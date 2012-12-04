@@ -22,7 +22,8 @@ libraryDependencies ++= Seq(
 //--- End of Dependencies
 
 scalacOptions ++= Seq("-deprecation", "-unchecked", "-Xexperimental",
-                      "-P:continuations:enable", "-Yvirtualize", "-feature")
+                      "-P:continuations:enable", "-Yvirtualize", "-feature",
+                      "-language:higherKinds")
 
 // Our tests are not threadsafe so disabling parallel execution for now
 parallelExecution in Test := false
