@@ -1,37 +1,43 @@
 package kappa
 
-// TODO: Should A, S, L really all be invariant?
-trait SiteGraph[A, S, L] {
+trait SiteGraph[A, S, L] { self =>
 
   type Agent
   type SiteName
 
+  // Convenience aliases
+  private type SG = SiteGraph[A, S, L] {
+    type Agent = self.Agent
+    type SiteName = self.SiteName
+  }
+  private type SGSite = Site[Agent, SiteName]
+  private type SGLink = Link[Agent, SiteName]
+
   // Site graph ops
-  // FIXME
-  //def ++(that: SiteGraph[A, S, L]): SiteGraph[A, S, L]
+  // TODO:
+  //def ++(that: SG): SG
 
   // Agent ops
   def iterator: Iterator[Agent]
   def agentState(agent: Agent): A
-  def +(as: A, sts: Vector[S]): SiteGraph[A, S, L]
+  def +(as: A, sts: Vector[S]): SG
 
   // Site state ops
-  def siteIterator(agent: Agent): Iterator[Site[Agent, SiteName]]
-  def siteState(from: Site[Agent, SiteName]): S
-  def updatedSiteState(from: Site[Agent, SiteName],
-                       state: S): SiteGraph[A, S, L]
+  def siteIterator(agent: Agent): Iterator[SGSite]
+  def siteState(from: SGSite): S
+  def updatedSiteState(from: SGSite, state: S): SG
 
   // Link ops
-  def siteLink(from: Site[Agent, SiteName]): Link[Agent, SiteName]
-  //def +(kv: (Site, Link)): SiteGraph[A, S, L]
-  //def -(from: Site): SiteGraph[A, S, L]
-  def updatedLinkState(from: Site[Agent, SiteName],
-                       state: L): SiteGraph[A, S, L]
-  def connect(from: Site[Agent, SiteName], to: Site[Agent, SiteName],
-              state: L): SiteGraph[A, S, L]
-  def disconnect(from: Site[Agent, SiteName]): SiteGraph[A, S, L]
-  def define(from: Site[Agent, SiteName]): SiteGraph[A, S, L]
-  def undefine(from: Site[Agent, SiteName]): SiteGraph[A, S, L]
+  def siteLink(from: SGSite): SGLink
+  def updatedLinkState(from: SGSite, state: L): SG
+  def connect(from: SGSite, to: SGSite, state: L): SG
+  def disconnect(from: SGSite): SG
+  def define(from: SGSite): SG
+  def undefine(from: SGSite): SG
+  def +(from: SGSite, to: SGSite, state: L): SG =
+    this define from define to connect (from, to, state)
+  def -(from: SGSite, to: SGSite): SG =
+    this disconnect from undefine from undefine to
 }
 
 // Sites

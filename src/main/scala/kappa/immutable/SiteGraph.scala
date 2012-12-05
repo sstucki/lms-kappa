@@ -32,23 +32,13 @@ extends kappa.SiteGraph[A, S, L] {
            this.siteLinks ++ ls)
   }
 
-  @inline
-  private def mkVector[A](a: A, size: Int): Vector[A] = {
-    val bldr = new VectorBuilder[A]();
-    bldr.sizeHint(size)
-    var i: Int = 0;
-    while (i < size) { bldr += a; i += 1 }
-    bldr.result()
-  }
-
   // Agent ops
-
   def iterator = (0 until agentStates.size).iterator
 
-  def agentState(agent: Agent) = this.agentState(agent)
+  def agentState(agent: Agent) = this.agentStates(agent)
 
   def +(as: A, sts: Vector[S]) = {
-    val ls = mkVector(Undefined, sts.size)
+    val ls = SiteGraph.mkVector(Undefined, sts.size)
     new SiteGraph(agentStates :+ as, siteStates :+ sts, siteLinks :+ ls)
   }
 
@@ -151,5 +141,46 @@ extends kappa.SiteGraph[A, S, L] {
         "Attempt to undefine wildcard at " + from)
     }
     new SG(agentStates, siteStates, ls)
+  }
+
+  // FIXME: How should link state be represented?
+  override def toString = {
+    val m = new scala.collection.mutable.HashMap[(Int, Int), Int]()
+    val as = for (i <- 0 until agentStates.size) yield {
+      val ss = for (j <- 0 until siteStates(i).size) yield {
+        siteLinks(i)(j) match {
+          case Undefined => None
+          case Stub => Some(siteStates(i)(j))
+          case Linked(Site(l, k), _) => Some(
+            siteStates(i)(j) + "!" + m.applyOrElse((i, j), {
+              _: (Int, Int) =>
+              val s = m.size
+              m += (((l, k), s))
+              s
+            }))
+          case Wildcard(_) => Some(siteStates(i)(j) + "?")
+        }
+      }
+      agentStates(i) + ss.flatten.mkString("(", ",", ")")
+    }
+    as.mkString("", ",", "")
+  }
+}
+
+object SiteGraph {
+  def empty[A, S, L] =
+    new SiteGraph[A, S, L](Vector.empty, Vector.empty, Vector.empty)
+  def apply[A, S, L](as: A, sts: Vector[S]) = {
+    val ls = mkVector(Undefined, sts.size)
+    new SiteGraph[A, S, L](Vector(as), Vector(sts), Vector(ls))
+  }
+
+  @inline
+  private def mkVector[A](a: A, size: Int): Vector[A] = {
+    val bldr = new VectorBuilder[A]();
+    bldr.sizeHint(size)
+    var i: Int = 0;
+    while (i < size) { bldr += a; i += 1 }
+    bldr.result()
   }
 }
