@@ -18,8 +18,37 @@ extends kappa.SiteGraph[A, S, L] {
   private type SGLink = Link[Agent, SiteName]
 
   // Site graph ops
-  /* FIXME: Implement */
-  //def ++(that: kappa.SiteGraph[A, S, L]): SG
+  // TODO: Implement: SiteGraph.copy(that: kappa.SiteGraph[A, S, L])
+  //def ++(that: kappa.SiteGraph[A, S, L]) =
+  //  this ++ SiteGraph.copy(that)
+
+  def components: Seq[SG] = {
+
+    import collection.mutable.BitSet
+
+    def travComp(a: Agent, c: SG, asLeft: BitSet): SG =
+      if (!(asLeft contains a)) c
+      else {
+        asLeft -= a
+        val c2: SG = new SiteGraph(
+          c.agentStates :+ agentStates(a),
+          c.siteStates :+ siteStates(a),
+          c.siteLinks :+ siteLinks(a))
+        siteLinks(a).foldLeft(c2) {
+          (c3, l) => l match {
+            case Linked(to, _) => travComp(to.agent, c3, asLeft)
+            case _ => c3
+          }
+        }
+      }
+
+    val asLeft = new BitSet() ++ (0 until agentStates.size)
+    var cs: List[SG] = Nil
+    while (!asLeft.isEmpty) {
+      cs = travComp(asLeft.head, SiteGraph.empty[A, S, L], asLeft) :: cs
+    }
+    cs
+  }
 
   def ++(that: SG) = {
     val nas = that.agentStates.size
@@ -168,8 +197,11 @@ extends kappa.SiteGraph[A, S, L] {
 }
 
 object SiteGraph {
+
+  // Factory methods
   def empty[A, S, L] =
     new SiteGraph[A, S, L](Vector.empty, Vector.empty, Vector.empty)
+
   def apply[A, S, L](as: A, sts: Vector[S]) = {
     val ls = mkVector(Undefined, sts.size)
     new SiteGraph[A, S, L](Vector(as), Vector(sts), Vector(ls))

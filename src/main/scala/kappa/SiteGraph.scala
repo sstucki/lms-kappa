@@ -1,6 +1,7 @@
 package kappa
 
-trait SiteGraph[A, S, L] { self =>
+trait SiteGraph[A, S, L] {
+  self =>
 
   type Agent
   type SiteName
@@ -15,7 +16,8 @@ trait SiteGraph[A, S, L] { self =>
 
   // Site graph ops
   // TODO:
-  //def ++(that: SG): SG
+  //def ++(that: SiteGraph[A, S, L]): SG
+  def components: Seq[SG]
 
   // Agent ops
   def iterator: Iterator[Agent]
@@ -41,11 +43,10 @@ trait SiteGraph[A, S, L] { self =>
 }
 
 // Sites
-case class Site[@specialized(Int) AN, @specialized(Int) SN](
-  agent: AN, name: SN)
+case class Site[AN, SN](agent: AN, name: SN)
 
 // Links
-sealed trait Link[+AN, +SN];
+sealed abstract class Link[+AN, +SN];
 case object Undefined extends Link[Nothing, Nothing]
 case object Stub extends Link[Nothing, Nothing]
 case class Linked[AN, SN, L](to: Site[AN, SN], state: L) extends Link[AN, SN]
