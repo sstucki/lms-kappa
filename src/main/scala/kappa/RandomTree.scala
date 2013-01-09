@@ -6,16 +6,24 @@ import util.Random
 
 
 /**
- * This is a simplified version of the *random tree* data structure
+ * This is a simplified version of the ''random tree'' data structure
  * used by KaSim (see [[https://github.com/jkrivine/KaSim/blob/master/dataStructures/random_tree.ml]]).
  *
- * Unlike the version used by KaSim, instances of this class represent
- * fixed-size random trees, that is, the size of the tree is fixed at
- * creation and can not be modified afterwards.  However, instances of
- * this tree remain mutable in that the weights of the leaves of the
- * random tree can be updated after creation.
+ * The random tree data structure represents a distribution over the
+ * integer interval `{0, 1 ... size - 1}` as a sequence of `size`
+ * double-precision floaing-point weight values.  (The weights are
+ * stored in the leaves of a binary tree -- hence the name).  The
+ * [[nextRandom]] method can be used to sample the distribution:
+ * [[nextRandom]] picks a random element from the interval, with
+ * probability proportional to the weight of the element.
+ * 
+ * Unlike the random trees used by KaSim, instances of this class
+ * represent fixed-size random trees, that is, the size of the tree is
+ * fixed at creation time and can not be modified afterwards.
+ * However, instances of this tree remain mutable in that the weights
+ * of the leaves of the random tree can be updated after creation.
  *
- * Use case:
+ * Usage examples:
  *
  * {{{
  *   // Create a random tree
@@ -207,8 +215,7 @@ object RandomTree {
    * Creates a random tree with `size` leafs the weights of which are
    * initialized to zero.
    *
-   * @param weights the sequence of values used to initialize the
-   *                leaf weights.  
+   * @param size the number of leaves in this random tree.  
    *
    * @param prng the the pseudo-random number generator used by the
    *             random tree to generate random numbers.
