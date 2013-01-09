@@ -2,8 +2,6 @@ package kappa
 
 import annotation.tailrec
 
-import collection.mutable
-
 import util.Random
 
 
@@ -28,7 +26,7 @@ import util.Random
  *   for (_ <- 0 until 10000) hist1(rt.nextRandom._1) += 1
  *   hist1 // e.g. hist1: Array[Int] = Array(1657, 3252, 5091)
  *
- *   // Histogram of biased trials
+ *   // Histogram of infinitely biased trials
  *   val hist2 = new Array[Int](3)
  *   rt(2) = Double.PositiveInfinity
  *   for (_ <- 0 until 10000) hist2(rt.nextRandom._1) += 1
@@ -60,13 +58,6 @@ class RandomTree(val size: Int, val prng: Random) {
   private val leavesOffset = size - 1
 
   /**
-   * A set used to keep track of elements with infinite weights.
-   *
-   * TODO: Not necessary: remove!
-   */
-  private var infSet = new mutable.HashSet[Int]()
-
-  /**
    * Select the weight of the `i`th leaf of the random tree.
    *
    * @param i the index of the leaf to select.
@@ -81,7 +72,6 @@ class RandomTree(val size: Int, val prng: Random) {
    * @param w the new weight of the `i`th leaf of the random tree.
    */
   def update(i: PatternIndex, w: Double) {
-    if (w == Double.PositiveInfinity) infSet += i else infSet -= i // TODO: Remove!
     updateParentWeights(leavesOffset + i, w)
   }
 
@@ -113,19 +103,25 @@ class RandomTree(val size: Int, val prng: Random) {
    * @return the index and weight of a random leaf of the random tree
    *         with probability proportional to the weight of that leaf.
    */
-  def nextRandom: (PatternIndex, Double) = infSet.headOption match {
-    case Some(i) => (i, Double.PositiveInfinity)
-    case None => {
-      val tw = totalWeight
-      if (tw == 0.0) throw new NoSuchElementException
-      val r = prng.nextDouble * tw
-      val i = find(0, r)
-      (i, weights(i))
-    }
+  def nextRandom: (PatternIndex, Double) = {
+    val i =
+      if (isInfNode(0)) findInfLeaf(0)
+      else {
+        val tw = totalWeight
+        if (tw == 0.0) throw new NoSuchElementException
+        val r = prng.nextDouble * tw
+        findRandomLeaf(0, r)
+      }
+    (i, weights(i))
   }
 
-  /** FIXME: Dummy: returns the array of node weights. */
-  override def toString = weights.mkString("RandomTree(", ",", ")")
+  /**
+   * Returns a string containing the leaf weights of this random tree.
+   *
+   * @return a string containing the leaf weights of this random tree.
+   */
+  override def toString =
+    weights drop leavesOffset mkString ("RandomTree(", ",", ")")
 
   /**
    * Helper function to update the weights of (inner) parent nodes
@@ -147,15 +143,25 @@ class RandomTree(val size: Int, val prng: Random) {
    * trial.
    */
   @tailrec
-  private def find(i: Int, x: Double): Int =
+  private def findRandomLeaf(i: Int, x: Double): Int =
     if (isLeaf(i)) i - leavesOffset
     else {
       val li = leftChild(i)
       val lw = weights(li)
-      if (x < lw) find(li, x)
-      else find(rightChild(i), x - lw)
+      if (x < lw) findRandomLeaf(li, x)
+      else findRandomLeaf(rightChild(i), x - lw)
     }
       
+  /** Helper function to find any leaf node with infinite weight. */
+  @tailrec
+  private def findInfLeaf(i: Int): Int =
+    if (isLeaf(i)) i - leavesOffset
+    else {
+      val li = leftChild(i)
+      if (isInfNode(li)) findInfLeaf(li)
+      else findInfLeaf(rightChild(i))
+    }
+
   /**
    * Helper function to compute the weights of (inner) parent nodes
    * at construction time.
@@ -168,12 +174,6 @@ class RandomTree(val size: Int, val prng: Random) {
         weights(i) = weights(leftChild(i)) + weights(rightChild(i))
       }
       initParentWeights(s2)
-    }
-
-  // TODO: Not necessary, remove!
-  @inline private def initInfSet: Unit =
-    for (i <- leavesOffset until size) {
-      if (isInfNode(i)) infSet += i
     }
 
   /** Returns the index of the parent of the node with index `i`. */
@@ -235,7 +235,6 @@ object RandomTree {
     val rt = new RandomTree(weights.size, prng)
     weights.copyToArray(rt.weights, rt.leavesOffset)
     rt.initParentWeights(rt.leavesOffset)
-    rt.initInfSet
     rt
   }
 }
