@@ -1,178 +1,107 @@
 package kappa
 
-import scala.language.postfixOps
 import scala.util.parsing.combinator._
-import java.io.FileReader
 
 /**
  * Parser for the Kappa language
  */
-class Parser extends JavaTokenParsers {
-  // TODO make {Link,Agent,Site}State abstract types?
-  type LinkState  = String
-  type AgentState = String
-  type SiteState  = String
+trait Parser extends LanguageContext with JavaTokenParsers {
+  val agentState : Parser[AgentState]
+  val siteState : Parser[SiteState]
+  val linkState : Parser[LinkState]
 
-  /* Kappa expressions */
-  abstract class ExprTerm
-  case class LinkAnnot(lnk: BondLabel, state: LinkState) extends ExprTerm
-  case class Agent(name: String, state: Option[AgentState], intf: Intf) extends ExprTerm
+  object AST {
+    /* Site graphs */
+    abstract class Term
+    case class LinkAnnot(lnk: BondLabel, state: LinkState) extends Term
+    case class Agent(name: String, state: Option[AgentState], intf: Intf) extends Term
 
-  type Expr = List[ExprTerm]
-  type Intf = List[Site]
+    type Expr = List[Term]
+    type Intf = List[Site]
 
-  case class Site(name: String, int: Option[SiteState], lnk: Option[BondLabel])
-  type BondLabel = Int
+    case class Site(name: String, int: Option[SiteState], lnk: Link)
 
-  // expr : agent [, expr]
-  lazy val expr : Parser[Expr] = rep1sep(agent | lnkState, ",")
+    abstract class Link
+    case object Stub extends Link
+    case object Wildcard extends Link
+    case object Undefined extends Link
+    case class Linked(label: BondLabel) extends Link
+    type BondLabel = Int
 
-  lazy val state = ":" ~> ident
+    // expr : agent [, expr]
+    lazy val expr : Parser[Expr] = repsep(agent | linkAnnot, ",")
 
-  lazy val lnkState : Parser[LinkAnnot] = wholeNumber ~ state ^^
-    { case bondLabel ~ state => LinkAnnot(bondLabel.toInt, state) }
+    lazy val linkAnnot : Parser[LinkAnnot] = bondLabel ~ (":" ~> linkState) ^^
+      { case bondLabel ~ state => LinkAnnot(bondLabel, state) }
 
-  // agent : agent_name [: agent_state] [( interface )]
-  lazy val agent : Parser[Agent] = ident ~ opt(state) ~ opt(interface) ^^
-    { case name ~ state ~ intf => Agent(name, state, intf getOrElse List()) }
+    // agent : agent_name [: agent_state] [( interface )]
+    lazy val agent : Parser[Agent] = ident ~ opt(":" ~> agentState) ~ opt(interface) ^^
+      { case name ~ state ~ intf => Agent(name, state, intf getOrElse List()) }
 
-  // interface : [ site [, interface] ]
-  lazy val interface : Parser[Intf] = "(" ~> repsep(site, ",") <~ ")"
+    // interface : [ site [, interface] ]
+    lazy val interface : Parser[Intf] = "(" ~> repsep(site, ",") <~ ")"
 
-  // site : site_name [: site_state] [! bond_label]
-  lazy val site : Parser[Site] = ident ~ opt(state) ~ opt("!" ~> bondLabel) ^^
-    { case name ~ state ~ bondLabel => Site(name, state, bondLabel) }
+    // site : site_name | site : site_state | site ! bond_label
+    lazy val site : Parser[Site] = ident ^^ (Site(_, None, Undefined)) |
+                                   site ~ (":" ~> siteState) ^^ { case Site(name, _, link) ~ state => Site(name, Some(state), link) } |
+                                   site ~ link  ^^ { case Site(name, state, _) ~ link => Site(name, state, link) }
 
-  lazy val bondLabel : Parser[BondLabel] = wholeNumber ^^ (_.toInt)
+    lazy val link : Parser[Link] = "!" ~> (bondLabel ^^ (Linked(_)) |
+                                           "_" ^^ (_ => Wildcard))  |
+                                   "?" ^^ (_ => Undefined)
 
-  /* Algebraic expressions
-   * NB This is where having an embedded DSL pays off
-   */
-  abstract class AlgExpr
-  case class +(a: AlgExpr, b: AlgExpr) extends AlgExpr
-  case class -(a: AlgExpr, b: AlgExpr) extends AlgExpr
-  case class *(a: AlgExpr, b: AlgExpr) extends AlgExpr
-  case class /(a: AlgExpr, b: AlgExpr) extends AlgExpr
-  case class NumericLit(n: Double) extends AlgExpr
+    lazy val bondLabel : Parser[BondLabel] = wholeNumber ^^ (_.toInt)
 
-  lazy val algExpr : Parser[AlgExpr] = decimalNumber ^^ (x => NumericLit(x.toDouble)) // FIXME dummy
 
-  /* Contact graph */
-  abstract class CGTerm
-  case class CGAgent(name: String, states: List[AgentState], intf: CGIntf) extends CGTerm
-  case class CGLinkAnnot(lnk: BondLabel, states: List[LinkState]) extends CGTerm
+    /* Contact graphs */
+    type ContactGraph = List[CGTerm]
 
-  type CGIntf = List[CGSite]
-  case class CGSite(name: String, ints: List[SiteState], lnks: List[Int])
+    abstract class CGTerm
+    case class CGAgent(name: String, states: List[AgentState], intf: CGIntf) extends CGTerm
+    case class CGLinkAnnot(lnk: BondLabel, states: List[LinkState]) extends CGTerm
 
-  def list[T,U](p: Parser[T], q: Parser[U]) = p ~> "{" ~> (rep1sep(q, ",") <~ "}")
-  lazy val states = list(":", ident)
-  lazy val lnks = list("!", bondLabel)
+    type CGIntf = List[CGSite]
+    case class CGSite(name: String, ints: List[SiteState], lnks: List[BondLabel])
 
-  lazy val cgLnkState : Parser[CGLinkAnnot] = wholeNumber ~ states ^^
-    { case bondLabel ~ states => CGLinkAnnot(bondLabel.toInt, states) }
+    def list[T](p: Parser[T]) = "{" ~> rep1sep(p, ",") <~ "}"
 
-  lazy val cgAgent : Parser[CGAgent] = ident ~ opt(states) ~ opt(cgIntf) ^^
-    { case name ~ states ~ intf => CGAgent(name, states getOrElse List(), intf getOrElse List()) }
+    lazy val cgLinkAnnot : Parser[CGLinkAnnot] = bondLabel ~ (":" ~> list(linkState)) ^^
+      { case bondLabel ~ states => CGLinkAnnot(bondLabel, states) }
 
-  lazy val cgIntf : Parser[CGIntf] = "(" ~> repsep(cgSite, ",") <~ ")"
+    lazy val cgAgent : Parser[CGAgent] = ident ~ opt(":" ~> list(agentState)) ~ opt(cgIntf) ^^
+      { case name ~ states ~ intf => CGAgent(name, states getOrElse List(), intf getOrElse List()) }
 
-  lazy val cgSite : Parser[CGSite] = ident ~ opt(states) ~ opt(lnks) ^^
-    { case name ~ states ~ bondLabels => CGSite(name, states getOrElse List(), bondLabels getOrElse List()) }
+    lazy val cgIntf : Parser[CGIntf] = "(" ~> repsep(cgSite, ",") <~ ")"
 
-  /* Kappa file */
-  abstract class Decl
-  case class ContactGraph(cm: List[CGTerm]) extends Decl
-  case class Rule(name: VarName, lhs: Expr, rhs: Expr, rate: AlgExpr) extends Decl
-  case class Init(num: Int, expr: Expr) extends Decl
+    lazy val cgSite : Parser[CGSite] = ident ^^ (CGSite(_, List(), List())) |
+                                       cgSite ~ (":" ~> list(siteState)) ^^ {
+                                         case CGSite(name, states1, links) ~ states2 => CGSite(name, states1 ++ states2, links) } |
+                                       cgSite ~ ("!" ~> list(bondLabel)) ^^ {
+                                         case CGSite(name, states, links1) ~ links2 => CGSite(name, states, links1 ++ links2) }
 
-  abstract class Var extends Decl
-  case class KappaVar(name: VarName, expr: Expr) extends Var
-  case class AlgVar(name: VarName, arith: AlgExpr) extends Var
-
-  case class Plot(name: VarName) extends Decl
-  case class Obs(name: VarName, expr: Expr) extends Decl
-  case class Mod(bool: BoolExpr, effects: List[Effect], until: Option[BoolExpr]) extends Decl
-
-  type VarName = String
-
-  lazy val kappaFile : Parser[List[Decl]] = rep(decl)
-
-  lazy val decl : Parser[Decl] =
-    ( cg
-    | rule
-    | init
-    | kappaVar
-    | arithVar
-    | plot
-    | obs
-    | mod
-    )
-
-  lazy val cg : Parser[ContactGraph] = "%contact-graph:" ~> repsep(cgAgent | cgLnkState, ",") ^^ (ContactGraph(_))
-
-  lazy val varName : Parser[VarName] = "'[^']+'".r
-
-  lazy val rule : Parser[Rule] = varName ~ expr ~ ("->" ~> expr) ~ ("@" ~> algExpr) ^^
-    { case name ~ lhs ~ rhs ~ rate => Rule(name, lhs, rhs, rate) }
-
-  lazy val init : Parser[Init] = "%init:" ~> wholeNumber ~ expr ^^
-    { case num ~ expr => Init(num.toInt, expr) }
-
-  lazy val kappaVar : Parser[KappaVar] = "%var:" ~> varName ~ expr ^^
-    { case name ~ expr => KappaVar(name, expr) }
-
-  lazy val arithVar : Parser[AlgVar] = "%var:" ~> varName ~ algExpr ^^
-    { case name ~ alg => AlgVar(name, alg) }
-
-  lazy val plot : Parser[Plot] = "%plot:" ~> varName ^^ (Plot(_))
-
-  lazy val obs : Parser[Obs] = "%obs:" ~> varName ~ expr ^^
-    { case name ~ expr => Obs(name, expr) }
-
-  lazy val mod : Parser[Mod] = "%mod:" ~> boolExpr ~ ("do" ~> rep1sep(effect, ";")) ~ opt(boolExpr) ^^
-    { case bool ~ effects ~ until => Mod(bool, effects, until) }
-
-  abstract class BoolExpr
-  case class And(a: BoolExpr, b: BoolExpr) extends BoolExpr
-  case class Or (a: BoolExpr, b: BoolExpr) extends BoolExpr
-  case class Not(a: BoolExpr) extends BoolExpr
-  case class Eq (a: AlgExpr, b: AlgExpr) extends BoolExpr
-  case class Gt (a: AlgExpr, b: AlgExpr) extends BoolExpr
-  case class Lt (a: AlgExpr, b: AlgExpr) extends BoolExpr
-  case class Geq(a: AlgExpr, b: AlgExpr) extends BoolExpr
-  case class Leq(a: AlgExpr, b: AlgExpr) extends BoolExpr
-  case object True  extends BoolExpr
-  case object False extends BoolExpr
-
-  lazy val boolExpr : Parser[BoolExpr] =
-    ( "[true]"  ^^ { _ => True }
-    | "[false]" ^^ { _ => False }
-    | "[not]" ~> boolExpr ^^ (Not(_))
-    | boolExpr ~ ("&&" ~> boolExpr) ^^ { case a ~ b => And(a, b) }
-    | boolExpr ~ ("||" ~> boolExpr) ^^ { case a ~ b => Or (a, b) }
-    ) // TODO implement Eq, Gt, Lt, Geq, Leq
-
-  abstract class Effect
-  case class Add(alg: AlgExpr, expr: Expr) extends Effect
-  case class Del(alg: AlgExpr, expr: Expr) extends Effect
-  case class Snapshot(filename: Option[Filename]) extends Effect
-  case class Stop(filename: Option[Filename]) extends Effect
-  case class Update(varname: VarName, alg: AlgExpr) extends Effect
-  type Filename = String
-
-  lazy val effect : Parser[Effect] =
-    ( "$ADD" ~> algExpr ~ expr ^^ { case alg ~ expr => Add(alg, expr) }
-    | "$DEL" ~> algExpr ~ expr ^^ { case alg ~ expr => Del(alg, expr) }
-    | "$UPDATE" ~> varName ~ algExpr ^^ { case varname ~ alg => Update(varname, alg) }
-    | "$SNAPSHOT" ~> opt(stringLiteral) ^^ (Snapshot(_))
-    | "$STOP" ~> opt(stringLiteral) ^^ (Stop(_))
-    )
-}
-
-object ParseFile extends Parser {
-  def main(args: Array[String]) {
-    val reader = new FileReader(args(0))
-    println(parseAll(kappaFile, reader))
+    lazy val cg : Parser[ContactGraph] = repsep(cgAgent | cgLinkAnnot, ",")
   }
+
+  def parseSiteGraph(s: String) = parseAll(AST.expr, s)
+  def parseContactGraph(s: String) = parseAll(AST.cg, s)
 }
+
+
+trait KappaParser extends Parser with KappaContext {
+  // agentState and linkState are not really part of core Kappa
+  lazy val agentState : Parser[AgentState] = ident
+  lazy val siteState : Parser[SiteState] = ident
+  lazy val linkState : Parser[LinkState] = ident
+}
+
+
+trait KaSpaceParser extends Parser with KaSpaceContext {
+  lazy val decimal : Parser[Double] = decimalNumber ^^ (_.toDouble)
+  lazy val agentState : Parser[AgentState] = decimal
+  lazy val vec3 = "[" ~> decimal ~ ("," ~> decimal) ~ ("," ~> decimal) <~ "]"
+  lazy val siteState : Parser[SiteState] = vec3 ^^ { case x ~ y ~ z => Position(x, y, z) }
+  lazy val linkState : Parser[LinkState] = "[" ~> vec3 ~ ("," ~>  vec3) ~ ("," ~> vec3) <~ "]" ^^ {
+    case (x1 ~ x2 ~ x3) ~ (y1 ~ y2 ~ y3) ~ (z1 ~ z2 ~ z3) =>
+      Vector(Vector(x1, y1, z1), Vector(x2, y2, z2), Vector(x3, y3, z3)) }
+}
+

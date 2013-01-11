@@ -2,7 +2,8 @@
 /** Main Kappa package. */
 package object kappa {
   
-  // -- Type aliases for indixes. --
+  // -- Type aliases for indices. --
+  // RHZ do they have to be indices? why not just identifiers?
 
   /** Index of an [[Mixture]] within a [[??]] */
   type PatternIndex = Int
