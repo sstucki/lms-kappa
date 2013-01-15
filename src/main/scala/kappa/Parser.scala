@@ -5,7 +5,9 @@ import scala.util.parsing.combinator._
 /**
  * Parser for the Kappa language
  */
-trait Parser extends LanguageContext with JavaTokenParsers {
+trait Parser extends JavaTokenParsers {
+  this: LanguageContext =>
+/*  
   val agentState : Parser[AgentState]
   val siteState : Parser[SiteState]
   val linkState : Parser[LinkState]
@@ -84,17 +86,20 @@ trait Parser extends LanguageContext with JavaTokenParsers {
 
   def parseSiteGraph(s: String) = parseAll(AST.expr, s)
   def parseContactGraph(s: String) = parseAll(AST.cg, s)
+*/
 }
 
-
-trait KappaParser extends Parser with KappaContext {
+trait KappaParser extends Parser {
+  self: KappaContext =>
+/*
   // agentState and linkState are not really part of core Kappa
   lazy val agentState : Parser[AgentState] = ident
   lazy val siteState : Parser[SiteState] = ident
   lazy val linkState : Parser[LinkState] = ident
+*/
 }
 
-
+/*
 trait KaSpaceParser extends Parser with KaSpaceContext {
   lazy val decimal : Parser[Double] = decimalNumber ^^ (_.toDouble)
   lazy val agentState : Parser[AgentState] = decimal
@@ -104,4 +109,4 @@ trait KaSpaceParser extends Parser with KaSpaceContext {
     case (x1 ~ x2 ~ x3) ~ (y1 ~ y2 ~ y3) ~ (z1 ~ z2 ~ z3) =>
       Vector(Vector(x1, y1, z1), Vector(x2, y2, z2), Vector(x3, y3, z3)) }
 }
-
+*/

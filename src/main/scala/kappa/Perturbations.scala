@@ -1,7 +1,7 @@
 package kappa
 
-trait Perturbations extends LanguageContext with Patterns {
-  self =>
+trait Perturbations {
+  self: LanguageContext with Patterns =>
 
   var mods : Vector[Perturbation] = Vector()
 
