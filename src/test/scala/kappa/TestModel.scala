@@ -2,7 +2,7 @@ package kappa
 
 import org.scalatest.FlatSpec
 
-class TestModel extends KappaModel("A(s:{p,q}!{1,1})") with FlatSpec {
+class TestModel extends KappaModel("A(s:{p,q}!{1,1}") with FlatSpec {
 
   println("Contact graph = " + contactGraph)
   //import HelperFns._
@@ -47,6 +47,9 @@ class TestModel extends KappaModel("A(s:{p,q}!{1,1})") with FlatSpec {
   // val vmax = 1
   // val km = 1
   // val r3 = "A(s:p)" -> "A(s:q)" !@ (ccs => vmax * ccs(0) / (km + ccs(0)))
+
+  val m = Mixture(rhs) * 10
+  println("mixture: " + m)
 
   // val m1 = when ("A(s)".inMix < 10) set (k = 7)
   // val m2 = when (10 > "A(s)".inMix) set println("k = 7")

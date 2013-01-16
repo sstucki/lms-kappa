@@ -30,6 +30,9 @@ trait Mixtures {
     /** First agent in the doubly-linked list representing the mixture. */
     private var head: Agent = null
 
+    /** The number of elements in this mixture. */
+    var size: Int = 0
+
     class MixtureIterator extends Iterator[Agent] {
       private var nextAgent: Agent = head
       def next = {
@@ -41,40 +44,68 @@ trait Mixtures {
     }
 
     /**
-     * Make a copy (or rather a clone) of this mixture.
+     * Make a copy of this mixture.
      *
      * The resulting mixture is completely independent of the original
      * and can hence be operated on without the fear of destroying the
      * original.
      *
-     * @return a clone of this mixture.
+     * @return a copy of this mixture.
      */
-    // FIXME: Copying/cloning a Mixture is more complex than it might
-    // appear at first.  The various pointers/references in the target
-    // Mixture must be set such that they point to the appropriate
-    // agents/sites in the target Mixtures, rather than the
-    // agents/sites in the source mixture.  Hence, we need to traverse
-    // the entire graph, following both the `prev` and `next` pointers
-    // as well as all the `agent` pointers in the links of the agents
-    // sites, and copy the nodes as we encounter them.  To keep track
-    // of which nodes have already been copied, and where to, we need
-    // a to keep a special pointer in the agents of the source
-    // Mixture.  Once we're done, these need to be reset to `null` in
-    // order to enable future copy operations.
-    def copy = this
+    def copy: Mixture = {
+      var u: Agent = head
+      val that = new Mixture
+      that.size = this.size
+
+      // First allocate "empty" agents for `that`
+      var p: Agent = null
+      while(u != null) {
+        val sites = new Array[Site](u.sites.size)
+        val v = Agent(u.state, sites, mixture = that, prev = p)
+        if (p == null) { that.head = v } else { p.next = v }
+        u.copy = v
+        p = v
+        u = u.next
+      }
+
+      // Now setup the interfaces of the agents in `that`
+      u = head
+      while(u != null) {
+        val v = u.copy
+        for (i <- 0 until u.sites.size) {
+          val s = u.sites(i)
+          val l = s.link match {
+            case Linked(a, s, l) => Linked(a.copy, s, l)
+            case Stub => Stub
+          }
+          v.sites(i) = Site(s.state, l)
+        }
+        u = u.next
+      }
+
+      // Reset `copy` references in the agents of `this` to avoid
+      // memory leaks.
+      u = head
+      while(u != null) {
+        u.copy = null
+        u = u.next
+      }
+      that
+    }
 
     /** Add a single agent to this mixture. */
-    def +=(agent: Agent) = {
+    def +=(agent: Agent): Mixture = {
       agent.mixture = this
       agent.prev = null
       agent.next = head
-      head.prev = agent
+      if (head != null) head.prev = agent
       head = agent
+      size += 1
       this
     }
 
     /** Create a [[Mixture.Agent]] and add it to this mixture. */
-    def +=(state: AgentState, siteStates: Seq[SiteState]) {
+    def +=(state: AgentState, siteStates: Seq[SiteState]): Mixture = {
       val n = siteStates.size
       var i: Int = 0
       val sites = new Array[Site](n)
@@ -86,27 +117,29 @@ trait Mixtures {
     }
 
     /** Remove a single agent to this mixture. */
-    def -=(agent: Agent) = {
+    def -=(agent: Agent): Mixture = {
       val ap = agent.prev
       val an = agent.next
       if (ap != null) ap.next = an
       if (an != null) an.prev = ap
       if (head == agent) head = an
+      size -= 1
       this
     }
 
     /** Connect two sites in this mixture. */
     def connect(a1: Agent, s1: SiteIndex, l1: LinkState,
-                a2: Agent, s2: SiteIndex, l2: LinkState) = {
+                a2: Agent, s2: SiteIndex, l2: LinkState): Mixture = {
       a1.sites(s1).link = Linked(a2, s2, l1)
-      a1.sites(s1).link = Linked(a2, s2, l1)
+      a2.sites(s2).link = Linked(a1, s1, l2)
       this
     }
 
     /** Disconnect two sites in this mixture. */
-    def disconnect(a1: Agent, s1: SiteIndex, a2: Agent, s2: SiteIndex) = {
+    def disconnect(a1: Agent, s1: SiteIndex,
+                   a2: Agent, s2: SiteIndex): Mixture = {
       a1.sites(s1).link = Stub
-      a1.sites(s1).link = Stub
+      a2.sites(s2).link = Stub
       this
     }
 
@@ -117,7 +150,7 @@ trait Mixtures {
      * appended to this mixture.  After this concatenation `that`
      * becomes invalid and should not be operated on any longer. 
      */
-    def ++=(that: Mixture) = {
+    def ++=(that: Mixture): Mixture = {
       var a: Agent = that.head
       var last: Agent = null
       while (a != null) {
@@ -126,46 +159,93 @@ trait Mixtures {
         a = a.next
       }
       if (last != null) {
-        this.head.prev = last
+        if (this.head != null) this.head.prev = last
+        last.next = this.head
         this.head = that.head
       }
+      size += that.size
       this
     }
 
-    /** Generates and returns `x` copies of this mixture. */
-    // FIXME: Dummy, implement! Or should this be implemented in
-    // pattern instead?
-    def *(x: Int) = this
+    /** Generates and returns `x` concatenated copies of this mixture. */
+    def *(x: Int): Mixture =
+      if (x == 0) Mixture()
+      else if (x < 0) throw new IllegalArgumentException(
+        "attempt to create a negative number of copies of a mixture")
+      else {
+        val m = Mixture()
+        for (i <- 1 until x) {
+          m ++= this.copy
+        }
+        this ++= m
+      }
 
-    def iterator = new MixtureIterator
+    // Seq methods
+    @inline def apply(idx: Int): Agent = {
+      if (idx >= size) throw new IndexOutOfBoundsException
+      (iterator drop idx).next
+    }
+    @inline def iterator: Iterator[Agent] = new MixtureIterator
+    @inline def length: Int = size
 
+    override def toString = iterator.mkString("", ",", "")
   }
 
   object Mixture {
 
-    /** A class representing links between [[Patterns.Site]]s. */
+    /** A class representing links between [[Mixture.Site]]s. */
     // FIXME: This can be simplified by representing stubs as loops (self-links).
-    sealed abstract class Link
+    sealed abstract class Link {
+      // FIXME!
+      override def toString = this match {
+        case Stub => ""
+        case Linked(a, s, l) =>
+          "!" + a.state + "." + a.sites(s).state + l
+      }
+    }
     case object Stub extends Link
     case class Linked(agent: Agent, site: SiteIndex,
                       state: LinkState) extends Link
 
-    // Sites
+    /**
+     * A class representing sites of [[Mixture.Agents]]s.
+     *
+     * @param state the [[SiteState]] of this site
+     * @param link whether this site is linked to another site.
+     * @param stateLiftSet lift set for site state modifications
+     * @param linkLiftSet lift set for link modifications
+     */
     case class Site(
-      //val index: SiteIndex,
       var state: SiteState,
       var link: Link = Stub,
       val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet(),
       val linkLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet()) {
 
-      }
+      override def toString = state.toString + link
+    }
 
     /**
      * A class representing agents in [[Mixture]]s.
+     *
+     * @param state the [[AgentState]] of this agent.
+     * @param sites the interface of this agent.
+     * @param stateLiftSet lift set for agent state modifications
+     * @param mixture a reference to the [[Mixture]] this agent belongs to.
+     * @param next a reference to the next agent in the [[Mixture]]
+     *        this agent belongs to.
+     * @param next a reference to the previous agent in the [[Mixture]]
+     *        this agent belongs to.
      */
-    case class Agent(var state: AgentState, val sites: Array[Site],
-                     var mixture: Mixture = null, var next: Agent = null,
-                     var prev: Agent = null) {
+    case class Agent(
+      var state: AgentState,
+      val sites: Array[Site],
+      val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet(),
+      var mixture: Mixture = null,
+      var next: Agent = null,
+      var prev: Agent = null) {
+
+      /** A reference to a copy of this agent (used by [[Mixture]]`.copy`). */
+      protected[Mixture] var copy: Agent = null
 
       /**
        * Returns the neighbor of this site if it is connected.
@@ -178,14 +258,49 @@ trait Mixtures {
           case Linked(a, s, _) => Some((a, s))
           case _ => None
         }
+
+      override def toString() = state + sites.mkString("(", ",", ")")
+
+      // Seq methods
+      @inline def apply(idx: Int): Site = sites(idx)
+      @inline def iterator: Iterator[Site] = sites.iterator
+      @inline def length: Int = sites.length
     }
 
     /** Creates an empty mixture. */
+    @inline
     def apply(): Mixture = new Mixture
 
     /** Converts a pattern into a mixture. */
-    // FIXME: Implement!
-    def apply(pattern: Pattern): Mixture = Mixture()
+    def apply(pattern: Pattern): Mixture = {
+      val m = new Mixture
+      for (c <- pattern.components) {
+
+        // Allocate "empty" copies of agents in this component
+        val as = new Array[Agent](c.agents.size)
+        for (u <- c.agents) {
+          val v = new Agent(u.state, new Array[Site](u.sites.size))
+          m += v
+          as(u.index) = v
+        }
+
+        // Setup the interfaces of the agents in the component
+        for (u <- c.agents) {
+          var j = 0
+          for (s <- u.sites) {
+            val l = s.link match {
+              case Pattern.Linked(a, s, l) => Linked(as(a.index), s, l)
+              case Pattern.Stub => Stub
+              case _ => throw new IllegalArgumentException(
+                "attempt to convert pattern with undefined or wildcard " +
+                "link to mixture")
+            }
+            as(u.index).sites(j) = new Site(s.state, l)
+          }
+        }
+      }
+      m
+    }
 
     /** Converts a pattern into a mixture. */
     implicit def patternToMixture(pattern: Pattern) = apply(pattern)
