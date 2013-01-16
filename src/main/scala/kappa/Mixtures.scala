@@ -14,7 +14,7 @@ trait Mixtures {
    * Mixtures are mutable and organized as doubly linked lists of
    * [[Mixture.Agent]]s.  Operations on mixtures are destructive in
    * that the mixture is modified in place and if it appears as a
-   * parameter (e.g. as an argument to the `++=` method) it might be
+   * parameter (e.g. as an argument to the [[++=]] method) it might be
    * destroyed in the process.  No attempt is made to guarantee the
    * consistency of such zombie mixtures, and indeed not much effort
    * is made to guarantee the consistency of mixtures overall.  In
@@ -208,9 +208,9 @@ trait Mixtures {
                       state: LinkState) extends Link
 
     /**
-     * A class representing sites of [[Mixture.Agents]]s.
+     * A class representing sites of [[Mixture.Agent]]s.
      *
-     * @param state the [[SiteState]] of this site
+     * @param state the state of this site
      * @param link whether this site is linked to another site.
      * @param stateLiftSet lift set for site state modifications
      * @param linkLiftSet lift set for link modifications
@@ -227,13 +227,13 @@ trait Mixtures {
     /**
      * A class representing agents in [[Mixture]]s.
      *
-     * @param state the [[AgentState]] of this agent.
+     * @param state the state of this agent.
      * @param sites the interface of this agent.
      * @param stateLiftSet lift set for agent state modifications
      * @param mixture a reference to the [[Mixture]] this agent belongs to.
      * @param next a reference to the next agent in the [[Mixture]]
      *        this agent belongs to.
-     * @param next a reference to the previous agent in the [[Mixture]]
+     * @param prev a reference to the previous agent in the [[Mixture]]
      *        this agent belongs to.
      */
     case class Agent(
@@ -248,12 +248,13 @@ trait Mixtures {
       protected[Mixture] var copy: Agent = null
 
       /**
-       * Returns the neighbor of this site if it is connected.
+       * Returns the neighbor of a site if it is connected.
        *
+       * @param site the index of the site whose neighbor we try to find.
        * @return `Some(x)`, where `x` is the neighbor of this site, if
        *         this site is not connected, and `None` otherwise.
        */
-      @inline def neighbor(site: SiteIndex) : Option[(Agent, SiteIndex)] =
+      @inline def neighbor(site: SiteIndex): Option[(Agent, SiteIndex)] =
         sites(site).link match {
           case Linked(a, s, _) => Some((a, s))
           case _ => None
