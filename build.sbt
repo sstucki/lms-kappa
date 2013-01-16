@@ -21,9 +21,13 @@ libraryDependencies ++= Seq(
 
 //--- End of Dependencies
 
-scalacOptions ++= Seq("-deprecation", "-unchecked", "-Xexperimental",
-                      "-P:continuations:enable", "-Yvirtualize", "-feature",
-                      "-language:higherKinds")
+// General compiler options
+scalacOptions ++= Seq(
+  "-deprecation", "-unchecked", "-Xexperimental", "-P:continuations:enable",
+  "-Yvirtualize", "-feature", "-language:higherKinds")
+
+// Documentation (scaladoc) options
+scalacOptions in doc += "-external-urls:scala=http://www.scala-lang.org/"
 
 // Our tests are not threadsafe so disabling parallel execution for now
 parallelExecution in Test := false
