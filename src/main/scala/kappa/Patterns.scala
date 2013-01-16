@@ -10,15 +10,15 @@ trait Patterns {
    *
    * @constructor create a new Pattern.
    * @param components the connected components of this pattern.
-   * @param agents a vector of (component, agent) index pairs that
-   *        can be used to query individual agents given their
+   * @param agents a vector of [[Agent]]s that can be used to query
+   *        the individual agents in this pattern given their
    *        position within the pattern (i.e. in the order in which
    *        they were added to the pattern).
    * @param siteGraphString the string associated with this pattern
    *        (FIXME: what if this string does not exist?) 
    */
   class Pattern private (val components: Vector[Pattern.Component],
-                         val agents: Vector[Pair[ComponentIndex, AgentIndex]],
+                         val agents: Vector[Pattern.Agent],
                          val siteGraphString: String) {
     import Pattern._
 
@@ -38,7 +38,7 @@ trait Patterns {
      */
     def :+(agent: Agent): Pattern = new Pattern(
       components :+ new Component(Vector(agent)),
-      agents :+ (components.size, 0), siteGraphString)
+      agents :+ agent, siteGraphString)
 
     /**
      * Return a new pattern connecting two unconnected sites from this
@@ -55,12 +55,12 @@ trait Patterns {
      */
     def connect(a1: AgentIndex, s1: SiteIndex, l1: LinkState,
                 a2: AgentIndex, s2: SiteIndex, l2: LinkState): Pattern = {
-      val (c1, b1) = agents(a1)
-      val (c2, b2) = agents(a2)
-      val u = components(c1).agents(b1)
-      val v = components(c2).agents(b2)
-      u.sites(s1).link = Linked(v, s2, l1)
-      v.sites(s2).link = Linked(u, s1, l2)
+      val u1 = agents(a1)
+      val u2 = agents(a2)
+      val c1 = u1.component
+      val c2 = u2.component
+      u1.sites(s1).link = Linked(u2, s2, l1)
+      u2.sites(s2).link = Linked(u1, s1, l2)
       if (c1 != c2) merge(c1, c2) else this
     }
 
@@ -69,19 +69,15 @@ trait Patterns {
      *
      * FIXME: This is O(n) in the size of the pattern...
      */
-    @inline private def merge(c1: ComponentIndex, c2: ComponentIndex): Pattern = {
-      val (k1, k2) = if (c1 < c2) (c1, c2) else (c2, c1)
+    @inline private def merge(c1: Component, c2: Component): Pattern = {
+      val (k1, k2) = if (c1.index < c2.index) (c1.index, c2.index)
+                     else (c2.index, c1.index)
       val as1 = components(k1).agents
       val as2 = components(k2).agents
       val c = new Component(as1 ++ as2)
       val cs =
         (components updated (k1, c) take (k2)) ++ (components drop (k2 + 1))
-      val n = as1.size
-      val as = for (ca <- this.agents) yield {
-        if (ca._1 == k2) (k1, ca._2 + n)
-        else if (ca._1 > c2) (ca._1 - 1, ca._2) else ca
-      }
-      new Pattern(cs, as, siteGraphString)
+      new Pattern(cs, agents, siteGraphString)
     }
 
     override def toString =
@@ -89,17 +85,28 @@ trait Patterns {
       else iterator.mkString("", ",", "")
 
     // Action constructor
+    // FIXME: Should delegate to a factory method in Action object instead.
     def -> (rhs: Pattern) = new Action(this, rhs)
 
     // Seq methods
-    def apply(idx: Int): Agent = {
-      val (c, a) = agents(idx)
-      components(c).agents(a)
+    @inline def apply(idx: Int): Agent = agents(idx)
+    @inline def iterator: Iterator[Agent] = agents.iterator
+    @inline def length: Int = agents.length
+
+    @inline def apply(ci: ComponentIndex, ai: AgentIndex): Agent =
+      components(ci).agents(ai)
+
+    /** Update the pattern pointers in the components. */
+    private def registerComponents {
+      var i = 0
+      for (c <- components) {
+        c.pattern = this
+        c.index = i
+        i += 1
+      }
     }
-    def iterator : Iterator[Agent] = agents.iterator map {
-      ca => components(ca._1).agents(ca._2)
-    }
-    def length : Int = agents.length
+
+    registerComponents
   }
 
   /** Companion object of the [[Patterns.Pattern]] class. */
@@ -199,7 +206,12 @@ trait Patterns {
      * @param index the index of this agent in the pattern it belongs to.
      */
     case class Agent(val state: AgentState, val sites: Vector[Site]) {
-      //var pattern : Option[Pattern] = None
+
+      /** The component this agent belongs to. */
+      var component: Component = null
+
+      /** The index of the agent within the component. */
+      var index: AgentIndex = 0
 
       /**
        * Returns the neighbor of a site if it is connected.
@@ -217,9 +229,9 @@ trait Patterns {
       override def toString() = state + sites.mkString("(", ",", ")")
 
       // Seq methods
-      // def apply(idx: Int) : Site = intf(idx)
-      // def iterator : Iterator[Site] = intf.iterator
-      // def length : Int = intf.length
+      @inline def apply(idx: Int): Site = sites(idx)
+      @inline def iterator: Iterator[Site] = sites.iterator
+      @inline def length: Int = sites.length
 
       // Register sites.
       //for (s <- sites) s.agent = this
@@ -231,12 +243,30 @@ trait Patterns {
      */
     class Component(val agents: Vector[Agent]) {
 
+      /** The pattern this component belongs to. */
+      var pattern: Pattern = null
+
+      /** The index of the component within the pattern. */
+      var index: ComponentIndex = 0
+
       /**
        * Return the number of matchings of this pattern component in
        * the target mixture
        */
       // FIXME: implement!
       def count: Int = 1
+
+      /** Update the component pointers in the agents. */
+      private def registerAgents {
+        var i = 0
+        for (a <- agents) {
+          a.component = this
+          a.index = i
+          i += 1
+        }
+      }
+
+      registerAgents
     }
 
     /**
