@@ -25,11 +25,11 @@ class TestModel extends KappaModel("A(s:{p,q}!{1,1}") with FlatSpec {
 
   // LHS
   val s1 = Site(s, true); val s2 = s1.copy()
-  val a1 = Agent(a, Vector(s1)); val a2 = Agent(b, Vector(s2))
-  val lhs = Pattern() :+ a1 :+ a2
+  val a1 = Agent(a, Array(s1)); val a2 = Agent(b, Array(s2))
+  val lhs = Pattern() :+ a1 :+ a2 :+ (a, Site(s))
 
   val s3 = Site(s); val s4 = Site(sq)
-  val rhs = ((Pattern() :+ Agent(a, Vector(s3)) :+ Agent(a, Vector(s4)))
+  val rhs = ((Pattern() :+ (a, s3) :+ (a, s4))
              connect (1, 0, l, 0, 0, l))
 
   val k = 5
@@ -48,8 +48,15 @@ class TestModel extends KappaModel("A(s:{p,q}!{1,1}") with FlatSpec {
   // val km = 1
   // val r3 = "A(s:p)" -> "A(s:q)" !@ (ccs => vmax * ccs(0) / (km + ccs(0)))
 
-  val m = Mixture(rhs) * 10
+  val m = Mixture(rhs) * 5
   println("mixture: " + m)
+
+  val pes = (
+    (for (u <- lhs.iterator; v <- m.iterator) yield PartialEmbedding(u, v)) ++
+    (for (u <- rhs.iterator; v <- m.iterator) yield PartialEmbedding(u, v))
+  ).flatten
+  println("partial embeddings:")
+  for (pe <- pes) println("  " + pe)
 
   // val m1 = when ("A(s)".inMix < 10) set (k = 7)
   // val m2 = when (10 > "A(s)".inMix) set println("k = 7")

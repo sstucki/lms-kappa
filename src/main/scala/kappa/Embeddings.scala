@@ -3,7 +3,7 @@ package kappa
 import collection.immutable.Vector
 
 trait Embeddings extends PartialEmbeddings {
-  this: Mixtures =>
+  this: Mixtures with Patterns =>
 
   /**
    * A class reperesenting a total embedding as a product of
@@ -16,12 +16,12 @@ trait Embeddings extends PartialEmbeddings {
    * KaSim method over this method?
    * 
    * @param pes the [[PartialEmbedding]] making up this [[Embedding]].
-   * @param pattern the [[PatternIndex]] of the pattern that constitutes
-   *                the domain of this embedding.
+   * @param pattern the [[Patterns#Pattern]] that constitutes the domain of
+   *        this embedding.
    * @param signature the root agents of the underlying [[PartialEmbedding]]s. 
    */
   case class Embedding(pes: Vector[PartialEmbedding],
-                       pattern: PatternIndex,
+                       pattern: Pattern,
                        signature: Vector[AgentIndex]) {
 
     // -- Forwarding methods of the underlying Vectors -- 

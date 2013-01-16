@@ -4,110 +4,98 @@ import collection.immutable.HashMap
 import collection.mutable
 
 trait PartialEmbeddings {
-  this: Mixtures =>
+  this: Mixtures with Patterns =>
 
   /**
    * A class reperesenting an embedding form a single connected
    * component of a site graph into a mixture.
-   * 
-   * @param map a map representing the injection underlying this
-   *            [[PartialEmbedding]].
-   * @param pattern the [[PatternIndex]] of the pattern that contains
-   *                the domain of this embedding.
-   * @param component the [[ComponentIndex]] of the connected component
-   *                  (in pattern) that conconstitutes the domain of this
-   *                  embedding.
+   *
+   * @param map an array of [[Mixtures#Mixture.Agent]]s representing
+   *        the injection from pattern agent indices to mixture agents.
+   * @param pattern the [[Patterns#Pattern]] of the pattern that contains
+   *        the domain of this embedding.
+   * @param component the connected [[Patterns#Pattern.Component]]
+   *        (of `pattern`) that conconstitutes the domain of this
+   *        embedding.
    */
-  // FIXME: Replace map with vector!
-  case class PartialEmbedding(map: HashMap[AgentIndex, Mixture.Agent],
-                              pattern: PatternIndex,
-                              component: ComponentIndex) {
+  case class PartialEmbedding private (
+    val map: Array[Mixture.Agent],
+    val pattern: Pattern,
+    val component: Pattern.Component) {
 
     type Source = AgentIndex
     type Target = Mixture.Agent
 
-    /** The address of this embedding in the [[EmbeddingHeap]]. */
-    // FIXME: Not used.
-    //var address: Option[Int] = None
-    
     /**
-     * Selects the first pair of this embedding.
-     * 
-     * *Note:* might return different results for different runs.
-     *
-     * @return the first pair of this embedding.
-     */
-    def head: (Source, Target) = map.head
-    
-    /**
-     * Returns this [[PartialEmbedding]] as a [[Map]] from agent indices
-     * to agent indices.
+     * Returns this [[PartialEmbedding]] as a map from agent indices
+     * to [[Mixtures#Mixture.Agent]]s.
      *
      * FIXME: When is this used? Why not just use iterator, etc.?
-     * 
-     * @return this [[PartialEmbedding]] as a [[Map]] from agent indices
-     * to agent indices.
+     *
+     * @return this [[PartialEmbedding]] as a map from agent indices
+     * to [[Mixtures#Mixture.Agent]]s.
      */
-    def toMap: Map[Source, Target] = map
+    def toMap: Map[Source, Target] = iterator.toMap
 
-    /** What exactly is this? */
-    // FIXME: Not used
-    // def isTrashed: Boolean = address match {
-    //   case Some(-1) => true
-    //   case _ => false
-    // }
-
-
-    // -- Forwarding methods of the underlying Map -- 
+    //-- Methods imitating a Map[Source, Target] and Vector[Target] interface --
     
-    def get(key: Source) = map.get(key)
+    /**
+     * Selects the first pair of this partial embedding.
+     *
+     * @return the first pair of this partial embedding.
+     */
+    def head: (Source, Target) = (0, map.head)
 
-    def apply(key: Source) = map(key)
+    def get(key: Source): Option[Target] =
+      if (key > map.size) None else Some(map(key))
 
-    def iterator = map.iterator
+    def apply(key: Source): Target = map(key)
+
+    def iterator: Iterator[(Source, Target)] =
+      for ((v, k) <- map.iterator.zipWithIndex) yield (k, v)
 
     def updated(key: Source, value: Target) =
       this.copy(map = this.map updated (key, value))
     
     def +(p: (Source, Target)) = this updated (p._1, p._2)
 
-    def -(key: Source) = this.copy(map = this.map - key)
+    def :+(t: Target) = this.copy(map = this.map :+ t)
 
+    override def toString =
+      "PE(" + component.index + ": " + toMap.mkString(", ") + ")"
+  }
 
-    /**
-     * Exception used to signal a clash in an embedding, i.e. a violation
-     * of the injectivity of an embedding.
-     * 
-     * FIXME: Don't use! See next FIXME comment of addToMap() below.
-     */
-    case class ClashException(map: Map[Source, Target],
-                              p: (Source, Target)) extends Exception
+  object PartialEmbedding {
 
-    /**
-     * This method adds the injection (map) of this embedding to an
-     * aggregate injection of a composite embedding (e.g. of a pattern
-     * with multiple components).
-     *
-     * FIXME: Don't use this method, it's only used to agregate partial
-     * embeddings into total embeddings, so define a function that does
-     * this directly instead.  The advantage of that other function is
-     * that it can be optimized (using e.g. while or tail recursion)
-     * where as this can not be.  It's also more clear what the
-     * aggregation method is good for and it avoids creating and
-     * catching ClashExceptions.
-     *
-     * @param map a map representing the aggregate injection/embedding.
-     * @param cod a inv reperesenting the codomain of the agregate
-     *            injection/embedding. 
-     * @return a pair consisting of the updated aggregate injection and
-     *         its codomain
-     */
-    def addToMap(map: Map[Source, Target], cod: mutable.Set[Target])
-    : (Map[Source, Target], mutable.Set[Target]) = {
-      (this.map foldLeft (map, cod)) { (mc, p) =>
-        if (cod contains p._2) throw new ClashException(map, p)
-        else (map + p, cod += p._2)
-                                    }
+    def apply(k: Pattern.Agent, v: Mixture.Agent): Option[PartialEmbedding] = {
+      val component = k.component
+      val map = new Array[Mixture.Agent](component.length)
+      def extend(i: AgentIndex, v: Mixture.Agent): Boolean = {
+        if (map(i) != null) map(i) == v
+        else {
+          val k = component(i)
+          if (k matches v) {
+            map(i) = v
+            val n = k.sites.size
+            var j: Int = 0
+            var extending: Boolean = true
+            while (j < n && extending) {
+              extending = (k.neighbor(j), v.neighbor(j)) match {
+                case (None, _) => true
+                case (Some((u1, s1)), Some((u2, s2))) =>
+                  (s1 == s2) && extend(u1.index, u2)
+                case _ => false
+              }
+              j += 1
+            }
+            extending
+          } else false
+        }
+      }
+
+      if (extend(k.index, v)) Some(
+        new PartialEmbedding(map, k.component.pattern, k.component))
+      else None
     }
   }
 }

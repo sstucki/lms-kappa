@@ -6,16 +6,15 @@ trait Patterns {
   this: LanguageContext with Parser with Rules with Symbols with Mixtures =>
 
   /**
-   * A class representing patterns in [[kappa.Model]]s (i.e. site graphs).
+   * A class representing patterns in [[Model]]s (i.e. site graphs).
    *
    * @constructor create a new Pattern.
    * @param components the connected components of this pattern.
-   * @param agents a vector of [[Agent]]s that can be used to query
-   *        the individual agents in this pattern given their
+   * @param agents a vector of [[Pattern.Agent]]s that can be used
+   *        to query the individual agents in this pattern given their
    *        position within the pattern (i.e. in the order in which
    *        they were added to the pattern).
    * @param siteGraphString the string associated with this pattern
-   *        (FIXME: what if this string does not exist?) 
    */
   class Pattern private (val components: Vector[Pattern.Component],
                          val agents: Vector[Pattern.Agent],
@@ -39,6 +38,18 @@ trait Patterns {
     def :+(agent: Agent): Pattern = new Pattern(
       components :+ new Component(Vector(agent)),
       agents :+ agent, siteGraphString)
+
+    /**
+     * Create a single unconnected agent and return a new pattern
+     * extending this pattern with the newly created agent.
+     *
+     * @param state the state of the agent to add.
+     * @param sites the sites of the agent to add.
+     * @return a new pattern extending this pattern with an additional
+     *         (unconnected) agent.
+     */
+    def :+(state: AgentState, sites: Site*): Pattern =
+      this :+ Agent(state, sites.toArray)
 
     /**
      * Return a new pattern connecting two unconnected sites from this
@@ -116,7 +127,7 @@ trait Patterns {
     sealed abstract class Link {
 
       /**
-       * Compare this link against a [[Mixture.Link]].
+       * Compare this link against a [[Mixtures#Mixture.Link]].
        *
        * @return `true` if this site matches `that`.
        */
@@ -181,7 +192,7 @@ trait Patterns {
         })
 
       /**
-       * Compare this site against a [[Mixture.Site]].
+       * Compare this site against a [[Mixtures#Mixture.Site]].
        *
        * @return `true` if this site matches `that`.
        */
@@ -205,7 +216,7 @@ trait Patterns {
      *
      * @param index the index of this agent in the pattern it belongs to.
      */
-    case class Agent(val state: AgentState, val sites: Vector[Site]) {
+    case class Agent(val state: AgentState, val sites: Array[Site]) {
 
       /** The component this agent belongs to. */
       var component: Component = null
@@ -225,6 +236,27 @@ trait Patterns {
           case Linked(a, s, _) => Some((a, s))
           case _ => None
         }
+
+      /**
+       * Compare this agent against a [[Mixtures#Mixture.Agent]].
+       *
+       * @return `true` if this agent matches `that`.
+       */
+      def matches(that: Mixture.Agent): Boolean = {
+        val n = this.sites.size
+        if (that.sites.size != n) false
+        else if (apo.lteq(that.state, state)) {
+          var i: Int = 0
+          var sitesMatch: Boolean = true
+          while (i < n && sitesMatch) {
+            val s1 = this.sites(i)
+            val s2 = that.sites(i)
+            sitesMatch = (s1 matches s2)
+            i += 1
+          }
+          sitesMatch
+        } else false
+      }
 
       override def toString() = state + sites.mkString("(", ",", ")")
 
@@ -255,6 +287,11 @@ trait Patterns {
        */
       // FIXME: implement!
       def count: Int = 1
+
+      // Seq methods
+      @inline def apply(idx: Int): Agent = agents(idx)
+      @inline def iterator: Iterator[Agent] = agents.iterator
+      @inline def length: Int = agents.length
 
       /** Update the component pointers in the agents. */
       private def registerAgents {
