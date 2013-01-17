@@ -10,12 +10,16 @@ trait Embeddings extends PartialEmbeddings {
    * [[PartialEmbedding]]s.
    *
    * TODO: We are using an immutable Vector to reperesent the collection of
-   * unerlying [[PartialEmbeddings]], whereas KaSim uses mutable arrays and
+   * underlying [[PartialEmbeddings]], whereas KaSim uses mutable arrays and
    * constructs embeddings (aka InjProducts) by sequentially adding
-   * partial embeddinsg (aka Injections).  Are there any advantages of the
+   * partial embeddings (aka Injections).  Are there any advantages of the
    * KaSim method over this method?
-   * 
-   * @param pes the [[PartialEmbedding]] making up this [[Embedding]].
+   *
+   * RHZ: This class should extend Seq, Map and perhaps PartialFunction if
+   * it defines all these functions!! I mean you get extra functionality for
+   * free if you do it, don't you? And conceptually an embedding is a map
+   *
+   * @param pes the [[PartialEmbedding]]s making up this [[Embedding]].
    * @param pattern the [[Patterns#Pattern]] that constitutes the domain of
    *        this embedding.
    * @param signature the root agents of the underlying [[PartialEmbedding]]s. 
@@ -24,7 +28,7 @@ trait Embeddings extends PartialEmbeddings {
                        pattern: Pattern,
                        signature: Vector[AgentIndex]) {
 
-    // -- Forwarding methods of the underlying Vectors -- 
+    // -- Forwarding methods of the underlying Vectors --
 
     def apply(key: ComponentIndex) = pes(key)
 
@@ -33,7 +37,7 @@ trait Embeddings extends PartialEmbeddings {
     def updated(key: ComponentIndex, value: PartialEmbedding) =
       this.copy(pes = this.pes updated (key, value),
                 signature = this.signature updated (key, value.head._1))
-    
+
     def :+(pe: PartialEmbedding) =
       this.copy(pes = this.pes :+ pe, signature = this.signature :+ pe.head._1)
 

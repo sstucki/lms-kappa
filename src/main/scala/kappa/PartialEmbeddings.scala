@@ -80,10 +80,10 @@ trait PartialEmbeddings {
             var j: Int = 0
             var extending: Boolean = true
             while (j < n && extending) {
-              extending = (k.neighbor(j), v.neighbor(j)) match {
+              extending = (k.sites(j).neighbor, v.sites(j).neighbor) match {
                 case (None, _) => true
-                case (Some((u1, s1)), Some((u2, s2))) =>
-                  (s1 == s2) && extend(u1.index, u2)
+                case (Some(s1), Some(s2)) =>
+                  (s1 == s2) && extend(s1.agent.index, s2.agent)
                 case _ => false
               }
               j += 1

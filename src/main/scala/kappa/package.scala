@@ -4,11 +4,14 @@ package object kappa {
   
   // -- Type aliases for indices. --
   //
-  // RHZ do they have to be indices? why not just identifiers?
+  // RHZ: Do they have to be indices? why not just identifiers?
   //
   // sstucki: I think "index" describes their function more closely.
   //          "Identifyer" is more general, that could also refer to,
   //          e.g. a name (a string) or a suple of indices.
+  //
+  // RHZ: That's exactly why I thought identifier would be a better name...
+  //      and also because Id is shorter than Index
 
   /** Index of an [[Patterns#Pattern]] within a [[Model]] */
   type PatternIndex = Int

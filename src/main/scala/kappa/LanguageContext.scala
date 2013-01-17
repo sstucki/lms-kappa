@@ -9,6 +9,7 @@ trait LanguageContext {
   type LinkState
 
   // Partial orders over state types
+  // RHZ: Perhaps it'd be cleaner to define a lteq method in Agent, Site, and Link?
   def apo: PartialOrdering[AgentState]
   def spo: PartialOrdering[SiteState]
   def lpo: PartialOrdering[LinkState]

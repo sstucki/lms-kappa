@@ -5,8 +5,6 @@ import scala.language.postfixOps
 trait Rules {
   this: LanguageContext with Symbols with Patterns with Embeddings =>
 
-  // TODO the following code should be in another trait/file,
-  // but the -> method in Pattern requires Action to be in scope
   var rules: Vector[Rule] = Vector()
 
   // Actions

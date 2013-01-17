@@ -24,6 +24,8 @@ trait Mixtures {
    * @constructor create an empty Mixture.
    */
   class Mixture {
+    // RHZ any particular reason to make this like a cons cell instead of just
+    // wrapping around an Array of Agents? I find it quite cumbersome this way
 
     import Mixture._
 
@@ -35,11 +37,13 @@ trait Mixtures {
 
     class MixtureIterator extends Iterator[Agent] {
       private var nextAgent: Agent = head
+
       def next = {
         val n = nextAgent
         if (n != null) nextAgent = n.next
         n
       }
+
       def hasNext = nextAgent != null
     }
 
@@ -73,9 +77,13 @@ trait Mixtures {
       while(u != null) {
         val v = u.copy
         for (i <- 0 until u.sites.size) {
-          val s = u.sites(i)
+          var s = u.sites(i)
           val l = s.link match {
-            case Linked(a, s, l) => Linked(a.copy, s, l)
+            // FIXME this is wrong but it was wrong before as well!
+            // in the sense that the agent the link referred to was not the one
+            // somewhere in a cons cell linked by that, but an agent floating in
+            // the middle of nowhere
+            case Linked(s, l) => Linked(s, l)
             case Stub => Stub
           }
           v.sites(i) = Site(s.state, l)
@@ -127,19 +135,25 @@ trait Mixtures {
       this
     }
 
+    // RHZ These two methods should belong to Site
+    // NB connect should return the link and the link should have a method
+    // withState for cooler syntax
+
     /** Connect two sites in this mixture. */
-    def connect(a1: Agent, s1: SiteIndex, l1: LinkState,
-                a2: Agent, s2: SiteIndex, l2: LinkState): Mixture = {
-      a1.sites(s1).link = Linked(a2, s2, l1)
-      a2.sites(s2).link = Linked(a1, s1, l2)
+    def connect(s1: Site, l1: LinkState,
+                s2: Site, l2: LinkState): Mixture = {
+      s1.link = Linked(s2, l1)
+      s2.link = Linked(s1, l2)
       this
     }
 
+    // This should receive only one site as input, as in KaSim, to easily handle
+    // wildcard destruction
     /** Disconnect two sites in this mixture. */
-    def disconnect(a1: Agent, s1: SiteIndex,
-                   a2: Agent, s2: SiteIndex): Mixture = {
-      a1.sites(s1).link = Stub
-      a2.sites(s2).link = Stub
+    def disconnect(s1: Site,
+                   s2: Site): Mixture = {
+      s1.link = Stub
+      s2.link = Stub
       this
     }
 
@@ -195,16 +209,19 @@ trait Mixtures {
 
     /** A class representing links between [[Mixture.Site]]s. */
     // FIXME: This can be simplified by representing stubs as loops (self-links).
+    //
+    // RHZ: Do we need to simplify it that much? Representing stubs as self-links
+    // is conceptually wrong and misleading for the guy reading the code
     sealed abstract class Link {
       // FIXME!
       override def toString = this match {
         case Stub => ""
-        case Linked(a, s, l) =>
-          "!" + a.state + "." + a.sites(s).state + l
+        case Linked(s, l) =>
+          "!" + s.agent.state + "." + s.state + "." + l
       }
     }
     case object Stub extends Link
-    case class Linked(agent: Agent, site: SiteIndex,
+    case class Linked(site: Site,
                       state: LinkState) extends Link
 
     /**
@@ -221,7 +238,16 @@ trait Mixtures {
       val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet(),
       val linkLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet()) {
 
+      // RHZ: should we reference the parent Agent in Mixtures as well?
+      var agent: Agent = null
+
       override def toString = state.toString + link
+
+      @inline def neighbor : Option[Site] =
+        link match {
+          case Linked(s, _) => Some(s)
+          case _ => None
+        }
     }
 
     /**
@@ -240,6 +266,8 @@ trait Mixtures {
       var state: AgentState,
       val sites: Array[Site],
       val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet(),
+      // RHZ: Maybe we should make this type-safe as well
+      // Since it's mutable I'll just turn a blind eye to it for now
       var mixture: Mixture = null,
       var next: Agent = null,
       var prev: Agent = null) {
@@ -254,12 +282,6 @@ trait Mixtures {
        * @return `Some(x)`, where `x` is the neighbor of this site, if
        *         this site is not connected, and `None` otherwise.
        */
-      @inline def neighbor(site: SiteIndex): Option[(Agent, SiteIndex)] =
-        sites(site).link match {
-          case Linked(a, s, _) => Some((a, s))
-          case _ => None
-        }
-
       override def toString() = state + sites.mkString("(", ",", ")")
 
       // Seq methods
@@ -288,13 +310,13 @@ trait Mixtures {
         // Setup the interfaces of the agents in the component
         for (u <- c.agents) {
           var j = 0
-          for (s <- u.sites) {
+          for (si <- 0 until u.sites.size) {
+            val s = u.sites(si)
             val l = s.link match {
-              case Pattern.Linked(a, s, l) => Linked(as(a.index), s, l)
+              case Pattern.Linked(s, l) => Linked(as(s.agent.index).sites(si), l)
               case Pattern.Stub => Stub
               case _ => throw new IllegalArgumentException(
-                "attempt to convert pattern with undefined or wildcard " +
-                "link to mixture")
+                "attempt to create mixture with an undefined or wildcard link")
             }
             as(u.index).sites(j) = new Site(s.state, l)
           }

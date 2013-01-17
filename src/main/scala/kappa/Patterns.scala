@@ -25,8 +25,11 @@ trait Patterns {
      * Return the (overestimated) number of matchings of this pattern
      * in the target mixture
      */
-    def count: Double = (components map (_.count)).foldLeft(1.0)(_*_)
+    def count: Double = (components map (_.count)).product
 
+    /* RHZ: I think all of these are methods we really don't need for simulation
+     * that we can safely skip for now
+     *
     /**
      * Return a new pattern extending this pattern with an additional
      * (unconnected) agent.
@@ -90,6 +93,7 @@ trait Patterns {
         (components updated (k1, c) take (k2)) ++ (components drop (k2 + 1))
       new Pattern(cs, agents, siteGraphString)
     }
+    */
 
     override def toString =
       if (!siteGraphString.isEmpty) siteGraphString
@@ -108,6 +112,7 @@ trait Patterns {
       components(ci).agents(ai)
 
     /** Update the pattern pointers in the components. */
+    // RHZ: Is this a Scala design pattern?
     private def registerComponents {
       var i = 0
       for (c <- components) {
@@ -121,6 +126,11 @@ trait Patterns {
   }
 
   /** Companion object of the [[Patterns.Pattern]] class. */
+  // RHZ: Why not work with path-dependent types? There are things that can only
+  // be done on agents in the same pattern (like connecting) and path-dependent
+  // types let us enforce that with the type system... And for the things that
+  // can be done on any pair of components or agents, we use the supertype
+  // Pattern#Component or Pattern#Agent
   object Pattern {
 
     /** A class representing links between [[Pattern.Site]]s. */
@@ -134,45 +144,29 @@ trait Patterns {
       def matches(that: Mixture.Link): Boolean = (this, that) match {
         case (Undefined, _) => true
         case (Stub, Mixture.Stub) => true
-        case (Wildcard(a1, s1, l1), Mixture.Linked(a2, s2, l2)) => (
-          a1 match {
-            case Some(a1) => apo.lteq(a2.state, a1)
-            case None => true
-          }) && (s1 match {
-          case Some(s1) => spo.lteq(a2.sites(s2).state, s1)
-          case None => true
-        }) && (l1 match {
-            case Some(l1) => lpo.lteq(l2, l1)
-            case None => true
-          })
-        case (Linked(_, _, l1), Mixture.Linked(_, _, l2)) => {
+        case (Wildcard(a1, s1, l1), Mixture.Linked(s2, l2)) =>
+          (a1 map (apo.lteq(s2.agent.state, _)) getOrElse true) &&
+          (s1 map (spo.lteq(s2.state, _)) getOrElse true) &&
+          (l1 map (lpo.lteq(l2, _)) getOrElse true)
+        case (Linked(_, l1), Mixture.Linked(_, l2)) =>
           lpo.lteq(l1, l2)
-        }
         case _ => false
       }
 
       // FIXME!
       override def toString = this match {
         case Undefined => "?"
-        case Wildcard(a, s, l) => "!" + (
-          a match {
-            case Some(a) => a
-            case None => "_"
-          }) + "." + (s match {
-          case Some(s) => s
-          case None => "_"
-        }) + (l match {
-            case Some(l) => l
-            case None => "_"
-          })
+        case Wildcard(a, s, l) =>
+          "!" + (a getOrElse "_") + "." + (s getOrElse "_") + "." + (l getOrElse "_")
         case Stub => ""
-        case Linked(a, s, l) =>
-          "!" + a.state + "." + a.sites(s).state + l
+        case Linked(s, l) =>
+          "!" + s.agent.state + "." + s.state + "." + l
       }
     }
+
     case object Undefined extends Link
     case object Stub extends Link
-    case class Linked(agent: Agent, site: SiteIndex,
+    case class Linked(site: Site,
                       state: LinkState) extends Link
     case class Wildcard(agentState: Option[AgentState],
                         siteState: Option[SiteState],
@@ -183,26 +177,48 @@ trait Patterns {
      */
     class Site private (val state: SiteState, var link: Link = Undefined) {
 
+      /** The agent this site belongs to. */
+      var _agent: Option[Agent] = None
+      def agent = _agent match {
+        case Some(a) => a
+        // RHZ: I prefer this exception rather than a null pointer exception
+        case None => throw new Exception("I don't belong to any agent! =(")
+      }
+      def agent_= (a: Agent) = _agent = Some(a)
+
       /** Convenience copy method. */
       def copy(state: SiteState = this.state, link: Link = this.link) =
         new Site(state, link match {
           case l: Linked => throw new IllegalArgumentException(
-            "attempt to copy an linked site!") // don't duplicate links!
-          case l: Link => l 
+            "attempt to copy a linked site!") // don't duplicate links!
+          case l => l
         })
+
+      /**
+       * Returns the neighbor of a site if it is connected.
+       *
+       * @param site the index of the site whose neighbor we try to find.
+       * @return `Some(x)`, where `x` is the neighbor of this site, if
+       *         this site is not connected, and `None` otherwise.
+       */
+      @inline def neighbor(): Option[Site] =
+        link match {
+          case Linked(s, _) => Some(s)
+          case _ => None
+        }
 
       /**
        * Compare this site against a [[Mixtures#Mixture.Site]].
        *
        * @return `true` if this site matches `that`.
        */
-      def matches(that: Mixture.Site): Boolean = {
-        if (spo.lteq(that.state, state)) link matches that.link else false
-      }
+      def matches(that: Mixture.Site): Boolean =
+        spo.lteq(that.state, state) && (this.link matches that.link)
 
       override def toString = state.toString + link
     }
 
+    // RHZ: Why not as part of the class?
     object Site {
       def apply(state: SiteState) = new Site(state)
       def apply(state: SiteState, stub: Boolean) =
@@ -219,29 +235,30 @@ trait Patterns {
     case class Agent(val state: AgentState, val sites: Array[Site]) {
 
       /** The component this agent belongs to. */
-      var component: Component = null
+      // RHZ: made this type-safe
+      var _component: Option[Component] = None
+      def component = _component match {
+        case Some(cc) => cc
+        case None => throw new Exception("I don't belong to any component! =(")
+      }
+      def component_= (cc: Component) = _component = Some(cc)
+      //var component: Component = null
 
       /** The index of the agent within the component. */
+      // RHZ: Should we make this an Option[AgentIndex] to have a type-safe behaviour?
       var index: AgentIndex = 0
-
-      /**
-       * Returns the neighbor of a site if it is connected.
-       *
-       * @param site the index of the site whose neighbor we try to find.
-       * @return `Some(x)`, where `x` is the neighbor of this site, if
-       *         this site is not connected, and `None` otherwise.
-       */
-      @inline def neighbor(site: SiteIndex): Option[(Agent, SiteIndex)] =
-        sites(site).link match {
-          case Linked(a, s, _) => Some((a, s))
-          case _ => None
-        }
 
       /**
        * Compare this agent against a [[Mixtures#Mixture.Agent]].
        *
        * @return `true` if this agent matches `that`.
        */
+      def matches(that: Mixture.Agent): Boolean =
+        that.sites.size == this.sites.size &&
+        apo.lteq(that.state, state) &&
+        (this.sites zip that.sites forall { case (s1, s2) => s1 matches s2 })
+
+      /*
       def matches(that: Mixture.Agent): Boolean = {
         val n = this.sites.size
         if (that.sites.size != n) false
@@ -257,6 +274,7 @@ trait Patterns {
           sitesMatch
         } else false
       }
+      */
 
       override def toString() = state + sites.mkString("(", ",", ")")
 
@@ -265,8 +283,8 @@ trait Patterns {
       @inline def iterator: Iterator[Site] = sites.iterator
       @inline def length: Int = sites.length
 
-      // Register sites.
-      //for (s <- sites) s.agent = this
+      // Register sites
+      for (s <- sites) s.agent = this
     }
 
     /**
@@ -276,7 +294,13 @@ trait Patterns {
     class Component(val agents: Vector[Agent]) {
 
       /** The pattern this component belongs to. */
-      var pattern: Pattern = null
+      var _pattern: Option[Pattern] = None
+      def pattern = _pattern match {
+        case Some(p) => p
+        case None => throw new Exception("I don't belong to any pattern! =(")
+      }
+      def pattern_= (p: Pattern) = _pattern = Some(p)
+      //var pattern: Pattern = null
 
       /** The index of the component within the pattern. */
       var index: ComponentIndex = 0

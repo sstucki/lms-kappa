@@ -21,6 +21,7 @@ with Parser with Symbols with Embeddings {
 
   // Implicit conversions and other functions
   // FIXME: Why are these in a separate object?
+  // RHZ: Just because I want to import only those after I create my model object
   // object HelperFns {
   //   implicit def stringToPattern(s: String) : Pattern = createPattern(s)
 
