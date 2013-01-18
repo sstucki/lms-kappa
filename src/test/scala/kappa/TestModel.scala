@@ -8,6 +8,12 @@ class TestModel extends KappaModel("A(s:{p,q}!{1,1}") with FlatSpec {
   //import HelperFns._
 
   // Manual setup of Symbol table
+  //
+  // FIXME: This is a hack! It's just here to make the test work. Once
+  // parsing the contact graph of a model works, this should probably
+  // be removed, and the various tables in Symbols should be made
+  // immutable.  Unless, of course, we want to reserve the option to
+  // add symbols to the symbol table manually...
   agentTypes    = agentTypes    :+ "A"       :+ "B"
   agentTypeSyms = agentTypeSyms + ("A" -> 0) + ("B" -> 1)
   siteNames     = siteNames     :+ "s"

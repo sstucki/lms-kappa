@@ -9,7 +9,32 @@ trait LanguageContext {
   type LinkState
 
   // Partial orders over state types
-  // RHZ: Perhaps it'd be cleaner to define a lteq method in Agent, Site, and Link?
+  //
+  // RHZ: Perhaps it'd be cleaner to define a lteq method in Agent,
+  // Site, and Link?
+  //
+  // sstucki: There already is such a method, it's called `matches`
+  // ;-) But the truth is that this class is a mess and the cleanest
+  // way to implement the partial orders might be to introduce a
+  // proper State trait that contains the comparison function and then
+  // use it as a super-type for states, e.g.
+  //
+  //   type AgentState <: State
+  //
+  // and let concrete types extend it, e.g.
+  //
+  //   class AgentStateImpl extends State ...
+  //
+  // We will seldom be able to use arbitrary types as state types
+  // anyway, since we will want to override the toString method, and
+  // hence we might as well wrap the state types into a State.
+  // Another advantage of this is that the State trait could contain a
+  // method to check whether a given state is valid in a mixture
+  // (which is missing now) so we can throw an error when one tries to
+  // create a mixture from a pattern with e.g. undefined state.  I'm
+  // working on this State trait already, and you would be surprised
+  // with the sort of problem this simple task brings to light :-/ so
+  // stay tuned...
   def apo: PartialOrdering[AgentState]
   def spo: PartialOrdering[SiteState]
   def lpo: PartialOrdering[LinkState]

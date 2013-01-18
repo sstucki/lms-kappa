@@ -19,6 +19,16 @@ trait Embeddings extends PartialEmbeddings {
    * it defines all these functions!! I mean you get extra functionality for
    * free if you do it, don't you? And conceptually an embedding is a map
    *
+   * sstucki: Well, yes and no.  It's true that you get extra functionality
+   * but it might not do what you expect it to.  For example, assume you
+   * were to extend Seq, then you get sequence concatenation (`++`) out of
+   * the box, but `e1 ++ e1` won't return an embedding even when both `e1`
+   * and `e2` are embeddings!  The reason is that the collections library
+   * uses builders for stuff like sequence concatenation and we have not
+   * define a builder for embeddings.  To conclude: yes we should probably
+   * make this proper Maps at some point, but it will require some effort.
+   * PatialFunction, on the other hand, seems like a low-hanging fruit :-)
+   *
    * @param pes the [[PartialEmbedding]]s making up this [[Embedding]].
    * @param pattern the [[Patterns#Pattern]] that constitutes the domain of
    *        this embedding.

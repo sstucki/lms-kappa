@@ -30,6 +30,14 @@ trait Patterns {
     /* RHZ: I think all of these are methods we really don't need for simulation
      * that we can safely skip for now
      *
+     * sstucki: These are used in test cases because we don't have a
+     * parser right now.  Without them the test breaks. :-( I believe
+     * you will also find these handy when you implement the parser.
+     * As I understood it you build patterns from the AST by first
+     * adding all the agents to a pattern in a first traversal and
+     * then connecting them in a second pass.  That's exactly what
+     * these methods are intended for.
+     */
     /**
      * Return a new pattern extending this pattern with an additional
      * (unconnected) agent.
@@ -93,7 +101,6 @@ trait Patterns {
         (components updated (k1, c) take (k2)) ++ (components drop (k2 + 1))
       new Pattern(cs, agents, siteGraphString)
     }
-    */
 
     override def toString =
       if (!siteGraphString.isEmpty) siteGraphString
@@ -111,18 +118,20 @@ trait Patterns {
     @inline def apply(ci: ComponentIndex, ai: AgentIndex): Agent =
       components(ci).agents(ai)
 
-    /** Update the pattern pointers in the components. */
     // RHZ: Is this a Scala design pattern?
-    private def registerComponents {
-      var i = 0
-      for (c <- components) {
-        c.pattern = this
-        c.index = i
-        i += 1
-      }
-    }
+    //
+    // sstucki: Not that I know of.  The reason I put this in a
+    // separate method is that I used a mutable variable in there and
+    // I didn't want that to become part of the class.  Maybe it would
+    // have been sufficient to just put it in a separate scope.
+    // Anyway, I changed this to a for comprehension now to make it
+    // more readable (since it's not performance critical anyway).
 
-    registerComponents
+    /* Update the pattern pointers in the components. */
+    for ((c, i) <- components.zipWithIndex) {
+      c._pattern = this
+      c._index = i
+    }
   }
 
   /** Companion object of the [[Patterns.Pattern]] class. */
@@ -131,6 +140,21 @@ trait Patterns {
   // types let us enforce that with the type system... And for the things that
   // can be done on any pair of components or agents, we use the supertype
   // Pattern#Component or Pattern#Agent
+  //
+  // sstucki: Yes, but things are a bit more subtle than that.  The
+  // way Patterns are built right now is that we first build a
+  // collection of Agents and then pass them to the Pattern
+  // constructor.  That is not possible when Agent is an inner class
+  // of Pattern.  You can simply not create an inner Agent without
+  // first creating the Outer pattern.  Now if we were to make Pattern
+  // more mutable, this would work (just create a Pattern and have
+  // e.g. a ":+" that takes an agent state and creates an agent).  We
+  // would have to build sites similarly (if we want them to be inner
+  // classes of Patterns or even Agents).  Maybe that is the way to
+  // go, but as things look right now it's not possible.  Btw. it is
+  // possible to make Agents inner classes in Mixtures as these are
+  // already built in this way.  I added a comment about this in the
+  // Mixture class.
   object Pattern {
 
     /** A class representing links between [[Pattern.Site]]s. */
@@ -144,11 +168,11 @@ trait Patterns {
       def matches(that: Mixture.Link): Boolean = (this, that) match {
         case (Undefined, _) => true
         case (Stub, Mixture.Stub) => true
-        case (Wildcard(a1, s1, l1), Mixture.Linked(s2, l2)) =>
-          (a1 map (apo.lteq(s2.agent.state, _)) getOrElse true) &&
-          (s1 map (spo.lteq(s2.state, _)) getOrElse true) &&
+        case (Wildcard(a1, s1, l1), Mixture.Linked(a2, s2, l2)) =>
+          (a1 map (apo.lteq(a2.state, _)) getOrElse true) &&
+          (s1 map (spo.lteq(a2.sites(s2).state, _)) getOrElse true) &&
           (l1 map (lpo.lteq(l2, _)) getOrElse true)
-        case (Linked(_, l1), Mixture.Linked(_, l2)) =>
+        case (Linked(_, _, l1), Mixture.Linked(_, _, l2)) =>
           lpo.lteq(l1, l2)
         case _ => false
       }
@@ -159,15 +183,52 @@ trait Patterns {
         case Wildcard(a, s, l) =>
           "!" + (a getOrElse "_") + "." + (s getOrElse "_") + "." + (l getOrElse "_")
         case Stub => ""
-        case Linked(s, l) =>
-          "!" + s.agent.state + "." + s.state + "." + l
+        case Linked(a, s, l) =>
+          "!" + a.state + "." + a.sites(s).state + "." + l
       }
     }
 
+    /** A class representing an undefined link at a [[Pattern.Site]]. */
     case object Undefined extends Link
+
+    /** A class representing stubs, i.e. unconnected [[Pattern.Site]]s. */
     case object Stub extends Link
-    case class Linked(site: Site,
+
+    /**
+     * A class representing actual links links between [[Pattern.Site]]s.
+     *
+     * Instances of this class also hold the [[LinkState]] in the
+     * direction from the source site (i.e. the site that stores the
+     * instance) to the target site (i.e. the site that is pointed to
+     * by the instance).
+     *
+     * As in [[Mixtures#Mixture.Link]], the target sites are stored in
+     * a "relative" fashion, i.e. as (agent, site index) pairs rather
+     * than just a reference to the target site.  This simplifies the
+     * process of matching patterns to mixtures (i.e. the process of
+     * extending pairs of patter and mixture agents into partial
+     * embeddings).  For more details, see the documentation of the
+     * [[Mixtures#Mixture.Link]] class.
+     *
+     * @param agent the target agent of this link.
+     * @param site the index of the target site in the target agent of
+     *        this link.
+     * @param state the state of the link from source to target.
+     */
+    case class Linked(agent:Agent, site: SiteIndex,
                       state: LinkState) extends Link
+
+    /**
+     * A class representing a wildcard link at a [[Pattern.Site]].
+     *
+     * The class allows to specify constraints on the type and state
+     * of the link target, i.e. the states of the link, the target
+     * site and the target agent that the wildcard matches.
+     *
+     * @param agentState the state a matching target agent should have.
+     * @param siteState the state a matching target site should have.
+     * @param linkState the state a matching link should have.
+     */
     case class Wildcard(agentState: Option[AgentState],
                         siteState: Option[SiteState],
                         linkState: Option[LinkState]) extends Link
@@ -177,14 +238,24 @@ trait Patterns {
      */
     class Site private (val state: SiteState, var link: Link = Undefined) {
 
+      // TODO: this is not used at the moment.  Remove?
+
+      /** Internal reference to the agent this site belongs to. */
+      protected[Pattern] var _agent: Agent = null
+
+      // RHZ: I prefer this exception rather than a null pointer exception
+      //
+      // sstucki: Fair enough.  I assume what you really care about is
+      // the message in the exception rather than the type of the
+      // exception?  This can still be done without using the overhead
+      // of an Option.  The pointer should remain invisible form most
+      // purposes anyway.  I changed it accordingly.
+
       /** The agent this site belongs to. */
-      var _agent: Option[Agent] = None
-      def agent = _agent match {
-        case Some(a) => a
-        // RHZ: I prefer this exception rather than a null pointer exception
-        case None => throw new Exception("I don't belong to any agent! =(")
-      }
-      def agent_= (a: Agent) = _agent = Some(a)
+      @inline def agent =
+        if (_agent == null) throw new NullPointerException(
+          "attempt to access parent agent of orphan site")
+        else _agent
 
       /** Convenience copy method. */
       def copy(state: SiteState = this.state, link: Link = this.link) =
@@ -197,13 +268,12 @@ trait Patterns {
       /**
        * Returns the neighbor of a site if it is connected.
        *
-       * @param site the index of the site whose neighbor we try to find.
-       * @return `Some(x)`, where `x` is the neighbor of this site, if
-       *         this site is not connected, and `None` otherwise.
+       * @return `Some(x)`, where `x` is the neighboring site of this
+       *         site, if this site is connected, and `None` otherwise.
        */
-      @inline def neighbor(): Option[Site] =
+      @inline def neighbor: Option[Site] =
         link match {
-          case Linked(s, _) => Some(s)
+          case Linked(a, s, _) => Some(a.sites(s))
           case _ => None
         }
 
@@ -219,6 +289,13 @@ trait Patterns {
     }
 
     // RHZ: Why not as part of the class?
+    //
+    // sstucki: because factory methods and custom extractors are
+    // defined in companion objects in Scala.  See
+    // http://daily-scala.blogspot.ch/2009/09/factory-methods-and-companion-objects.html
+    // and http://www.scala-lang.org/node/112
+
+    /** Companion object of [[Site]] containing factory methods */
     object Site {
       def apply(state: SiteState) = new Site(state)
       def apply(state: SiteState, stub: Boolean) =
@@ -236,17 +313,45 @@ trait Patterns {
 
       /** The component this agent belongs to. */
       // RHZ: made this type-safe
-      var _component: Option[Component] = None
-      def component = _component match {
-        case Some(cc) => cc
-        case None => throw new Exception("I don't belong to any component! =(")
-      }
-      def component_= (cc: Component) = _component = Some(cc)
-      //var component: Component = null
+      //
+      // sstucki: No, you made it into an Option, that is no more (or
+      // less) type-safe than a (null) pointer, it's just more
+      // expressive. ;-) But since this pointer is not (supposed to
+      // be) used in any interface, this expressiveness isn't really
+      // useful.  I reverted it and made the pointer protected.  Now
+      // expressive error messages on the other hand are very useful,
+      // so I kept that.
+      protected[Pattern] var _component: Component = null
+      @inline def component =
+        if (_component == null) throw new NullPointerException(
+          "attempt to access parent component of orphan agent")
+        else _component
 
+      // RHZ: Should we make this an Option[AgentIndex] to have a
+      // type-safe behaviour?
+      //
+      // sstucki: No! Using an option does not make it type-safe.  But
+      // we ought to protect it.  Fixed this.
       /** The index of the agent within the component. */
-      // RHZ: Should we make this an Option[AgentIndex] to have a type-safe behaviour?
-      var index: AgentIndex = 0
+      protected[Pattern] var _index: AgentIndex = -1
+      @inline def index =
+        if (_index < 0) throw new NullPointerException(
+          "attempt to  parent component of orphan agent")
+        else _index
+
+      /**
+       * Returns the neighbor of a site if it is connected.
+       *
+       * @param site the index of the site whose neighbor we try to find.
+       * @return `Some(a, s)`, where `a` is the neighboring agent of
+       *         this site and `s` is the index of the neighboring site
+       *         in `a`, or `None` if this site is not connected.
+       */
+      @inline def neighbor(site: SiteIndex): Option[(Agent, SiteIndex)] =
+        sites(site).link match {
+          case Linked(a, s, _) => Some((a, s))
+          case _ => None
+        }
 
       /**
        * Compare this agent against a [[Mixtures#Mixture.Agent]].
@@ -258,24 +363,6 @@ trait Patterns {
         apo.lteq(that.state, state) &&
         (this.sites zip that.sites forall { case (s1, s2) => s1 matches s2 })
 
-      /*
-      def matches(that: Mixture.Agent): Boolean = {
-        val n = this.sites.size
-        if (that.sites.size != n) false
-        else if (apo.lteq(that.state, state)) {
-          var i: Int = 0
-          var sitesMatch: Boolean = true
-          while (i < n && sitesMatch) {
-            val s1 = this.sites(i)
-            val s2 = that.sites(i)
-            sitesMatch = (s1 matches s2)
-            i += 1
-          }
-          sitesMatch
-        } else false
-      }
-      */
-
       override def toString() = state + sites.mkString("(", ",", ")")
 
       // Seq methods
@@ -283,8 +370,8 @@ trait Patterns {
       @inline def iterator: Iterator[Site] = sites.iterator
       @inline def length: Int = sites.length
 
-      // Register sites
-      for (s <- sites) s.agent = this
+      // Register sites.
+      //for (s <- sites) s.agent = this
     }
 
     /**
@@ -294,16 +381,18 @@ trait Patterns {
     class Component(val agents: Vector[Agent]) {
 
       /** The pattern this component belongs to. */
-      var _pattern: Option[Pattern] = None
-      def pattern = _pattern match {
-        case Some(p) => p
-        case None => throw new Exception("I don't belong to any pattern! =(")
-      }
-      def pattern_= (p: Pattern) = _pattern = Some(p)
-      //var pattern: Pattern = null
+      protected[Pattern] var _pattern: Pattern = null
+      def pattern =
+        if (_pattern == null) throw new NullPointerException(
+          "attempt to access parent pattern of orphan component")
+        else _pattern
 
       /** The index of the component within the pattern. */
-      var index: ComponentIndex = 0
+      protected[Pattern] var _index: ComponentIndex = -1
+      def index =
+        if (_index < 0) throw new NullPointerException(
+          "attempt to retrieve in-pattern index of orphan component")
+        else _index
 
       /**
        * Return the number of matchings of this pattern component in
@@ -317,17 +406,11 @@ trait Patterns {
       @inline def iterator: Iterator[Agent] = agents.iterator
       @inline def length: Int = agents.length
 
-      /** Update the component pointers in the agents. */
-      private def registerAgents {
-        var i = 0
-        for (a <- agents) {
-          a.component = this
-          a.index = i
-          i += 1
-        }
+      // Update the component pointers in the agents.
+      for ((a, i) <- agents.zipWithIndex) {
+        a._component = this
+        a._index = i
       }
-
-      registerAgents
     }
 
     /**
