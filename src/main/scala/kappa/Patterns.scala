@@ -169,11 +169,11 @@ trait Patterns {
         case (Undefined, _) => true
         case (Stub, Mixture.Stub) => true
         case (Wildcard(a1, s1, l1), Mixture.Linked(a2, s2, l2)) =>
-          (a1 map (apo.lteq(a2.state, _)) getOrElse true) &&
-          (s1 map (spo.lteq(a2.sites(s2).state, _)) getOrElse true) &&
-          (l1 map (lpo.lteq(l2, _)) getOrElse true)
+          (a1 map (_ matches a2.state) getOrElse true) &&
+          (s1 map (_ matches a2.sites(s2).state) getOrElse true) &&
+          (l1 map (_ matches l2) getOrElse true)
         case (Linked(_, _, l1), Mixture.Linked(_, _, l2)) =>
-          lpo.lteq(l1, l2)
+          l1 matches l2
         case _ => false
       }
 
@@ -197,10 +197,10 @@ trait Patterns {
     /**
      * A class representing actual links links between [[Pattern.Site]]s.
      *
-     * Instances of this class also hold the [[LinkState]] in the
-     * direction from the source site (i.e. the site that stores the
-     * instance) to the target site (i.e. the site that is pointed to
-     * by the instance).
+     * Instances of this class also hold the
+     * [[LanguageContext#LinkState]] in the direction from the source
+     * site (i.e. the site that stores the instance) to the target
+     * site (i.e. the site that is pointed to by the instance).
      *
      * As in [[Mixtures#Mixture.Link]], the target sites are stored in
      * a "relative" fashion, i.e. as (agent, site index) pairs rather
@@ -283,7 +283,7 @@ trait Patterns {
        * @return `true` if this site matches `that`.
        */
       def matches(that: Mixture.Site): Boolean =
-        spo.lteq(that.state, state) && (this.link matches that.link)
+        (this.state matches that.state) && (this.link matches that.link)
 
       override def toString = state.toString + link
     }
@@ -360,7 +360,7 @@ trait Patterns {
        */
       def matches(that: Mixture.Agent): Boolean =
         that.sites.size == this.sites.size &&
-        apo.lteq(that.state, state) &&
+        (this.state matches that.state) &&
         (this.sites zip that.sites forall { case (s1, s2) => s1 matches s2 })
 
       override def toString() = state + sites.mkString("(", ",", ")")
