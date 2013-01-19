@@ -7,26 +7,22 @@ trait PartialEmbeddings {
    * A class reperesenting an embedding form a single connected
    * component of a site graph into a mixture.
    *
-   * WARNING: For convenience, this class provides the interface of a
-   * `Seq[Mixtures#Mixture.Agent]`.  However, using some methods from
-   * the `Seq` API might not result in the expected behavior.
-   * E.g. `++` will return a `Seq[PartialEmbedding]` rather than the
-   * expected `PartialEmbedding`.
+   * ''WARNING'': For convenience, this class provides the interface
+   * of a `Seq[Mixture.Agent]`.  However, using some methods from the
+   * `Seq` API might not result in the expected behavior.  E.g. `++`
+   * will return a `Seq[PartialEmbedding]` rather than the expected
+   * `PartialEmbedding`.
    *
-   * @param map an array of [[Mixtures#Mixture.Agent]]s representing
+   * @param inj an array of [[Mixtures#Mixture.Agent]]s representing
    *        the injection from pattern agent indices to mixture
    *        agents.
-   * @param pattern the [[Patterns#Pattern]] of the pattern that contains
-   *        the domain of this embedding.
    * @param component the connected [[Patterns#Pattern.Component]]
    *        (of `pattern`) that conconstitutes the domain of this
    *        embedding.
    */
-  case class PartialEmbedding private (
-    val map: Array[Mixture.Agent],
-    val pattern: Pattern,
-    val component: Pattern.Component)
-      extends Seq[Mixtures#Mixture.Agent] {
+  final case class PartialEmbedding private (
+    val inj: Array[Mixture.Agent], val component: Pattern.Component)
+      extends Seq[Mixture.Agent] {
 
     type Source = AgentIndex
     type Target = Mixture.Agent
@@ -47,28 +43,36 @@ trait PartialEmbeddings {
      *
      * @return the first pair of this partial embedding.
      */
-    @inline def head: (Source, Target) = (0, map.head)
+    @inline def mapHead: (Source, Target) = (0, inj.head)
 
     @inline def get(key: Source): Option[Target] =
-      if (key > map.size) None else Some(map(key))
+      if (key > inj.size) None else Some(inj(key))
 
     @inline def mapIterator: Iterator[(Source, Target)] =
-      for ((v, k) <- map.iterator.zipWithIndex) yield (k, v)
+      for ((v, k) <- inj.iterator.zipWithIndex) yield (k, v)
 
     // TODO: Potentially confusing?
     @inline def +(p: (Source, Target)) = this updated (p._1, p._2)
 
 
-    // -- Seq[Target] API --
+    // -- Core Seq[Target] API --
 
-    @inline def apply(idx: Source): Target = map(key)
+    @inline def apply(idx: Source): Target = inj(idx)
 
-    @inline def iterator: Iterator[Target] = map.iterator
+    @inline def iterator: Iterator[Target] = inj.iterator
 
-    @inline def :+(elem: Target) = this.copy(map = this.map :+ elem)
+    @inline def length: Int = inj.length
+
+
+    // -- Extra Seq[Target] API --
+
+    @inline def :+(elem: Target) = this.copy(inj = this.inj :+ elem)
+
+    @inline override def foreach[U](f: Target => U): Unit =
+      inj foreach f
 
     @inline def updated(index: Source, elem: Target) =
-      this.copy(map = this.map updated (index, elem))
+      this.copy(inj = this.inj updated (index, elem))
 
 
     override def toString =
@@ -80,40 +84,35 @@ trait PartialEmbeddings {
     /**
      * Extend a pattern/mixture agent pair into a partial embedding.
      *
-     * @param k the pattern agent in the agent pair
+     * @param u the pattern agent in the agent pair
      * @param v the mixture agent in the agent pair
      * @returns `Some(pe)`, where `pe` is a (partial) embedding from
-     *          the pattern containing `k` into the mixture containing
+     *          the pattern containing `u` into the mixture containing
      *          `v`, or `None` if no such embedding exists.
      */
-    def apply(k: Pattern.Agent, v: Mixture.Agent): Option[PartialEmbedding] = {
-      val component = k.component
-      val map = new Array[Mixture.Agent](component.length)
+    def apply(u: Pattern.Agent, v: Mixture.Agent): Option[PartialEmbedding] = {
+      val component = u.component
+      val inj = new Array[Mixture.Agent](component.length)
       def extend(i: AgentIndex, v: Mixture.Agent): Boolean = {
-        if (map(i) != null) map(i) == v
+        if (inj(i) != null) inj(i) == v
         else {
-          val k = component(i)
-          if (k matches v) {
-            map(i) = v
-            val n = k.sites.size
-            var j: Int = 0
-            var extending: Boolean = true
-            while (j < n && extending) {
-              extending = (k.neighbor(j), v.neighbor(j)) match {
+          val u = component(i)
+          if (u matches v) {
+            inj(i) = v
+            (0 until u.sites.size) forall { j =>
+              (u.neighbor(j), v.neighbor(j)) match {
                 case (None, _) => true
                 case (Some((a1, s1)), Some((a2, s2))) =>
                   (s1 == s2) && extend(a1.index, a2)
                 case _ => false
               }
-              j += 1
             }
-            extending
           } else false
         }
       }
 
-      if (extend(k.index, v)) Some(
-        new PartialEmbedding(map, k.component.pattern, k.component))
+      if (extend(u.index, v)) Some(
+        new PartialEmbedding(inj, u.component))
       else None
     }
   }

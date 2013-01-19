@@ -38,11 +38,11 @@ trait Embeddings extends PartialEmbeddings {
    * degree).  For now, we can just extend these classes with the
    * appropriate Seq and put a warning there, e.g. like this:
    *
-   * WARNING: For convenience, this class provides the interface of a
-   * `Seq[PartialEmbedding]`.  However, using some methods from the
-   * `Seq` API might not result in the expected behavior.  E.g. `++`
-   * will return a `Seq[PartialEmbedding]` rather than the expected
-   * `Embedding`.
+   * ''WARNING'': For convenience, this class provides the interface
+   * of a `Seq[PartialEmbedding]`.  However, using some methods from
+   * the `Seq` API might not result in the expected behavior.
+   * E.g. `++` will return a `Seq[PartialEmbedding]` rather than the
+   * expected `Embedding`.
    *
    * For many use cases this is enough and if the expected behavior is
    * ever required (e.g. `++` returning an Embedding), we can always
@@ -51,29 +51,40 @@ trait Embeddings extends PartialEmbeddings {
    * @param pes the [[PartialEmbedding]]s making up this [[Embedding]].
    * @param pattern the [[Patterns#Pattern]] that constitutes the domain of
    *        this embedding.
-   * @param signature the root agents of the underlying [[PartialEmbedding]]s.
    */
-  case class Embedding(
-    pes: Vector[PartialEmbedding],
-    pattern: Pattern,
-    signature: Vector[AgentIndex])
+  final case class Embedding(pes: Vector[PartialEmbedding], pattern: Pattern)
       extends Seq[PartialEmbedding] {
 
-    // -- Forwarding methods of the underlying Vectors --
+    /**
+     * Return the image of the root agent of a given partial
+     * embedding.
+     *
+     * @param idx index of the partial embedding to return the image
+     *        of the root agent from.
+     * @param the image of the root agent of the partial embedding at
+     *        index `idx`.
+     */
+    @inline def signature(idx: ComponentIndex) = pes(idx)(0)
 
-    def apply(key: ComponentIndex) = pes(key)
 
-    def iterator = pes.iterator
+    // -- Core Seq[PartialEmbedding] API --
 
-    def updated(key: ComponentIndex, value: PartialEmbedding) =
-      this.copy(pes = this.pes updated (key, value),
-                signature = this.signature updated (key, value.head._1))
+    @inline def apply(idx: ComponentIndex) = pes(idx)
 
-    def :+(pe: PartialEmbedding) =
-      this.copy(pes = this.pes :+ pe, signature = this.signature :+ pe.head._1)
+    @inline def iterator = pes.iterator
 
-    def length = pes.length
+    @inline def length: Int = pes.length
 
-    def size = pes.length
+
+    // -- Extra Seq[PartialEmbedding] API --
+
+    @inline def :+(pe: PartialEmbedding) =
+      this.copy(pes = this.pes :+ pe)
+
+    @inline override def foreach[U](f: PartialEmbedding => U): Unit =
+      pes foreach f
+
+    @inline def updated(index: ComponentIndex, elem: PartialEmbedding) =
+      this.copy(pes = this.pes updated (index, elem))
   }
 }

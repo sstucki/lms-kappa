@@ -3,10 +3,17 @@ package kappa
 import scala.language.postfixOps
 
 trait Patterns {
-  this: LanguageContext with Parser with Rules with Symbols with Mixtures =>
+  this: LanguageContext with Parser with Rules with Symbols with Mixtures
+      with PartialEmbeddings =>
 
   /**
    * A class representing patterns in [[Model]]s (i.e. site graphs).
+   *
+   * ''WARNING'': For convenience, this class provides the interface
+   * of a `Seq[Pattern.Agent]`.  However, using some methods from the
+   * `Seq` API might not result in the expected behavior.  E.g. `++`
+   * will return a `Seq[Pattern.Agent]` rather than the expected
+   * `Pattern`.
    *
    * @constructor create a new Pattern.
    * @param components the connected components of this pattern.
@@ -16,9 +23,12 @@ trait Patterns {
    *        they were added to the pattern).
    * @param siteGraphString the string associated with this pattern
    */
-  class Pattern private (val components: Vector[Pattern.Component],
-                         val agents: Vector[Pattern.Agent],
-                         val siteGraphString: String) {
+  final class Pattern private (
+    val components: Vector[Pattern.Component],
+    val agents: Vector[Pattern.Agent],
+    val siteGraphString: String)
+      extends Seq[Pattern.Agent] {
+
     import Pattern._
 
     /**
@@ -27,40 +37,6 @@ trait Patterns {
      */
     def count: Double = (components map (_.count)).product
 
-    /* RHZ: I think all of these are methods we really don't need for simulation
-     * that we can safely skip for now
-     *
-     * sstucki: These are used in test cases because we don't have a
-     * parser right now.  Without them the test breaks. :-( I believe
-     * you will also find these handy when you implement the parser.
-     * As I understood it you build patterns from the AST by first
-     * adding all the agents to a pattern in a first traversal and
-     * then connecting them in a second pass.  That's exactly what
-     * these methods are intended for.
-     */
-    /**
-     * Return a new pattern extending this pattern with an additional
-     * (unconnected) agent.
-     *
-     * @param agent the agent to add.
-     * @return a new pattern extending this pattern with an additional
-     *         (unconnected) agent.
-     */
-    def :+(agent: Agent): Pattern = new Pattern(
-      components :+ new Component(Vector(agent)),
-      agents :+ agent, siteGraphString)
-
-    /**
-     * Create a single unconnected agent and return a new pattern
-     * extending this pattern with the newly created agent.
-     *
-     * @param state the state of the agent to add.
-     * @param sites the sites of the agent to add.
-     * @return a new pattern extending this pattern with an additional
-     *         (unconnected) agent.
-     */
-    def :+(state: AgentState, sites: Site*): Pattern =
-      this :+ Agent(state, sites.toArray)
 
     /**
      * Return a new pattern connecting two unconnected sites from this
@@ -68,7 +44,7 @@ trait Patterns {
      *
      * If the two sites do not belong to the same connected component
      * of this pattern, the two respecive components will be merged.
-     * 
+     *
      * FIXME: Merging is O(n) in the size of the pattern...
      *
      * @param agent the agent to add.
@@ -110,13 +86,57 @@ trait Patterns {
     // FIXME: Should delegate to a factory method in Action object instead.
     def -> (rhs: Pattern) = new Action(this, rhs)
 
-    // Seq methods
+
+    // -- Core Seq[Agent] API --
     @inline def apply(idx: Int): Agent = agents(idx)
     @inline def iterator: Iterator[Agent] = agents.iterator
     @inline def length: Int = agents.length
 
     @inline def apply(ci: ComponentIndex, ai: AgentIndex): Agent =
       components(ci).agents(ai)
+
+
+    /* RHZ: I think all of these are methods we really don't need for simulation
+     * that we can safely skip for now
+     *
+     * sstucki: These are used in test cases because we don't have a
+     * parser right now.  Without them the test breaks. :-( I believe
+     * you will also find these handy when you implement the parser.
+     * As I understood it you build patterns from the AST by first
+     * adding all the agents to a pattern in a first traversal and
+     * then connecting them in a second pass.  That's exactly what
+     * these methods are intended for.
+     */
+
+    // -- Extra Seq[Agent] API --
+
+    /**
+     * Return a new pattern extending this pattern with an additional
+     * (unconnected) agent.
+     *
+     * @param elem the agent to add.
+     * @return a new pattern extending this pattern with an additional
+     *         (unconnected) agent.
+     */
+    @inline def :+(elem: Agent): Pattern = new Pattern(
+      components :+ new Component(Vector(elem)),
+      agents :+ elem, siteGraphString)
+
+    /**
+     * Create a single unconnected agent and return a new pattern
+     * extending this pattern with the newly created agent.
+     *
+     * @param state the state of the agent to add.
+     * @param sites the sites of the agent to add.
+     * @return a new pattern extending this pattern with an additional
+     *         (unconnected) agent.
+     */
+    @inline def :+(state: AgentState, sites: Site*): Pattern =
+      this :+ Agent(state, sites.toArray)
+
+    @inline override def foreach[U](f: Agent => U): Unit =
+      components foreach { c => c.agents foreach f }
+
 
     // RHZ: Is this a Scala design pattern?
     //
@@ -188,10 +208,10 @@ trait Patterns {
       }
     }
 
-    /** A class representing an undefined link at a [[Pattern.Site]]. */
+    /** An object representing an undefined link at a [[Pattern.Site]]. */
     case object Undefined extends Link
 
-    /** A class representing stubs, i.e. unconnected [[Pattern.Site]]s. */
+    /** An object representing stubs, i.e. unconnected [[Pattern.Site]]s. */
     case object Stub extends Link
 
     /**
@@ -215,8 +235,8 @@ trait Patterns {
      *        this link.
      * @param state the state of the link from source to target.
      */
-    case class Linked(agent:Agent, site: SiteIndex,
-                      state: LinkState) extends Link
+    final case class Linked(agent:Agent, site: SiteIndex, state: LinkState)
+        extends Link
 
     /**
      * A class representing a wildcard link at a [[Pattern.Site]].
@@ -229,14 +249,16 @@ trait Patterns {
      * @param siteState the state a matching target site should have.
      * @param linkState the state a matching link should have.
      */
-    case class Wildcard(agentState: Option[AgentState],
-                        siteState: Option[SiteState],
-                        linkState: Option[LinkState]) extends Link
+    final case class Wildcard(
+      agentState: Option[AgentState],
+      siteState: Option[SiteState],
+      linkState: Option[LinkState]) extends Link
 
     /**
      * A class representing sites in [[Pattern.Agent]]s.
      */
-    class Site private (val state: SiteState, var link: Link = Undefined) {
+    final class Site private (
+      val state: SiteState, var link: Link = Undefined) {
 
       // TODO: this is not used at the moment.  Remove?
 
@@ -307,9 +329,17 @@ trait Patterns {
     /**
      * A class representing agents in [[Pattern.Component]]s.
      *
-     * @param index the index of this agent in the pattern it belongs to.
+     * ''WARNING'': For convenience, this class provides the interface
+     * of a `Seq[Pattern.Site]`.  However, using some methods from the
+     * `Seq` API might not result in the expected behavior.  E.g. `++`
+     * will return a `Seq[Pattern.Site]` rather than the expected
+     * `Pattern.Agent`.
+     *
+     * @param state the state of the agent.
+     * @param sites the sites of the agent.
      */
-    case class Agent(val state: AgentState, val sites: Array[Site]) {
+    case class Agent(val state: AgentState, val sites: Array[Site])
+        extends Seq[Site] {
 
       /** The component this agent belongs to. */
       // RHZ: made this type-safe
@@ -365,10 +395,14 @@ trait Patterns {
 
       override def toString() = state + sites.mkString("(", ",", ")")
 
-      // Seq methods
+      // -- Core Seq[Site] API --
       @inline def apply(idx: Int): Site = sites(idx)
       @inline def iterator: Iterator[Site] = sites.iterator
       @inline def length: Int = sites.length
+
+      // -- Extra Seq[Site] API --
+      @inline override def foreach[U](f: Site => U): Unit =
+        sites foreach f
 
       // Register sites.
       //for (s <- sites) s.agent = this
@@ -377,8 +411,16 @@ trait Patterns {
     /**
      * A class representing connected components of [[Patterns.Pattern]]s
      * (i.e. connected components of site graphs).
+     *
+     * ''WARNING'': For convenience, this class provides the
+     * interface of a `Seq[Pattern.Agent]`.  However, using some
+     * methods from the `Seq` API might not result in the expected
+     * behavior.  E.g. `++` will return a `Seq[Pattern.Agent]` rather
+     * than the expected `Pattern.Component`.
+     *
+     * @param agents the agents in this component
      */
-    class Component(val agents: Vector[Agent]) {
+    case class Component(val agents: Vector[Agent]) extends Seq[Agent] {
 
       /** The pattern this component belongs to. */
       protected[Pattern] var _pattern: Pattern = null
@@ -401,10 +443,25 @@ trait Patterns {
       // FIXME: implement!
       def count: Int = 1
 
-      // Seq methods
+      /**
+       * Return all the (partial) embeddings from this pattern
+       * component in a given mixture.
+       *
+       * @return all the partial embeddings from `this` in `that`.
+       */
+      def partialEmbeddingsIn(that: Mixture): Seq[PartialEmbedding] =
+        (for (u <- this; v <- that) yield PartialEmbedding(u, v)).flatten
+
+
+      // -- Core Seq[Agent] API --
       @inline def apply(idx: Int): Agent = agents(idx)
       @inline def iterator: Iterator[Agent] = agents.iterator
       @inline def length: Int = agents.length
+
+      // -- Extra Seq[Agent] API --
+      @inline override def foreach[U](f: Agent => U): Unit =
+        agents foreach f
+
 
       // Update the component pointers in the agents.
       for ((a, i) <- agents.zipWithIndex) {

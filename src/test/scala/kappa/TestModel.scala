@@ -20,7 +20,7 @@ class TestModel extends KappaModel("A(s:{p,q}!{1,1}") with FlatSpec {
   siteNameSyms  = siteNameSyms  + ("s" -> 0)
   siteStateNames     = siteStateNames    :+ "p"       :+ "q"
   siteStateNameSyms  = siteStateNameSyms + ("p" -> 0) + ("q" -> 1)
-  
+
   val a  = new AgentState(0)
   val b  = new AgentState(1)
   val s  = new SiteState(0, None)
@@ -57,10 +57,10 @@ class TestModel extends KappaModel("A(s:{p,q}!{1,1}") with FlatSpec {
   val m = Mixture(rhs) * 5
   println("mixture: " + m)
 
-  val pes = (
-    (for (u <- lhs.iterator; v <- m.iterator) yield PartialEmbedding(u, v)) ++
-    (for (u <- rhs.iterator; v <- m.iterator) yield PartialEmbedding(u, v))
-  ).flatten
+  val pes = {
+    (for (c <- lhs.components) yield (c partialEmbeddingsIn m)) ++
+    (for (c <- rhs.components) yield (c partialEmbeddingsIn m))
+  }.flatten
   println("partial embeddings:")
   for (pe <- pes) println("  " + pe)
 

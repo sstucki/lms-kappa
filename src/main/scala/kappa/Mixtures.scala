@@ -26,7 +26,7 @@ trait Mixtures {
    *
    *  1. extending pairs of pattern component/mixture agents into
    *     partial embeddings,
-   * 
+   *
    *  2. applying actions to mixtures.
    *
    * To extend partial embeddings efficiently, it is important to be
@@ -76,7 +76,7 @@ trait Mixtures {
    *
    * @constructor create an empty Mixture.
    */
-  class Mixture {
+  final class Mixture extends Seq[Mixture.Agent] {
     // RHZ any particular reason to make this like a cons cell instead of just
     // wrapping around an Array of Agents? I find it quite cumbersome this way
     //
@@ -111,13 +111,19 @@ trait Mixtures {
     import Mixture._
 
     /** First agent in the doubly-linked list representing the mixture. */
-    private var head: Agent = null
+    private var _head: Agent = null
 
-    /** The number of elements in this mixture. */
-    var size: Int = 0
+    /** First agent in the doubly-linked list representing the mixture. */
+    override def head: Agent =
+      if (_head == null) throw new NoSuchElementException(
+        "attempt to reference head element in empty mixture")
+      else _head
 
-    class MixtureIterator extends Iterator[Agent] {
-      private var nextAgent: Agent = head
+    /** The number of agents in this mixture. */
+    private var _length: Int = 0
+
+    private class MixtureIterator extends Iterator[Agent] {
+      private var nextAgent: Agent = _head
 
       def next = {
         val n = nextAgent
@@ -138,9 +144,9 @@ trait Mixtures {
      * @return a copy of this mixture.
      */
     def copy: Mixture = {
-      var u: Agent = head
+      var u: Agent = _head
       val that = new Mixture
-      that.size = this.size
+      that._length = this._length
 
       // First allocate "empty" agents for `that`
       var p: Agent = null
@@ -149,14 +155,14 @@ trait Mixtures {
         val v = new Agent(u.state, sites)
         v.mixture = that
         v.prev = p
-        if (p == null) { that.head = v } else { p.next = v }
+        if (p == null) { that._head = v } else { p.next = v }
         u.copy = v
         p = v
         u = u.next
       }
 
       // Now setup the interfaces of the agents in `that`
-      u = head
+      u = _head
       while(u != null) {
         val v = u.copy
         for (i <- 0 until u.sites.size) {
@@ -172,7 +178,7 @@ trait Mixtures {
 
       // Reset `copy` references in the agents of `this` to avoid
       // memory leaks.
-      u = head
+      u = _head
       while(u != null) {
         u.copy = null
         u = u.next
@@ -184,10 +190,10 @@ trait Mixtures {
     def +=(agent: Agent): Mixture = {
       agent.mixture = this
       agent.prev = null
-      agent.next = head
-      if (head != null) head.prev = agent
-      head = agent
-      size += 1
+      agent.next = _head
+      if (_head != null) _head.prev = agent
+      _head = agent
+      _length += 1
       this
     }
 
@@ -209,8 +215,8 @@ trait Mixtures {
       val an = agent.next
       if (ap != null) ap.next = an
       if (an != null) an.prev = ap
-      if (head == agent) head = an
-      size -= 1
+      if (_head == agent) _head = an
+      _length -= 1
       this
     }
 
@@ -296,7 +302,7 @@ trait Mixtures {
      * becomes invalid and should not be operated on any longer. 
      */
     def ++=(that: Mixture): Mixture = {
-      var a: Agent = that.head
+      var a: Agent = that._head
       var last: Agent = null
       while (a != null) {
         a.mixture = this
@@ -304,11 +310,11 @@ trait Mixtures {
         a = a.next
       }
       if (last != null) {
-        if (this.head != null) this.head.prev = last
-        last.next = this.head
-        this.head = that.head
+        if (this._head != null) this._head.prev = last
+        last.next = this._head
+        this._head = that._head
       }
-      size += that.size
+      _length += that._length
       this
     }
 
@@ -325,13 +331,24 @@ trait Mixtures {
         this ++= m
       }
 
-    // Seq methods
+
+    // -- Core Seq[Agent] API --
     @inline def apply(idx: Int): Agent = {
-      if (idx >= size) throw new IndexOutOfBoundsException
+      if (idx >= _length) throw new IndexOutOfBoundsException
       (iterator drop idx).next
     }
     @inline def iterator: Iterator[Agent] = new MixtureIterator
-    @inline def length: Int = size
+    @inline override def length: Int = _length
+
+
+    // -- Extra Seq[Agent] API --
+    @inline override def foreach[U](f: Agent => U): Unit = {
+      var u = _head
+      while (u != null) {
+        f(u)
+        u = u.next
+      }
+    }
 
     override def toString = iterator.mkString("", ",", "")
   }
@@ -362,7 +379,7 @@ trait Mixtures {
       }
     }
 
-    /** A class representing stubs, i.e. unconnected [[Mixture.Site]]s. */
+    /** An object representing stubs, i.e. unconnected [[Mixture.Site]]s. */
     case object Stub extends Link
 
     /**
@@ -403,8 +420,8 @@ trait Mixtures {
      *        this link.
      * @param state the state of the link from source to target.
      */
-    case class Linked(agent: Agent, site: SiteIndex,
-                      state: LinkState) extends Link
+    final case class Linked(agent: Agent, site: SiteIndex, state: LinkState)
+        extends Link
 
     /**
      * A class representing sites of [[Mixture.Agent]]s.
@@ -414,7 +431,7 @@ trait Mixtures {
      * @param stateLiftSet lift set for site state modifications
      * @param linkLiftSet lift set for link modifications
      */
-    case class Site(
+    final case class Site(
       var state: SiteState,
       var link: Link = Stub,
       val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet(),
@@ -423,10 +440,10 @@ trait Mixtures {
       // RHZ: should we reference the parent Agent in Mixtures as well?
       //
       // sstucki: no I think this is total overkill unless we change
-      // the definition of Liked (see comment in the copy method
-      // above) or want to have a "nice and intuitive" interface for
-      // manipulating mixtures and their agents, states, etc. but that
-      // is not the goal here, really.
+      // the definition of Liked (see comment of Linked above) or want
+      // to have a "nice and intuitive" interface for manipulating
+      // mixtures and their agents, states, etc. but that is not the
+      // goal here, really.
 
       //var agent: Agent = null
 
@@ -457,7 +474,7 @@ trait Mixtures {
      * @param prev a reference to the previous agent in the [[Mixture]]
      *        this agent belongs to.
      */
-    case class Agent protected[Mixture] (
+    final case class Agent protected[Mixture] (
       var state: AgentState,
       val sites: Array[Site],
       val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet()) {
@@ -493,15 +510,15 @@ trait Mixtures {
 
       override def toString() = state + sites.mkString("(", ",", ")")
 
-      // Seq methods
+      // -- Core Seq[Site] API --
       @inline def apply(idx: Int): Site = sites(idx)
       @inline def iterator: Iterator[Site] = sites.iterator
       @inline def length: Int = sites.length
     }
 
+
     /** Creates an empty mixture. */
-    @inline
-    def apply(): Mixture = new Mixture
+    @inline def apply(): Mixture = new Mixture
 
     /** Converts a pattern into a mixture. */
     def apply(pattern: Pattern): Mixture = {
