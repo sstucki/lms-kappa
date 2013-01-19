@@ -1,8 +1,5 @@
 package kappa
 
-import collection.immutable.HashMap
-import collection.mutable
-
 trait PartialEmbeddings {
   this: Mixtures with Patterns =>
 
@@ -10,8 +7,15 @@ trait PartialEmbeddings {
    * A class reperesenting an embedding form a single connected
    * component of a site graph into a mixture.
    *
+   * WARNING: For convenience, this class provides the interface of a
+   * `Seq[Mixtures#Mixture.Agent]`.  However, using some methods from
+   * the `Seq` API might not result in the expected behavior.
+   * E.g. `++` will return a `Seq[PartialEmbedding]` rather than the
+   * expected `PartialEmbedding`.
+   *
    * @param map an array of [[Mixtures#Mixture.Agent]]s representing
-   *        the injection from pattern agent indices to mixture agents.
+   *        the injection from pattern agent indices to mixture
+   *        agents.
    * @param pattern the [[Patterns#Pattern]] of the pattern that contains
    *        the domain of this embedding.
    * @param component the connected [[Patterns#Pattern.Component]]
@@ -21,7 +25,8 @@ trait PartialEmbeddings {
   case class PartialEmbedding private (
     val map: Array[Mixture.Agent],
     val pattern: Pattern,
-    val component: Pattern.Component) {
+    val component: Pattern.Component)
+      extends Seq[Mixtures#Mixture.Agent] {
 
     type Source = AgentIndex
     type Target = Mixture.Agent
@@ -30,36 +35,41 @@ trait PartialEmbeddings {
      * Returns this [[PartialEmbedding]] as a map from agent indices
      * to [[Mixtures#Mixture.Agent]]s.
      *
-     * FIXME: When is this used? Why not just use iterator, etc.?
-     *
      * @return this [[PartialEmbedding]] as a map from agent indices
      * to [[Mixtures#Mixture.Agent]]s.
      */
-    def toMap: Map[Source, Target] = iterator.toMap
+    def toMap: Map[Source, Target] = mapIterator.toMap
 
-    //-- Methods imitating a Map[Source, Target] and Vector[Target] interface --
-    
+    // -- Convenience functions from Map[Source, Target] API --
+
     /**
      * Selects the first pair of this partial embedding.
      *
      * @return the first pair of this partial embedding.
      */
-    def head: (Source, Target) = (0, map.head)
+    @inline def head: (Source, Target) = (0, map.head)
 
-    def get(key: Source): Option[Target] =
+    @inline def get(key: Source): Option[Target] =
       if (key > map.size) None else Some(map(key))
 
-    def apply(key: Source): Target = map(key)
-
-    def iterator: Iterator[(Source, Target)] =
+    @inline def mapIterator: Iterator[(Source, Target)] =
       for ((v, k) <- map.iterator.zipWithIndex) yield (k, v)
 
-    def updated(key: Source, value: Target) =
-      this.copy(map = this.map updated (key, value))
-    
-    def +(p: (Source, Target)) = this updated (p._1, p._2)
+    // TODO: Potentially confusing?
+    @inline def +(p: (Source, Target)) = this updated (p._1, p._2)
 
-    def :+(t: Target) = this.copy(map = this.map :+ t)
+
+    // -- Seq[Target] API --
+
+    @inline def apply(idx: Source): Target = map(key)
+
+    @inline def iterator: Iterator[Target] = map.iterator
+
+    @inline def :+(elem: Target) = this.copy(map = this.map :+ elem)
+
+    @inline def updated(index: Source, elem: Target) =
+      this.copy(map = this.map updated (index, elem))
+
 
     override def toString =
       "PE(" + component.index + ": " + toMap.mkString(", ") + ")"
@@ -67,6 +77,15 @@ trait PartialEmbeddings {
 
   object PartialEmbedding {
 
+    /**
+     * Extend a pattern/mixture agent pair into a partial embedding.
+     *
+     * @param k the pattern agent in the agent pair
+     * @param v the mixture agent in the agent pair
+     * @returns `Some(pe)`, where `pe` is a (partial) embedding from
+     *          the pattern containing `k` into the mixture containing
+     *          `v`, or `None` if no such embedding exists.
+     */
     def apply(k: Pattern.Agent, v: Mixture.Agent): Option[PartialEmbedding] = {
       val component = k.component
       val map = new Array[Mixture.Agent](component.length)

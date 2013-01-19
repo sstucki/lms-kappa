@@ -29,14 +29,35 @@ trait Embeddings extends PartialEmbeddings {
    * make this proper Maps at some point, but it will require some effort.
    * PatialFunction, on the other hand, seems like a low-hanging fruit :-)
    *
+   * sstucki: UPDATE: I've been thinking and it's probably rather
+   * tricky to develop and actual builder for the graph structures
+   * (see the documentation in [[Mixturres#Mixture]].  For the
+   * embeddings, it's different, because we're really just wrapping a
+   * vector so we could, at least in principle, write an appropriate
+   * builder (I think one can even re-use exiting builders to some
+   * degree).  For now, we can just extend these classes with the
+   * appropriate Seq and put a warning there, e.g. like this:
+   *
+   * WARNING: For convenience, this class provides the interface of a
+   * `Seq[PartialEmbedding]`.  However, using some methods from the
+   * `Seq` API might not result in the expected behavior.  E.g. `++`
+   * will return a `Seq[PartialEmbedding]` rather than the expected
+   * `Embedding`.
+   *
+   * For many use cases this is enough and if the expected behavior is
+   * ever required (e.g. `++` returning an Embedding), we can always
+   * implement it later.  Does that that sound like a good compromise?
+   *
    * @param pes the [[PartialEmbedding]]s making up this [[Embedding]].
    * @param pattern the [[Patterns#Pattern]] that constitutes the domain of
    *        this embedding.
-   * @param signature the root agents of the underlying [[PartialEmbedding]]s. 
+   * @param signature the root agents of the underlying [[PartialEmbedding]]s.
    */
-  case class Embedding(pes: Vector[PartialEmbedding],
-                       pattern: Pattern,
-                       signature: Vector[AgentIndex]) {
+  case class Embedding(
+    pes: Vector[PartialEmbedding],
+    pattern: Pattern,
+    signature: Vector[AgentIndex])
+      extends Seq[PartialEmbedding] {
 
     // -- Forwarding methods of the underlying Vectors --
 
