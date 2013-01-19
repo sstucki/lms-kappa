@@ -553,4 +553,7 @@ trait Mixtures {
     /** Converts a pattern into a mixture. */
     implicit def patternToMixture(pattern: Pattern) = apply(pattern)
   }
+
+  /** Default Mixture of the enclosing model. */
+  val mix = Mixture()
 }

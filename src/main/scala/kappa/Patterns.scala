@@ -1,9 +1,7 @@
 package kappa
 
-import scala.language.postfixOps
-
 trait Patterns {
-  this: LanguageContext with Parser with Rules with Symbols with Mixtures
+  this: LanguageContext with Parser with Actions with Symbols with Mixtures
       with PartialEmbeddings =>
 
   /**
@@ -82,9 +80,11 @@ trait Patterns {
       if (!siteGraphString.isEmpty) siteGraphString
       else iterator.mkString("", ",", "")
 
-    // Action constructor
-    // FIXME: Should delegate to a factory method in Action object instead.
-    def -> (rhs: Pattern) = new Action(this, rhs)
+    /**
+     * Construct and action with `this` and `that` as LHS and RHS,
+     * respectively.
+     */
+    def -> (that: Pattern) = Action(this, that)
 
 
     // -- Core Seq[Agent] API --
