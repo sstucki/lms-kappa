@@ -191,10 +191,10 @@ trait Mixtures {
       u = _head
       while(u != null) {
         val v = u.copy
-        for (i <- 0 until u.sites.size) {
-          val s = u.sites(i)
+        for (i <- 0 until u.length) {
+          val s = u(i)
           val l = s.link match {
-            case Linked(a, s, l) => Linked(a.copy, s, l)
+            case Linked(a, j, l) => Linked(a.copy, j, l)
             case Stub => Stub
           }
           v.sites(i) = Site(s.state, l)
@@ -597,22 +597,23 @@ trait Mixtures {
         // Allocate "empty" copies of agents in this component
         val as = new Array[Agent](c.agents.size)
         for (u <- c.agents) {
-          val v = new Agent(u.state, new Array[Site](u.sites.size))
+          val v = Agent(u.state, new Array[Site](u.sites.size))
           m += v
           as(u.index) = v
         }
 
         // Setup the interfaces of the agents in the component
         for (u <- c.agents) {
-          var j = 0
+          var i = 0
           for (s <- u.sites) {
             val l = s.link match {
-              case Pattern.Linked(a, s, l) => Linked(as(a.index), s, l)
+              case Pattern.Linked(a, j, l) => Linked(as(a.index), j, l)
               case Pattern.Stub => Stub
               case _ => throw new IllegalArgumentException(
                 "attempt to create mixture with an undefined or wildcard link")
             }
-            as(u.index).sites(j) = new Site(s.state, l)
+            as(u.index).sites(i) = Site(s.state, l)
+            i += 1
           }
         }
       }
