@@ -10,14 +10,82 @@ trait Model extends Patterns with Mixtures with Actions with Rules
   var events    : Int                  = 0
   var maxTime   : Option[Double]       = None
   var maxEvents : Option[Int]          = None
-  var init      : Mixture              = new Mixture()
   var obs       : Vector[Pattern]      = Vector()
+  //val mix       : Mixture              = new Mixture() // Use Mixtures.mix
 
-  def withInit(mix: Mixture) = { init ++= mix; this }
+  def withInit(mix: Mixture) = { this.mix ++= mix; this }
+  def withObs(obs: Pattern) = { this.obs = this.obs :+ obs; this }
   def withMaxTime(t: Double) = { maxTime = Some(t); this }
   def withMaxEvents(e: Int) = { maxEvents = Some(e); this }
 
-  def run() { }
+  def run() {
+    // FXIME: Naive simulator....
+
+    println("# == Rules:")
+    for (r <- rules) println("#    " + r)
+    println
+    println("# == Observables:")
+    for (o <- obs) println("#    " + o)
+    println
+
+    // Create a new random number generator
+    val rand = new util.Random
+
+    println("# === Start of simulation ===")
+    println("# Event\tTime\tObservables")
+
+    // Main loop
+    while (events < (maxEvents getOrElse (events + 1))) {
+
+      // Collect all patterns (LHS' and observables)
+      val lhss = for (i <- 0 until rules.length) yield (rules(i).action.lhs)
+      val pats = lhss ++ obs
+
+      // Compute all partial embeddings.
+      val embs =
+        for (p <- pats) yield (p.components map (_ partialEmbeddingsIn mix))
+
+      // Compute all observable counts.
+      val obsCounts =
+        for (i <- rules.size until rules.length + obs.length) yield {
+          (embs(i) map (_.length)).product
+        }
+
+      println("" + events + "\t" + time + "\t" + obsCounts.mkString("\t"))
+
+      // Compute all rule weights.
+      val weights =
+        for (i <- 0 until rules.size) yield {
+          rules(i).rate((embs(i) map (_.length)): _*)
+        }
+
+      // Build the activity tree
+      val tree = RandomTree(weights, rand)
+      val totalActivity = tree.totalWeight
+
+      if (totalActivity == 0) {
+        println("# No more events. Terminating.")
+        maxEvents = Some(0)
+      } else {
+
+        // Pick a rule and event at random
+        val ri = tree.nextRandom._1
+        val e = for (pes <- embs(ri)) yield pes(rand.nextInt(pes.size))
+        val emb = new Embedding(e.toVector, rules(ri).action.lhs)
+
+        // Apply the rule/event
+        rules(ri).action(emb, mix)
+
+        // Compute time advance
+        val dt = -math.log(rand.nextDouble) / totalActivity
+        time += dt
+      }
+
+      events += 1
+    }
+
+    println("# === End of simulation ===")
+  }
 
   // Implicit conversions and other functions
   // FIXME: Why are these in a separate object?

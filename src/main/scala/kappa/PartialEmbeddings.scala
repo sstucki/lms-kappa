@@ -20,7 +20,7 @@ trait PartialEmbeddings {
    *        (of `pattern`) that conconstitutes the domain of this
    *        embedding.
    */
-  final case class PartialEmbedding private (
+  final case class PartialEmbedding /*private*/ (
     val inj: Array[Mixture.Agent], val component: Pattern.Component)
       extends Seq[Mixture.Agent] {
 

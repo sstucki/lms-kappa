@@ -15,9 +15,9 @@ import scala.language.implicitConversions
  *     states, i.e. it specifies whether `this` state "matches" `that`
  *     state;
  *
- *  2. [[isConcrete]] is an unary realtion that defines whether a
- *     given state is admissible in a mixture, i.e whether it is
- *     a "concrete" state.
+ *  2. [[isComplete]] is an unary realtion that defines whether a
+ *     given state is admissible in a mixture, i.e whether it is a
+ *     "concrete" state.
  *
  * Examples of states are agent, site and link states.
  *
@@ -54,7 +54,7 @@ trait State[A] {
    *
    * @return `true` if this sate is valid in a mixture.
    */
-  def isConcrete: Boolean
+  def isComplete: Boolean
 
   // FIMXE: In the future we might to provide these for compatibility?
 
@@ -99,25 +99,56 @@ object State {
     }
 
   /**
-   * Compare two Option values using a "matches" relation.
+   * Compare two `Option` values using a "matches" relation.
    *
-   * This function defines a new binary "matches" relation `M(x, y)`
+   * This function defines a new binary "matches" relation `M(ox, oy)`
    * (w.r.t. the relation `mf`):
    *
-   *  - `M(None, y)`, for any `y`
+   *  - `M(None, oy)`, for any `oy`
    *  - `M(Some(x), Some(y))`, if and only if `mf(x, y)`
    *
-   * @tparam T the underlying type of the option values.
-   * @param x the option value to match.
-   * @param y the option value to match against.
+   * @tparam T the underlying type of the `Option[T]` values.
+   * @param ox the `Option` value to match.
+   * @param oy the `Option` value to match against.
    * @param mf a function representing the "matches" relation.
-   * @return `true` if `x` matches `y` according to `mf`.
+   * @return `true` if `ox` matches `oy` according to `M(ox, oy)`.
    */
-  @inline def matchesOption[T](x: Option[T], y: Option[T])(
+  @inline final def omatches[T](ox: Option[T], oy: Option[T])(
     mf: (T, T) => Boolean): Boolean =
-      (x, y) match {
+      (ox, oy) match {
         case (None, _) => true
         case (Some(_), None) => false
         case (Some(x), Some(y)) => mf(x, y)
       }
+
+  /**
+   * Compare two `Option[State]` values using a "matches" relation.
+   *
+   * This function defines a binary matches relation over options of
+   * states.  The relation is defined as in [[State.omatches]] with
+   * the [[State.matches]] method of the corresponding `State[T]` type
+   * providing the inner "matches" relation.
+   *
+   * @tparam T the underlying type of the `Option[State[T]]` values.
+   * @param ox the `Option[State[T]]` value to match.
+   * @param oy the `Option[State[T]]` value to match against.
+   * @return `true` if `ox` matches `oy` according to `M(ox, oy)`.
+   */
+  @inline final def osmatches[T <: State[T]](ox: Option[T], oy: Option[T]) =
+    omatches(ox, oy)(_ matches _)
+
+  /**
+   * Compare two state values for equality.
+   *
+   * The function defines the following equivalence relation:
+   *
+   *  - `sequals(a, b)` iff `(a matches b) && (b matches a)`
+   *
+   * @tparam T the underlying type of the `Option[State[T]]` values.
+   * @param ox the first `Option[State[T]]` operand.
+   * @param oy the second `Option[State[T]]` operand.
+   * @return `true` if `ox` and `oy` are equivalent.
+   */
+  @inline def sequals[T <: State[T]](ls: T, rs: T): Boolean =
+    (ls matches rs) && (rs matches ls)
 }

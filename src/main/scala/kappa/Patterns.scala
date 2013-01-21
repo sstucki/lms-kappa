@@ -180,18 +180,39 @@ trait Patterns {
     /** A class representing links between [[Pattern.Site]]s. */
     sealed abstract class Link {
 
+      import State.osmatches
+
+      /**
+       * Compare this link against another [[Pattern.Link]].
+       *
+       * @return `true` if `this` matches `that`.
+       */
+      def matches(that: Link): Boolean = (this, that) match {
+        case (Undefined, _) => true
+        case (Stub, Stub) => true
+        case (Wildcard(a1, s1, l1), Wildcard(a2, s2, l2)) =>
+          osmatches(a1, a2) && osmatches(s1, s2) && osmatches(l1, l2)
+        case (Wildcard(a1, s1, l1), Linked(a2, s2, l2)) =>
+          osmatches(a1, Some(a2.state)) &&
+            osmatches(s1, Some(a2.sites(s2).state)) &&
+            osmatches(l1, Some(l2))
+        case (Linked(_, _, l1), Linked(_, _, l2)) =>
+          l1 matches l2
+        case _ => false
+      }
+
       /**
        * Compare this link against a [[Mixtures#Mixture.Link]].
        *
-       * @return `true` if this site matches `that`.
+       * @return `true` if `this` matches `that`.
        */
       def matches(that: Mixture.Link): Boolean = (this, that) match {
         case (Undefined, _) => true
         case (Stub, Mixture.Stub) => true
         case (Wildcard(a1, s1, l1), Mixture.Linked(a2, s2, l2)) =>
-          (a1 map (_ matches a2.state) getOrElse true) &&
-          (s1 map (_ matches a2.sites(s2).state) getOrElse true) &&
-          (l1 map (_ matches l2) getOrElse true)
+          osmatches(a1, Some(a2.state)) &&
+            osmatches(s1, Some(a2.sites(s2).state)) &&
+            osmatches(l1, Some(l2))
         case (Linked(_, _, l1), Mixture.Linked(_, _, l2)) =>
           l1 matches l2
         case _ => false
@@ -257,7 +278,7 @@ trait Patterns {
     /**
      * A class representing sites in [[Pattern.Agent]]s.
      */
-    final class Site private (
+    final case class Site private (
       val state: SiteState, var link: Link = Undefined) {
 
       // TODO: this is not used at the moment.  Remove?
@@ -300,6 +321,14 @@ trait Patterns {
         }
 
       /**
+       * Compare this site against another [[Pattern.Site]].
+       *
+       * @return `true` if `this` matches `that`.
+       */
+      def matches(that: Site): Boolean =
+        (this.state matches that.state) && (this.link matches that.link)
+
+      /**
        * Compare this site against a [[Mixtures#Mixture.Site]].
        *
        * @return `true` if this site matches `that`.
@@ -319,11 +348,10 @@ trait Patterns {
 
     /** Companion object of [[Site]] containing factory methods */
     object Site {
-      def apply(state: SiteState) = new Site(state)
+      def apply(state: SiteState) = new Site(state, Undefined)
       def apply(state: SiteState, stub: Boolean) =
         new Site(state, if (stub) Stub else Undefined)
       def apply(state: SiteState, wildcard: Wildcard) = new Site(state, wildcard)
-      def unapply(site: Site) = (site.state, site.link)
     }
 
     /**
@@ -341,7 +369,6 @@ trait Patterns {
     case class Agent(val state: AgentState, val sites: Array[Site])
         extends Seq[Site] {
 
-      /** The component this agent belongs to. */
       // RHZ: made this type-safe
       //
       // sstucki: No, you made it into an Option, that is no more (or
@@ -351,7 +378,10 @@ trait Patterns {
       // useful.  I reverted it and made the pointer protected.  Now
       // expressive error messages on the other hand are very useful,
       // so I kept that.
+      /** The component this agent belongs to. */
       protected[Pattern] var _component: Component = null
+
+      /** The component this agent belongs to. */
       @inline def component =
         if (_component == null) throw new NullPointerException(
           "attempt to access parent component of orphan agent")
@@ -364,6 +394,8 @@ trait Patterns {
       // we ought to protect it.  Fixed this.
       /** The index of the agent within the component. */
       protected[Pattern] var _index: AgentIndex = -1
+
+      /** The index of the agent within the component. */
       @inline def index =
         if (_index < 0) throw new NullPointerException(
           "attempt to  parent component of orphan agent")
@@ -392,6 +424,10 @@ trait Patterns {
         that.sites.size == this.sites.size &&
         (this.state matches that.state) &&
         (this.sites zip that.sites forall { case (s1, s2) => s1 matches s2 })
+
+      // FIXME: Hack to avoid recursive calls to `equals`
+      override def equals(that: Any): Boolean =
+        that.isInstanceOf[Agent] && (this eq that.asInstanceOf[Agent])
 
       override def toString() = state + sites.mkString("(", ",", ")")
 

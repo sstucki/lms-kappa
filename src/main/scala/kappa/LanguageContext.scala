@@ -21,9 +21,9 @@ trait KappaContext extends LanguageContext {
   case class AgentStateImpl(atype: AgentTypeSym) extends State[AgentStateImpl] {
     override def toString = agentTypes(atype)
     def matches(that: AgentStateImpl) = this.atype == that.atype
-    def isConcrete = true
+    def isComplete = true
   }
-  
+
   case class SiteStateImpl(name: SiteNameSym, state: Option[SiteStateNameSym])
        extends State[SiteStateImpl] {
 
@@ -34,10 +34,10 @@ trait KappaContext extends LanguageContext {
          })
 
          def matches(that: SiteStateImpl) =
-           (this.name == that.name) && State.matchesOption(
+           (this.name == that.name) && State.omatches(
              this.state, that.state)(_==_)
 
-         def isConcrete = !state.isEmpty
+         def isComplete = !state.isEmpty
        }
 
   case class LinkStateImpl(state: Option[LinkStateNameSym])
@@ -47,10 +47,10 @@ trait KappaContext extends LanguageContext {
            case Some(s) => ": " + linkStateNames(s)
          }
 
-         def matches(that: LinkStateImpl) = State.matchesOption(
+         def matches(that: LinkStateImpl) = State.omatches(
            this.state, that.state)(_==_)
 
-         def isConcrete = !state.isEmpty
+         def isComplete = !state.isEmpty
        }
 }
 

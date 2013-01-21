@@ -134,6 +134,32 @@ trait Mixtures {
       def hasNext = nextAgent != null
     }
 
+    ///** The type of the collection used to track updated agents. */
+    //type UpdatedAgentsList = mutable.Buffer[Agent]
+
+    /** The collection used to track updated agents. */
+    val updatedAgents = new mutable.ArrayBuffer[Agent]()
+
+    /**
+     * Mark a given agent as updated and add it to the updated agents
+     * list (unless it was already marked).
+     */
+    @inline def markUpdated(agent: Agent) {
+      if (!agent.updated) {
+        agent.updated = true
+        updatedAgents += agent
+      }
+    }
+
+    /**
+     * Unmark all the agents in the updated agents list and clear the
+     * list.
+     */
+    @inline def clearUpdatedAgents {
+      for (agent <- updatedAgents) agent.updated = false
+      updatedAgents.clear
+    }
+
     /**
      * Make a copy of this mixture.
      *
@@ -194,23 +220,43 @@ trait Mixtures {
       if (_head != null) _head.prev = agent
       _head = agent
       _length += 1
+
+      agent.updated = false
+      markUpdated(agent)
+
       this
     }
 
     /** Create a [[Mixture.Agent]] and add it to this mixture. */
     def +=(state: AgentState, siteStates: Seq[SiteState]): Mixture = {
-      val n = siteStates.size
+
+      // Create and initialize sites
       var i: Int = 0
-      val sites = new Array[Site](n)
-      val it = siteStates.iterator
-      while (it.hasNext) {
-        sites(i) = new Site(it.next)
+      val sites = new Array[Site](siteStates.size)
+      for (s <- siteStates) {
+        sites(i) = new Site(s)
+        i += 1
       }
+
+      // Add agent to mixture
       this += (new Agent(state, sites))
     }
 
     /** Remove a single agent to this mixture. */
     def -=(agent: Agent): Mixture = {
+
+      // Disconnect agent
+      for (s <- agent) {
+        s.link match {
+          case Linked(a2, i, _) => {
+            a2.sites(i).link = Stub
+            markUpdated(a2)
+          }
+          case _ => { }
+        }
+      }
+
+      // Remove agent
       val ap = agent.prev
       val an = agent.next
       if (ap != null) ap.next = an
@@ -273,6 +319,10 @@ trait Mixtures {
                 a2: Agent, s2: SiteIndex, l2: LinkState): Mixture = {
       a1.sites(s1).link = Linked(a2, s2, l1)
       a2.sites(s2).link = Linked(a1, s1, l2)
+
+      markUpdated(a1)
+      markUpdated(a2)
+
       this
     }
 
@@ -283,14 +333,16 @@ trait Mixtures {
     /** Disconnect a site in this mixture. */
     def disconnect(a: Agent, s: SiteIndex): Mixture = {
       val s1 = a.sites(s)
-      val l = a.sites(s).link
-      val s2 = l match {
-        case Linked(a2, i, _) => a2.sites(i)
-        case _ => throw new IllegalArgumentException(
-          "attempt to disconnect an unconnected site")
+      s1.link match {
+        case Linked(a2, i, _) => {
+          a2.sites(i).link = Stub
+          markUpdated(a2)
+        }
+        case _ => { }
       }
       s1.link = Stub
-      s2.link = Stub
+      markUpdated(a)
+
       this
     }
 
@@ -299,13 +351,15 @@ trait Mixtures {
      *
      * The doubly-linked list representing the mixture `that` will be
      * appended to this mixture.  After this concatenation `that`
-     * becomes invalid and should not be operated on any longer. 
+     * becomes invalid and should not be operated on any longer.
      */
     def ++=(that: Mixture): Mixture = {
       var a: Agent = that._head
       var last: Agent = null
       while (a != null) {
         a.mixture = this
+        a.updated = false
+        markUpdated(a)
         last = a
         a = a.next
       }
@@ -477,7 +531,8 @@ trait Mixtures {
     final case class Agent protected[Mixture] (
       var state: AgentState,
       val sites: Array[Site],
-      val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet()) {
+      val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet())
+        extends Seq[Site] {
 
       // RHZ: Maybe we should make this type-safe as well
       // Since it's mutable I'll just turn a blind eye to it for now
@@ -495,6 +550,12 @@ trait Mixtures {
       protected[Mixture] var copy: Agent = null
 
       /**
+       * Marker flag for agents to be considered updated (used to
+       * track changes made by actions).
+       */
+      var updated: Boolean = false
+
+      /**
        * Returns the neighbor of a site if it is connected.
        *
        * @param site the index of the site whose neighbor we try to find.
@@ -508,12 +569,20 @@ trait Mixtures {
           case _ => None
         }
 
+      // FIXME: Hack to avoid recursive calls to `equals`
+      override def equals(that: Any): Boolean =
+        that.isInstanceOf[Agent] && (this eq that.asInstanceOf[Agent])
+
       override def toString() = state + sites.mkString("(", ",", ")")
 
       // -- Core Seq[Site] API --
       @inline def apply(idx: Int): Site = sites(idx)
       @inline def iterator: Iterator[Site] = sites.iterator
       @inline def length: Int = sites.length
+
+      // -- Extra Seq[Site] API --
+      @inline override def foreach[U](f: Site => U): Unit =
+        sites.foreach(f)
     }
 
 
