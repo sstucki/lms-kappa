@@ -101,7 +101,7 @@ class RandomTree(val size: Int, val prng: Random) {
   /**
    * Returns the index and weight of a random leaf of the random tree
    * with probability proportional to the weight of that leaf.
-   * 
+   *
    * More precisely, the probability of selecting leaf `i` is
    *
    * {{{

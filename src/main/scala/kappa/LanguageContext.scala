@@ -1,11 +1,26 @@
 package kappa
 
+/** A trait for agent states. */
+trait AgentStateIntf[T] extends Matchable[T] {
+  this: T =>
+
+  /**
+   * Checks if this agent state matches `that` when constructing rules
+   * according to the "longest common prefix" rule.
+   *
+   * @return `true` if this agent state matches `that`.
+   */
+  def matchesInLongestCommonPrefix(that: T): Boolean
+}
+
+
 trait LanguageContext {
   // State types
-  type AgentState <: State[AgentState]
-  type SiteState <: State[SiteState]
-  type LinkState <: State[LinkState]
+  type AgentState <: AgentStateIntf[AgentState]
+  type SiteState <: Matchable[SiteState]
+  type LinkState <: Matchable[LinkState]
 }
+
 
 trait KappaContext extends LanguageContext {
   this: KappaSymbols =>
@@ -18,14 +33,17 @@ trait KappaContext extends LanguageContext {
   // to represent symbols, some of these wrappers would likely not be
   // necessary as we could use the symbols directly to represent the
   // states (in cases where the states are not tuples).
-  case class AgentStateImpl(atype: AgentTypeSym) extends State[AgentStateImpl] {
+  case class AgentStateImpl(atype: AgentTypeSym)
+      extends AgentStateIntf[AgentStateImpl] {
     override def toString = agentTypes(atype)
     def matches(that: AgentStateImpl) = this.atype == that.atype
     def isComplete = true
+    def matchesInLongestCommonPrefix(that: AgentStateImpl) =
+      this.atype == that.atype
   }
 
   case class SiteStateImpl(name: SiteNameSym, state: Option[SiteStateNameSym])
-       extends State[SiteStateImpl] {
+       extends Matchable[SiteStateImpl] {
 
          // FIXME: Adjust to new syntax?
          override def toString = siteNames(name) + (state match {
@@ -34,20 +52,20 @@ trait KappaContext extends LanguageContext {
          })
 
          def matches(that: SiteStateImpl) =
-           (this.name == that.name) && State.omatches(
+           (this.name == that.name) && Matchable.optionMatches(
              this.state, that.state)(_==_)
 
          def isComplete = !state.isEmpty
        }
 
   case class LinkStateImpl(state: Option[LinkStateNameSym])
-       extends State[LinkStateImpl] {
+       extends Matchable[LinkStateImpl] {
          override def toString = state match {
            case None => ""
            case Some(s) => ": " + linkStateNames(s)
          }
 
-         def matches(that: LinkStateImpl) = State.omatches(
+         def matches(that: LinkStateImpl) = Matchable.optionMatches(
            this.state, that.state)(_==_)
 
          def isComplete = !state.isEmpty

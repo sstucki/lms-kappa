@@ -1,2 +1,4 @@
 target/
 project/
+/.ensime
+/.ensime_lucene

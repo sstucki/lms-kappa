@@ -1,5 +1,7 @@
 package kappa
 
+import scala.collection.mutable
+
 trait PartialEmbeddings {
   this: Mixtures with Patterns =>
 
@@ -20,7 +22,7 @@ trait PartialEmbeddings {
    *        (of `pattern`) that conconstitutes the domain of this
    *        embedding.
    */
-  final case class PartialEmbedding /*private*/ (
+  final case class PartialEmbedding private (
     val inj: Array[Mixture.Agent], val component: Pattern.Component)
       extends Seq[Mixture.Agent] {
 
@@ -74,10 +76,48 @@ trait PartialEmbeddings {
     @inline def updated(index: Source, elem: Target) =
       this.copy(inj = this.inj updated (index, elem))
 
+    // -- Equals API --
+    override def canEqual(that: Any) = that.isInstanceOf[PartialEmbedding]
+
+    // -- Any API --
+    /**
+     * Compares the this embedding with the argument (`that`) for
+     * equality.
+     *
+     * The only reason for overloading this method is efficiency.  We
+     * know that a pair `(u, v)` of agents from a pattern component
+     * and mixture can extend to at most one total embedding between
+     * from the pattern component to the mixture.  Hence it's
+     * sufficient to test the pattern components, mixtures and head
+     * pairs of the two embeddings for equality.
+     *
+     * @return `true` if the argument is a reference to the receiver
+     *         agent; `false` otherwise.
+     */
+    override def equals(that: Any): Boolean = that match {
+      case that: PartialEmbeddings#PartialEmbedding =>
+        (that canEqual this) &&
+        (this.component == that.component) &&
+        (this.head == that.head)
+      case _ => false
+    }
+
+    /**
+     * Calculate a hash code value for this partial embedding.
+     *
+     * See [[PartialEmbedding.equals]] for why this method is
+     * overridden.
+     *
+     * @return the hash code value for this partial embedding.
+     */
+    override def hashCode(): Int =
+      this.component.## + this.head.##
 
     override def toString =
-      "PE(" + component.index + ": " + toMap.mkString(", ") + ")"
+      "PE(" + (if (component == null) "?" else component.index) +
+        ": " + toMap.mkString(", ") + ")"
   }
+
 
   object PartialEmbedding {
 
@@ -93,27 +133,85 @@ trait PartialEmbeddings {
     def apply(u: Pattern.Agent, v: Mixture.Agent): Option[PartialEmbedding] = {
       val component = u.component
       val inj = new Array[Mixture.Agent](component.length)
-      def extend(i: AgentIndex, v: Mixture.Agent): Boolean = {
-        if (inj(i) != null) inj(i) == v
-        else {
-          val u = component(i)
-          if (u matches v) {
-            inj(i) = v
-            (0 until u.sites.size) forall { j =>
-              (u.neighbor(j), v.neighbor(j)) match {
-                case (None, _) => true
-                case (Some((a1, s1)), Some((a2, s2))) =>
-                  (s1 == s2) && extend(a1.index, a2)
-                case _ => false
-              }
-            }
-          } else false
-        }
-      }
-
-      if (extend(u.index, v)) Some(
-        new PartialEmbedding(inj, u.component))
+      if (extendInjection(u, v, inj))
+        Some(new PartialEmbedding(inj, u.component))
       else None
+    }
+
+    /**
+     * Extend a multiple pattern/mixture agent pairs into a set of
+     * partial embeddings.
+     *
+     * All pattern/mixture agent pairs in `ps` must belong to the same
+     * pattern and mixture, respectively.  The partial embeddings
+     * returned by the method are guaranteed to be unique w.r.t each
+     * other.
+     *
+     * @param ps a collection of pattern/mixture agent pairs from the
+     *        same pattern and mixture, respectively.
+     * @returns all the (partial) embeddings the containing any of the
+     *          pairs in `ps`.
+     */
+    def apply(ps: Iterable[(Pattern.Agent, Mixture.Agent)])
+        : Iterable[PartialEmbedding] = {
+
+      if (ps.isEmpty) Iterable.empty
+      else {
+        val component = ps.head._1.component
+        val conflicts =
+          new Array[mutable.HashSet[Mixture.Agent]](component.length)
+        for (i <- 0 until conflicts.size) {
+          conflicts(i) = new mutable.HashSet()
+        }
+        (for ((u, v) <- ps) yield {
+          val inj = new Array[Mixture.Agent](component.length)
+          if (extendInjection(u, v, inj, conflicts))
+            Some(new PartialEmbedding(inj, u.component))
+          else None
+        }).flatten
+      }
+    }
+
+    /**
+     * Extend a partial injection from agent indices to agents
+     * represented as an array of [[Mixture.Agent]]s through a
+     * traversal of the respective site graphs.
+     *
+     * @param u the next agent in the pre-image of the injection to
+     *        inspect in the traversal.
+     * @param v the next agent in the image of the injection to
+     *        inspect in the traversal.
+     * @param inj the partial injection to extend.
+     * @param conflicts a conflict map used to avoid the construction
+     *        of redundant injections by recording injection pairs
+     *        encountered during previous traversals (only used
+     *        during multiple traversals).
+     * @returns `true` if the injection in `inj` is total after
+     *          expansion.
+     */
+    // FIXME: Code duplication.  We could really profit from a
+    // common interface for Mixture.{Agent,Site,Link} and
+    // Site.{Agent,Site,Link}.
+    private def extendInjection(
+      u: Pattern.Agent, v: Mixture.Agent, inj: Array[Mixture.Agent],
+      conflicts: Array[mutable.HashSet[Mixture.Agent]] = null): Boolean = {
+      val i = u.index
+      if (inj(i) != null) inj(i) == v
+      else if (conflicts != null && (conflicts(i) contains v)) false
+      else {
+        if (u matches v) {
+          inj(i) = v
+          if (conflicts != null) conflicts(i) += v
+          (0 until u.sites.size) forall { j =>
+            (u.neighbour(j), v.neighbour(j)) match {
+              case (None, _) => true
+              case (Some((w1, _)), Some((w2, _))) =>
+                extendInjection(w1, w2, inj, conflicts)
+              case _ => false
+            }
+          }
+        } else false
+      }
     }
   }
 }

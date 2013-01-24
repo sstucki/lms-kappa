@@ -12,37 +12,54 @@ trait Actions {
     val additions: Int)
       extends Function2[Embedding, Mixture, Unit] {
 
+    import Action._
+
     def apply(embedding: Embedding, mixture: Mixture = mix) {
 
-      // Check for null events
-      // FIXME: Implement this properly!
-      mix.clearUpdatedAgents
-      val clash = embedding exists { pe =>
-        pe exists { a =>
-          if (a.updated) true
-          else {
-            mix.markUpdated(a)
-            false
+      // Copy the agents array, check consistency of the embedding and
+      // detect clashes
+      mix.clearMarkedAgents
+      var clash: Boolean = false
+      var garbage: Int = 0
+      var i: Int = 0
+      val totalAgents = (embedding map (_.length)).sum + additions
+      val agents = new Array[Mixture.Agent](totalAgents)
+      for ((pe, j) <- embedding.zipWithIndex; (v, k) <- pe.zipWithIndex) {
+        agents(i) = v; i += 1
+
+        val u = pe.component(k)
+        val consistent = (u matches v) && ((0 until u.length) forall {
+          s => (u.neighbour(s), v.neighbour(s)) match {
+            case (None, _) => true
+            case (Some((w1, _)), Some((w2, _))) => true
+            case _ => false
           }
+        })
+        if (!consistent) {
+          // FIXME: remove garbage "pe" from PE list of "c".
+          garbage += 1
+        }
+
+        if (v.marked) {
+          clash = true // Agent already in image => clash!
+        } else {
+          mix.mark(v)
         }
       }
 
       if (clash) {
         println("# clash!")
+      } else if (garbage > 0) {
+        println("# found and collected " + garbage + " garbage component embeddings.")
       } else {
 
-        // Allocate an extra partial embedding to hold added agents
-        // FIXME: This seems like a hack...
-        val addedPeInj = new Array[Mixture.Agent](additions)
-        val emb = embedding :+ new PartialEmbedding(addedPeInj, null)
-
         // Clear the updated agents list of mix
-        mix.clearUpdatedAgents
+        mix.clearMarkedAgents
 
         // Apply all actions
-        for (a <- atoms) a(emb, mixture)
+        for (a <- atoms) a(agents, mixture)
 
-        // FIXME: Handle positive/negative update.
+        // FIXME: Handle positive update.
       }
     }
 
@@ -52,71 +69,72 @@ trait Actions {
 
   object Action {
 
+    type Agents = Array[Mixture.Agent]
+
     sealed abstract class Atom {//extends Function2[Embedding, Mixture, Unit]
-      def apply(embedding: Embedding, mixture: Mixture)
+      def apply(agents: Agents, mixture: Mixture)
     }
 
-    final case class AgentAddition(c: ComponentIndex, a: AgentIndex,
-      state: AgentState, siteStates: Seq[SiteState])
+    final case class AgentAddition(a: AgentIndex, state: AgentState,
+      siteStates: Seq[SiteState])
         extends Atom {
 
-      def apply(embedding: Embedding, mixture: Mixture) {
+      def apply(agents: Agents, mixture: Mixture) {
         mix += (state, siteStates)
 
-        // Register new agent in specially allocated partial embedding
+        // Register the new agent in the agents array
         val u = mix.head
-        embedding(c).inj(a) = u
+        agents(a) = u
       }
     }
 
-    final case class AgentDeletion(c: ComponentIndex, a: AgentIndex)
+    final case class AgentDeletion(a: AgentIndex)
         extends Atom {
 
-      def apply(embedding: Embedding, mixture: Mixture) {
-        mix -= embedding(c)(a)
+      def apply(agents: Agents, mixture: Mixture) {
+        mix -= agents(a)
       }
     }
 
     final case class LinkAddition(
-      c1: ComponentIndex, a1: AgentIndex, s1: SiteIndex, l1: LinkState,
-      c2: ComponentIndex, a2: AgentIndex, s2: SiteIndex, l2: LinkState)
+      a1: AgentIndex, s1: SiteIndex, l1: LinkState,
+      a2: AgentIndex, s2: SiteIndex, l2: LinkState)
         extends Atom {
 
-      def apply(embedding: Embedding, mixture: Mixture) {
-        val u1 = embedding(c1)(a1)
-        val u2 = embedding(c2)(a2)
+      def apply(agents: Agents, mixture: Mixture) {
+        val u1 = agents(a1)
+        val u2 = agents(a2)
         mix connect (u1, s1, l1, u2, s2, l2)
       }
     }
 
-    final case class LinkDeletion(
-      c: ComponentIndex, a: AgentIndex, s: SiteIndex) extends Atom {
+    final case class LinkDeletion(a: AgentIndex, s: SiteIndex)
+        extends Atom {
 
-      def apply(embedding: Embedding, mixture: Mixture) {
-        val u = embedding(c)(a)
+      def apply(agents: Agents, mixture: Mixture) {
+        val u = agents(a)
         mix disconnect (u, s)
       }
     }
 
-    final case class AgentStateChange(
-      c: ComponentIndex, a: AgentIndex, state: AgentState)
+    final case class AgentStateChange(a: AgentIndex, state: AgentState)
         extends Atom {
 
-      def apply(embedding: Embedding, mixture: Mixture) {
-        val u = embedding(c)(a)
+      def apply(agents: Agents, mixture: Mixture) {
+        val u = agents(a)
         u.state = state
-        mix.markUpdated(u)  // FIXME: Should do this in a method in Mixture.
+        mix.mark(u)  // FIXME: Should do this in a method in Mixture.
       }
     }
 
     final case class SiteStateChange(
-      c: ComponentIndex, a: AgentIndex, s: SiteIndex, state: SiteState)
+      a: AgentIndex, s: SiteIndex, state: SiteState)
         extends Atom {
 
-      def apply(embedding: Embedding, mixture: Mixture) {
-        val u = embedding(c)(a)
+      def apply(agents: Agents, mixture: Mixture) {
+        val u = agents(a)
         u.sites(s).state = state
-        mix.markUpdated(u)  // FIXME: Should do this in a method in Mixture.
+        mix.mark(u)  // FIXME: Should do this in a method in Mixture.
       }
     }
 
@@ -124,33 +142,20 @@ trait Actions {
     /**
      * Construct an action from a LHS and RHS pattern using the
      * longest-common-prefix rule.
-     *
-     * FIXME: This will only work for versions of Kappa where the
-     * agent state is exactly equivalent to the agent type.  A
-     * possible way to fix this would be to define a sub-trait of the
-     * State trait that represents agent states and provides a
-     * "typeMatches" method or similar.  Needs discussion.
      */
     def apply(lhs: Pattern, rhs: Pattern): Action = {
 
-      import State._
       import Pattern._
 
-      def findStateChange[T <: State[T]](ls: T, rs: T): Option[T] =
-        if (sequals(ls, rs)) None         // No state change
+      val peOffsets: Vector[Int] =
+        lhs.components.scanLeft(0) { (i, pe) => i + pe.length }
+
+      def findStateChange[T <: Matchable[T]](ls: T, rs: T): Option[T] =
+        if (ls isEquivTo rs) None         // No state change
         else if (rs.isComplete) Some(rs)  // State refinement or change
         else throw new IllegalArgumentException(
           "attempt to change state " + ls + " to incomplete state " +
             rs + " in rule: " + lhs + " -> " + rhs)
-
-      def isComplete(a: Pattern.Agent) =
-        a.state.isComplete && (a.sites forall {
-          s => s.state.isComplete && (s.link match {
-            case Stub => true
-            case Linked(_, _, l) => l.isComplete
-            case _ => false
-          })
-        })
 
       def linkState(a: Agent, s: SiteIndex): LinkState =
         a.sites(s).link match {
@@ -160,36 +165,47 @@ trait Actions {
               " to be linked in RHS of rule " + lhs + " -> " + rhs)
         }
 
-      def fixLink(atoms: mutable.Buffer[Atom],
+      @inline def fixLink(
+        atoms: mutable.Buffer[Atom],
         a1: Agent, i1: AgentIndex, s1: SiteIndex, l1: LinkState,
         a2: Agent, i2: AgentIndex, s2: SiteIndex) {
         if (i2 <= i1)
           atoms += LinkAddition(
-            a1.component.index, a1.index, s1, l1,
-            a2.component.index, a2.index, s2, linkState(a2, s2))
+            agentOffset(a1), s1, l1,
+            agentOffset(a2), s2, linkState(a2, s2))
       }
+
+      @inline def agentOffset(a: Agent) =
+        peOffsets(a.component.index) + a.index
 
       val atoms = new mutable.ArrayBuffer[Atom]()
 
+      // Find the longest common prefix, i.e. longest prefix in the
+      // sequences of agents making up the LHS and RHS, for which the
+      // number of sites and the agent states match up.
       val zipped = (lhs zip rhs)
       val firstDiffIndex = zipped indexWhere {
-        case (la, ra) => !sequals(la.state, ra.state)
+        case (la, ra) =>
+          !((la.length == ra.length) &&
+            (la.state matchesInLongestCommonPrefix ra.state))
       }
       val commonPrefixLength =
         if (firstDiffIndex > 0) firstDiffIndex else zipped.length
 
+      @inline def addedAgentOffset(i: AgentIndex) =
+        peOffsets(lhs.length) + i - commonPrefixLength
+
       // Find all agent deletions
       for (la <- lhs drop commonPrefixLength) {
-        atoms += AgentDeletion(la.component.index, la.index)
+        atoms += AgentDeletion(agentOffset(la))
       }
 
       // Find all agent additions
       var additions = 0
-      val addedPeIndex = lhs.components.size
       for (i <- commonPrefixLength until rhs.size) {
         val ra = rhs(i)
-        if (isComplete(ra)) atoms += AgentAddition(
-          addedPeIndex, i - commonPrefixLength, ra.state,
+        if (ra.isComplete) atoms += AgentAddition(
+          addedAgentOffset(i), ra.state,
           (for (s <- ra.sites) yield s.state))
         else throw new IllegalArgumentException(
           "attempt to add incomplete agent " + ra + " in rule: " +
@@ -201,20 +217,27 @@ trait Actions {
       val lhsIndex = lhs.zipWithIndex.toMap
       val rhsIndex = rhs.zipWithIndex.toMap
 
-      // There are no agent changes by construction. See comment above.
-
-      // Find all state changes (in the longest common prefix)
+      // Find all agent state changes (in the longest common prefix)
       for {
-        (la, ra) <- longestCommonPrefix if la.length == ra.length
+        (la, ra) <- longestCommonPrefix
+        s <- findStateChange(la.state, ra.state)
+      } {
+        atoms += AgentStateChange(agentOffset(la), s)
+      }
+
+
+      // Find all site state changes (in the longest common prefix)
+      for {
+        (la, ra) <- longestCommonPrefix
         i <- 0 until la.length
         s <- findStateChange(la.sites(i).state, ra.sites(i).state)
       } {
-        atoms += SiteStateChange(la.component.index, la.index, i, s)
+        atoms += SiteStateChange(agentOffset(la), i, s)
       }
 
       // Find all the link changes in the longest common prefix
       for {
-        i <- 0 until commonPrefixLength if lhs(i).length == rhs(i).length
+        i <- 0 until commonPrefixLength
         j <- 0 until lhs(i).length
       } {
         val la = lhs(i)
@@ -227,23 +250,20 @@ trait Actions {
               "attempt to undefine site " + j + " of agent " + la +
                 " in rule: " + lhs + " -> " + rhs)
           case (Undefined | Wildcard(_, _, _), Stub) =>
-            atoms += LinkDeletion(la.component.index, la.index, j)
+            atoms += LinkDeletion(agentOffset(la), j)
           case (Linked(la2, _, _), Stub) =>
-            if (lhsIndex(la2) <= i) atoms += LinkDeletion(
-              la.component.index, la.index, j)
+            if (lhsIndex(la2) <= i) atoms += LinkDeletion(agentOffset(la), j)
           case (Undefined | Stub | Linked(_, _, _), Wildcard(_, _, _)) =>
             throw new IllegalArgumentException(
               "attempt to add wildcard link to site " + j + " of agent " +
                 la + " in rule: " + lhs + " -> " + rhs)
           case (Wildcard(la2, ls2, ll), Wildcard(ra2, rs2, rl)) =>
-            if (!(omatches(la2, ra2)(sequals(_, _)) &&
-              omatches(ls2, rs2)(sequals(_, _)) &&
-              omatches(ll, rl)(sequals(_, _))))
+            if (!(la2 matches ra2) && (ls2 matches rs2) && (ll matches rl))
               throw new IllegalArgumentException(
                 "attempt to modify wildcard link at site " + j +
                   " of agent " + la + " in rule: " + lhs + " -> " + rhs)
           case (Undefined | Wildcard(_, _, _), Linked(ra2, rj2, rl)) =>
-            atoms += LinkDeletion(la.component.index, la.index, j)
+            atoms += LinkDeletion(agentOffset(la), j)
             fixLink(atoms, la, i, j, rl, ra2, rhsIndex(ra2), rj2)
           case (Stub, Linked(ra2, rj2, rl)) =>
             fixLink(atoms, la, i, j, rl, ra2, rhsIndex(ra2), rj2)
@@ -252,8 +272,7 @@ trait Actions {
             val ri = rhsIndex(ra2)
             if (!((li == ri) && (ls == rs) &&
               findStateChange(ll, rl).isEmpty)) {
-              if (li <= i) atoms += LinkDeletion(
-                la.component.index, la.index, j)
+              if (li <= i) atoms += LinkDeletion(agentOffset(la), j)
               fixLink(atoms, la, i, j, rl, ra2, ri, rj2)
             }
           }
@@ -280,14 +299,11 @@ trait Actions {
           case Linked(ra2, j2, l) => {
             val ri = rhsIndex(ra2)
             if (ri <= i) {
-              val (c2, a2) =
-                if (ri < commonPrefixLength)
-                  (lhs(ri).component.index, lhs(ri).index)
-                else
-                  (addedPeIndex, ri - commonPrefixLength)
+              val a2 =
+                if (ri < commonPrefixLength) agentOffset(lhs(ri))
+                else addedAgentOffset(ri)
               atoms += LinkAddition(
-                addedPeIndex, i - commonPrefixLength, j, l,
-                c2, a2, j2, linkState(ra2, j2))
+                addedAgentOffset(i), j, l, a2, j2, linkState(ra2, j2))
             }
           }
           case _ => { }

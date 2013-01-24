@@ -178,9 +178,7 @@ trait Patterns {
   object Pattern {
 
     /** A class representing links between [[Pattern.Site]]s. */
-    sealed abstract class Link {
-
-      import State.osmatches
+    sealed abstract class Link extends Matchable[Link]{
 
       /**
        * Compare this link against another [[Pattern.Link]].
@@ -191,13 +189,13 @@ trait Patterns {
         case (Undefined, _) => true
         case (Stub, Stub) => true
         case (Wildcard(a1, s1, l1), Wildcard(a2, s2, l2)) =>
-          osmatches(a1, a2) && osmatches(s1, s2) && osmatches(l1, l2)
+          (a1 matches a2) && (s1 matches s2) && (l1 matches l2)
         case (Wildcard(a1, s1, l1), Linked(a2, s2, l2)) =>
-          osmatches(a1, Some(a2.state)) &&
-            osmatches(s1, Some(a2.sites(s2).state)) &&
-            osmatches(l1, Some(l2))
-        case (Linked(_, _, l1), Linked(_, _, l2)) =>
-          l1 matches l2
+          (a1 matches Some(a2.state)) &&
+          (s1 matches Some(a2.sites(s2).state)) &&
+          (l1 matches Some(l2))
+        case (Linked(_, s1, l1), Linked(_, s2, l2)) =>
+          (s1 == s2) && (l1 matches l2)
         case _ => false
       }
 
@@ -210,11 +208,21 @@ trait Patterns {
         case (Undefined, _) => true
         case (Stub, Mixture.Stub) => true
         case (Wildcard(a1, s1, l1), Mixture.Linked(a2, s2, l2)) =>
-          osmatches(a1, Some(a2.state)) &&
-            osmatches(s1, Some(a2.sites(s2).state)) &&
-            osmatches(l1, Some(l2))
+          (a1 matches Some(a2.state)) &&
+          (s1 matches Some(a2.sites(s2).state)) &&
+          (l1 matches Some(l2))
         case (Linked(_, _, l1), Mixture.Linked(_, _, l2)) =>
           l1 matches l2
+        case _ => false
+      }
+
+      /**
+       * Checks if this link can be used in mixtures.
+       *
+       * @return `true` if this link is valid in a mixture.
+       */
+      def isComplete = this match {
+        case _: Linked => true
         case _ => false
       }
 
@@ -279,7 +287,7 @@ trait Patterns {
      * A class representing sites in [[Pattern.Agent]]s.
      */
     final case class Site private (
-      val state: SiteState, var link: Link = Undefined) {
+      val state: SiteState, var link: Link = Undefined) extends Matchable[Site] {
 
       // TODO: this is not used at the moment.  Remove?
 
@@ -314,7 +322,7 @@ trait Patterns {
        * @return `Some(x)`, where `x` is the neighboring site of this
        *         site, if this site is connected, and `None` otherwise.
        */
-      @inline def neighbor: Option[Site] =
+      @inline def neighbour: Option[Site] =
         link match {
           case Linked(a, s, _) => Some(a.sites(s))
           case _ => None
@@ -337,6 +345,13 @@ trait Patterns {
         (this.state matches that.state) && (this.link matches that.link)
 
       override def toString = state.toString + link
+
+      /**
+       * Checks if this site can be used in mixtures.
+       *
+       * @return `true` if this site is valid in a mixture.
+       */
+      def isComplete = this.state.isComplete && this.link.isComplete
     }
 
     // RHZ: Why not as part of the class?
@@ -367,7 +382,7 @@ trait Patterns {
      * @param sites the sites of the agent.
      */
     case class Agent(val state: AgentState, val sites: Array[Site])
-        extends Seq[Site] {
+        extends Seq[Site] with Matchable[Agent] {
 
       // RHZ: made this type-safe
       //
@@ -409,7 +424,7 @@ trait Patterns {
        *         this site and `s` is the index of the neighboring site
        *         in `a`, or `None` if this site is not connected.
        */
-      @inline def neighbor(site: SiteIndex): Option[(Agent, SiteIndex)] =
+      @inline def neighbour(site: SiteIndex): Option[(Agent, SiteIndex)] =
         sites(site).link match {
           case Linked(a, s, _) => Some((a, s))
           case _ => None
@@ -425,11 +440,23 @@ trait Patterns {
         (this.state matches that.state) &&
         (this.sites zip that.sites forall { case (s1, s2) => s1 matches s2 })
 
-      // FIXME: Hack to avoid recursive calls to `equals`
-      override def equals(that: Any): Boolean =
-        that.isInstanceOf[Agent] && (this eq that.asInstanceOf[Agent])
+      /**
+       * Compare this agent against another [[Pattern.Agent]].
+       *
+       * @return `true` if this agent matches `that`.
+       */
+      def matches(that: Agent): Boolean =
+        that.sites.size == this.sites.size &&
+        (this.state matches that.state) &&
+        (this.sites zip that.sites forall { case (s1, s2) => s1 matches s2 })
 
-      override def toString() = state + sites.mkString("(", ",", ")")
+      /**
+       * Checks if this agent can be used in mixtures.
+       *
+       * @return `true` if this agent is valid in a mixture.
+       */
+      def isComplete =
+        this.state.isComplete && (this.sites forall (_.isComplete))
 
       // -- Core Seq[Site] API --
       @inline def apply(idx: Int): Site = sites(idx)
@@ -439,6 +466,59 @@ trait Patterns {
       // -- Extra Seq[Site] API --
       @inline override def foreach[U](f: Site => U): Unit =
         sites foreach f
+
+      // -- Equals API --
+      /** TODO: Is this method redundant? */
+      override def canEqual(that: Any) = that.isInstanceOf[Agent]
+
+      // -- Any API --
+      /**
+       * Tests whether the argument (`that`) is a reference to the
+       * receiver object (`this`).
+       *
+       * NOTE: There are multiple reasons fro overriding the `equals`
+       * method in this class:
+       *
+       *  1) Since this class is also a sequence of [[Site]]s (it
+       *     extends `Seq[Site]`), it inherits its `equals`
+       *     implementation from [[scala.collection.GenSeqLike]].
+       *     This method eventually ends up calling [[Site.equals]]
+       *     (via [[scala.collection.IterableLike.sameElements]]).
+       *     But because sites contain links, which in turn may
+       *     contain references to [[Agent]]s (i.e. if they are
+       *     instances of [[Linked]]), a call to the default `equals`
+       *     method may end up in a recursive loop, eventually causing
+       *     a stack overflow.
+       *
+       *  2) For efficiency.  We really consider different instances
+       *     of this class as different agents.  If you want to test
+       *     for structural equality, use [[Agent.isEquivTo]] instead.
+       *
+       * @return `true` if the argument is a reference to the receiver
+       *         agent; `false` otherwise.
+       */
+      override def equals(that: Any): Boolean =
+        that.isInstanceOf[Agent] && (this eq that.asInstanceOf[Agent])
+
+      /**
+       * Calculate a hash code value for the agent.
+       *
+       * NOTE: The reasons for overriding the `hashCode` method in
+       * this class are the same as those mentioned in
+       * [[Agent.equals]].
+       *
+       * TODO: Is it OK to rely on
+       * [[java.lang.System.identityHashCode]]?  A possible
+       * alternative would be, to use a counter in the companion
+       * object to provide unique (up to counter wrap-around) hash
+       * codes when creating an instance of this class.
+       *
+       * @return the hash code value for this agent.
+       */
+      override def hashCode(): Int =
+        java.lang.System.identityHashCode(this)
+
+      override def toString() = state + sites.mkString("(", ",", ")")
 
       // Register sites.
       //for (s <- sites) s.agent = this
@@ -528,7 +608,7 @@ trait Patterns {
     // TODO: Fix this. The problem right now is that the way states
     // are handled is inconsistent.  States should point to the symbol
     // table (environment), not the other way around.
-    
+
     // def apply(expr: String) = {
     //   val ast = parseSiteGraph(expr) match {
     //     case Success(ast, _) => ast

@@ -6,33 +6,34 @@ import scala.language.implicitConversions
 
 
 /**
- * A trait for states.
+ * A trait for objects that can be matched.
  *
- * States ar characterized by two boolean relations, each of which is
- * represented by an abstrac method of this trait:
+ * Examples of matchables are patterns, agents, sites, links, as well
+ * as states (e.g. agent, site and link states).
  *
- *  1. [[matches]] is a binary relation that defines a partial order on
- *     states, i.e. it specifies whether `this` state "matches" `that`
- *     state;
+ * Matchables ar characterized by two boolean relations, each of which
+ * is represented by an abstract method of this trait:
+ *
+ *  1. [[matches]] is a binary relation that defines a partial order
+ *     on matchables, i.e. it specifies whether `this` matchable
+ *     "matches" `that` matchable;
  *
  *  2. [[isComplete]] is an unary realtion that defines whether a
- *     given state is admissible in a mixture, i.e whether it is a
- *     "concrete" state.
- *
- * Examples of states are agent, site and link states.
+ *     given matchable is admissible in a mixture, i.e whether it is a
+ *     "concrete" instance of the given matchable class.
  *
  * Example usage:
  * {{{
- * case class MyState(name: String) extends State[MyState] {
+ * case class MyMatchable(name: String) extends Matchable[MyMatchable] {
  *   override def toString = name
- *   def matches(that: MyState) = this.name == that.name
+ *   def matches(that: MyMatchable) = this.name == that.name
  * }
  * }}}
  *
  * sstucki: It would seem natural for this trait to extend
- * `scala.math.PartiallyOrdered[State]` for compatibility with the
- * standard library.  However, `<=` needs to be efficient (because
- * it used in the "hot zone" of the simulator) and
+ * `scala.math.PartiallyOrdered[Matchable]` for compatibility with the
+ * standard library.  However, `<=` needs to be efficient (because it
+ * used in the "hot zone" of the simulator) and
  * [[scala.math.PartiallyOrdered]] seems to carry quite a bit of an
  * overhead (it seems to be covariant in its type parameter, which
  * requires implementations of its `tryCompare` method to be
@@ -40,35 +41,50 @@ import scala.language.implicitConversions
  * [[scala.math.PartiallyOrdered]] anywhere from which to take
  * inspiration.
  */
-trait State[A] {
+trait Matchable[T] extends Any {
+
+  this: T =>
 
   /**
-   * Checks if this state can be used in mixtures.
+   * Checks if this matchable matches `that`.
    *
-   * @return `true` if this sate is valid in a mixture.
+   * @return `true` if this matchable matches `that`.
    */
-  def matches(that: A): Boolean
+  def matches(that: T): Boolean
 
   /**
-   * Checks if this state can be used in mixtures.
+   * Checks if this matchable can be used in mixtures.
    *
-   * @return `true` if this sate is valid in a mixture.
+   * @return `true` if this matchable is valid in a mixture.
    */
   def isComplete: Boolean
+
+  /**
+   * Check if this matchable is equivalent to `that`.
+   *
+   * The function defines the following equivalence relation:
+   *
+   *  - `isEquivTo(x, y)` iff `(x matches y) && (y matches x)`
+   *
+   * @return `true` if and only if `this` and `that` are equivalent.
+   */
+  @inline
+  def isEquivTo[U <: T with Matchable[T]](that: U): Boolean =
+    (this matches that) && (that matches this)
 
   // FIMXE: In the future we might to provide these for compatibility?
 
   // /** Returns `true` if `this` is less than or equal to `that`. */
-  // def <=(that: A): Boolean
+  // def <=(that: T): Boolean
 
   // /** Returns `true` if `this` is less than `that`. */
-  // def <(that: State[A]) = (this <= that) && !(that <= this)
+  // def <(that: Matchable[T]) = (this <= that) && !(that <= this)
 
   // /** Returns `true` if `this` is greater than or equal to `that`. */
-  // def >=(that: State[A]) = (that <= this)
+  // def >=(that: Matchable[T]) = (that <= this)
 
   // /** Returns `true` if `this` is greater than `that`. */
-  // def >[B <: State[A]](that: B) = (that <= this) && !(this <= that)
+  // def >[B <: Matchable[T]](that: B) = (that <= this) && !(this <= that)
 
   // /**
   //  * Result of comparing `this` with `that`.
@@ -81,22 +97,10 @@ trait State[A] {
   //  *
   //  * - `x > 0` when `this > that`.
   //  */
-  // def tryCompareTo(that: State[A]): Option[Int] =
+  // def tryCompareTo(that: Matchable[T]): Option[Int]
 }
 
-object State {
-
-  /** View from `State` to `PartialOrdering[State]` */
-  implicit def stateToPartialOrdering[T <% State[T]]: PartialOrdering[T] =
-    new PartialOrdering[T] {
-      @inline def lteq(x: T, y: T): Boolean = y matches x
-      @inline def tryCompare(x: T, y: T): Option[Int] =
-        if (lteq(x, y)) {
-          if (lteq(x, y)) Some(0) else Some(-1)
-        } else {
-          if (lteq(x, y)) Some(1) else None
-        }
-    }
+object Matchable {
 
   /**
    * Compare two `Option` values using a "matches" relation.
@@ -113,7 +117,7 @@ object State {
    * @param mf a function representing the "matches" relation.
    * @return `true` if `ox` matches `oy` according to `M(ox, oy)`.
    */
-  @inline final def omatches[T](ox: Option[T], oy: Option[T])(
+  @inline final def optionMatches[T](ox: Option[T], oy: Option[T])(
     mf: (T, T) => Boolean): Boolean =
       (ox, oy) match {
         case (None, _) => true
@@ -122,33 +126,43 @@ object State {
       }
 
   /**
-   * Compare two `Option[State]` values using a "matches" relation.
+   * A wrapper class to match `Option[Matchable[T]]` instances.
    *
-   * This function defines a binary matches relation over options of
-   * states.  The relation is defined as in [[State.omatches]] with
-   * the [[State.matches]] method of the corresponding `State[T]` type
-   * providing the inner "matches" relation.
+   * This class extends the binary matches relation over a matchable
+   * type `T` to options values of `T`.  The relation is defined as in
+   * [[Matchable.optionMatches]] with the [[Matchable.matches]] method
+   * of the corresponding `Matchable[T]` type providing the inner
+   * "matches" relation.
    *
-   * @tparam T the underlying type of the `Option[State[T]]` values.
-   * @param ox the `Option[State[T]]` value to match.
-   * @param oy the `Option[State[T]]` value to match against.
+   * @tparam T the underlying type of the `Option[Matchable[T]]` values.
+   * @param ox the `Option[Matchable[T]]` value to match.
+   * @param oy the `Option[Matchable[T]]` value to match against.
    * @return `true` if `ox` matches `oy` according to `M(ox, oy)`.
    */
-  @inline final def osmatches[T <: State[T]](ox: Option[T], oy: Option[T]) =
-    omatches(ox, oy)(_ matches _)
+  final class OptionMatchable[T <: Matchable[T]](val om: Option[T])
+      extends AnyVal with Matchable[OptionMatchable[T]] {
+    def matches(that: OptionMatchable[T]) =
+      optionMatches(this.om, that.om)(_ matches _)
+    def isComplete = (this.om map (_.isComplete)) getOrElse false
+  }
 
-  /**
-   * Compare two state values for equality.
-   *
-   * The function defines the following equivalence relation:
-   *
-   *  - `sequals(a, b)` iff `(a matches b) && (b matches a)`
-   *
-   * @tparam T the underlying type of the `Option[State[T]]` values.
-   * @param ox the first `Option[State[T]]` operand.
-   * @param oy the second `Option[State[T]]` operand.
-   * @return `true` if `ox` and `oy` are equivalent.
-   */
-  @inline def sequals[T <: State[T]](ls: T, rs: T): Boolean =
-    (ls matches rs) && (rs matches ls)
+  /** View from `Option[Matchable[T]]` to `OptionMatchable[T]` */
+  implicit def matchableOptionAsOptionMatchable[T <: Matchable[T]](om: Option[T])
+      : OptionMatchable[T] = new OptionMatchable(om)
+
+  /** View from `Matchable` to `PartialOrdering[Matchable]` */
+  implicit def matchableAsPartialOrdering[T <% Matchable[T]]
+      : PartialOrdering[T] =
+    new PartialOrdering[T] {
+      @inline def lteq(x: T, y: T): Boolean = y matches x
+      @inline def tryCompare(x: T, y: T): Option[Int] =
+        if (lteq(x, y)) {
+          if (lteq(x, y)) Some(0) else Some(-1)
+        } else {
+          if (lteq(x, y)) Some(1) else None
+        }
+    }
+
+  // @inline def sequals[T <: Matchable[T]](ls: T, rs: T): Boolean =
+  //   (ls matches rs) && (rs matches ls)
 }

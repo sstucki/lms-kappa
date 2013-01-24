@@ -44,6 +44,7 @@ class KaSimAbcTest extends KappaModel("") with FlatSpec {
   val sx2p  = new SiteState(3, Some(2))
   val l  = new LinkState(Some(0))
 
+
   // #### Variables
 
   // %var: 'on_rate' 1.0E-4 # per molecule per second
@@ -108,13 +109,12 @@ class KaSimAbcTest extends KappaModel("") with FlatSpec {
   // %obs: 'Cpp' C(x1~p?,x2~p?)
   withObs(Pattern() :+ (c, Site(sx1p), Site(sx2p)))
 
-
   // %var: 'n_a' 1000
-  val n_a = 1000
+  val n_a = 100
   // %obs: 'n_b' 'n_a'
   val n_b = n_a
   // %var: 'n_c' 10000
-  val n_c = 10000
+  val n_c = 10 * n_a
 
 
   // #### Initial conditions
