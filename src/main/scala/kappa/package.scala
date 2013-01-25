@@ -44,4 +44,10 @@ package object kappa {
    */
   type SiteIndex = Int
 
+  /**
+   * Index of a [[PartialEmbeddings#PartialEmbedding]] within the
+   * collection of partial embeddings from a
+   * [[Patterns#Pattern.Component]] to a [[Mixtures#Mixture]]
+   */
+  type EmbeddingIndex = Int
 }

@@ -29,6 +29,14 @@ trait PartialEmbeddings {
     type Source = AgentIndex
     type Target = Mixture.Agent
 
+    // TODO: Not used. Remove.
+    // /**
+    //  * The index of the partial embedding within the collection of
+    //  * embeddings of the connected component that constitutes the
+    //  * domain of this embedding.
+    //  */
+    // var index: EmbeddingIndex = -1
+
     /**
      * Returns this [[PartialEmbedding]] as a map from agent indices
      * to [[Mixtures#Mixture.Agent]]s.
@@ -133,7 +141,7 @@ trait PartialEmbeddings {
     def apply(u: Pattern.Agent, v: Mixture.Agent): Option[PartialEmbedding] = {
       val component = u.component
       val inj = new Array[Mixture.Agent](component.length)
-      if (extendInjection(u, v, inj))
+      if (extendInjection(u, v, inj, null))
         Some(new PartialEmbedding(inj, u.component))
       else None
     }
@@ -173,6 +181,63 @@ trait PartialEmbeddings {
     }
 
     /**
+     * Extend a pair of pattern agents into a partial embedding.
+     *
+     * @param u the first pattern agent in the agent pair
+     * @param v the second pattern agent in the agent pair
+     * @returns `Some(pe)`, where `pe` is a (partial) embedding from
+     *          the pattern containing `u` into the pattern containing
+     *          `v`, or `None` if no such embedding exists.
+     */
+    def findEmbedding(u: Pattern.Agent, v: Pattern.Agent)
+        : Option[Array[Pattern.Agent]] = {
+
+      val component = u.component
+      val inj = new Array[Pattern.Agent](component.length)
+      if (extendInjection(u, v, inj, null)) Some(inj)
+      else None
+    }
+
+    /**
+     * Extend a partial injection from agent indices to agents
+     * represented as an array of [[Pattern.Agent]]s through a
+     * traversal of the respective site graphs.
+     *
+     * @param u the next agent in the pre-image of the injection to
+     *        inspect in the traversal.
+     * @param v the next agent in the image of the injection to
+     *        inspect in the traversal.
+     * @param inj the partial injection to extend.
+     * @param conflicts a conflict map used to avoid the construction
+     *        of redundant injections by recording injection pairs
+     *        encountered during previous traversals (only used
+     *        during multiple traversals).
+     * @returns `true` if the injection in `inj` is total.
+     */
+    private def extendInjection(
+      u: Pattern.Agent, v: Pattern.Agent, inj: Array[Pattern.Agent],
+      conflicts: Array[mutable.HashSet[Pattern.Agent]]): Boolean = {
+      val i = u.index
+      if (inj(i) != null) inj(i) == v
+      else if (conflicts != null && (conflicts(i) contains v)) false
+      else {
+        if (u matches v) {
+          inj(i) = v
+          if (conflicts != null) conflicts(i) += v
+          (0 until u.sites.size) forall { j =>
+            (u.neighbour(j), v.neighbour(j)) match {
+              case (None, _) => true
+              case (Some((w1, _)), Some((w2, _))) => {
+                extendInjection(w1, w2, inj, conflicts)
+              }
+              case _ => false
+            }
+          }
+        } else false
+      }
+    }
+
+    /**
      * Extend a partial injection from agent indices to agents
      * represented as an array of [[Mixture.Agent]]s through a
      * traversal of the respective site graphs.
@@ -194,7 +259,7 @@ trait PartialEmbeddings {
     // Site.{Agent,Site,Link}.
     private def extendInjection(
       u: Pattern.Agent, v: Mixture.Agent, inj: Array[Mixture.Agent],
-      conflicts: Array[mutable.HashSet[Mixture.Agent]] = null): Boolean = {
+      conflicts: Array[mutable.HashSet[Mixture.Agent]]): Boolean = {
       val i = u.index
       if (inj(i) != null) inj(i) == v
       else if (conflicts != null && (conflicts(i) contains v)) false

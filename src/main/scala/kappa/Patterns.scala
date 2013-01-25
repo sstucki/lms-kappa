@@ -1,8 +1,10 @@
 package kappa
 
+import scala.collection.mutable
+
 trait Patterns {
-  this: LanguageContext with Parser with Actions with Symbols with Mixtures
-      with PartialEmbeddings =>
+  this: LanguageContext with Parser with Actions with Rules with Symbols
+      with Mixtures with PartialEmbeddings =>
 
   /**
    * A class representing patterns in [[Model]]s (i.e. site graphs).
@@ -35,6 +37,8 @@ trait Patterns {
      */
     def count: Double = (components map (_.count)).product
 
+    /** Register the components of this pattern in the model. */
+    def registerComponents = for (c <- components) c.register
 
     /**
      * Return a new pattern connecting two unconnected sites from this
@@ -536,10 +540,13 @@ trait Patterns {
      *
      * @param agents the agents in this component
      */
-    case class Component(val agents: Vector[Agent]) extends Seq[Agent] {
+    case class Component(val agents: Vector[Agent])
+        extends Seq[Agent] with Matchable[Component] {
 
       /** The pattern this component belongs to. */
       protected[Pattern] var _pattern: Pattern = null
+
+      /** The pattern this component belongs to. */
       def pattern =
         if (_pattern == null) throw new NullPointerException(
           "attempt to access parent pattern of orphan component")
@@ -547,17 +554,111 @@ trait Patterns {
 
       /** The index of the component within the pattern. */
       protected[Pattern] var _index: ComponentIndex = -1
+
+      /** The index of the component within the pattern. */
       def index =
         if (_index < 0) throw new NullPointerException(
           "attempt to retrieve in-pattern index of orphan component")
         else _index
 
+      /** The index of the component within the model. */
+      protected[Pattern] var _modelIndex: ComponentIndex = -1
+
+      /** The index of the component within the model. */
+      def modelIndex: ComponentIndex =
+        if (_modelIndex > 0) _modelIndex else register
+
+      /**
+       * The partial embeddings from this component to the mixture.
+       *
+       * NOTE: The role of this buffer allow random access to
+       * embeddings (literally).  If we just kept embeddings in a map,
+       * we could not pick one of the embeddings uniformly at random
+       * (in O(1) time).
+       *
+       * FIXME: Can we do better?
+       */
+      protected[Pattern] var _embeddings
+          : mutable.ArrayBuffer[PartialEmbedding] = null
+
+      /**
+       * The partial embeddings from this component to the mixture.
+       *
+       * NOTE: This is just a convenience method for making sure we're
+       * always accessing the correct set of embeddings.
+       */
+      @inline protected[Pattern] def embeddings = {
+        val representative = patternComponents(this.modelIndex)
+        representative._embeddings
+      }
+
+      /**
+       * A hash map from embedding roots to embedding indices.
+       *
+       * NOTE: The role of this map is dual:
+       *
+       *  1) quickly find the index of a given embedding in
+       *     [[Component.embeddings]];
+       *
+       *  2) checking uniqueness of embeddings in
+       *     [[Component.embeddings]].
+       */
+      protected[Pattern] var _embeddingIndices
+          : mutable.HashMap[Mixture.Agent, EmbeddingIndex] = null
+
+      /**
+       * A hash map from embedding roots to embedding indices.
+       *
+       * NOTE: This is just a convenience method for making sure we're
+       * always accessing the correct set of embeddings.
+       */
+      @inline protected[Pattern] def embeddingIndices = {
+        val representative = patternComponents(this.modelIndex)
+        representative._embeddingIndices
+      }
+
+      /**
+       * Pick one of the embeddings from this component to the mixture
+       * uniformly at random.
+       *
+       * @param rand the PRNG used as a source of randomness.
+       */
+      @inline def randomEmbedding(rand: util.Random) = {
+        embeddings(rand.nextInt(embeddings.size))
+      }
+
+      /**
+       * Add a (partial) embedding to the collection of embeddings
+       * from this component to the mixture.
+       */
+      @inline def addEmbedding(pe: PartialEmbedding) {
+        if (!(embeddingIndices contains pe.head)) {
+          val i = embeddings.length
+          embeddings += pe
+          embeddingIndices += ((pe.head, i))
+        }
+      }
+
+      /**
+       * Remove a (partial) embedding to the collection of embeddings
+       * from this component to the mixture.
+       */
+      @inline def removeEmbedding(pe: PartialEmbedding) {
+        (embeddingIndices remove pe.head) match {
+          case Some(i) => {
+            val j = embeddings.length - 1
+            embeddings(i) = _embeddings(j)
+            embeddings.reduceToSize(j)
+          }
+          case None => { }
+        }
+      }
+
       /**
        * Return the number of matchings of this pattern component in
        * the target mixture
        */
-      // FIXME: implement!
-      def count: Int = 1
+      @inline def count: Int = embeddings.size
 
       /**
        * Return all the (partial) embeddings from this pattern
@@ -568,6 +669,60 @@ trait Patterns {
       def partialEmbeddingsIn(that: Mixture): Seq[PartialEmbedding] =
         (for (u <- this; v <- that) yield PartialEmbedding(u, v)).flatten
 
+      /**
+       * If this component does not have a representative already
+       * registered in the model, register it.
+       *
+       * @return the index of the representative of this component
+       *         in the model.
+       */
+      def register: ComponentIndex =
+        if (_modelIndex > 0) _modelIndex else {
+
+          // FIXME: This "isEquivTo" in the following loop is an
+          // isomorphism check, so this loop is expensive! One iso
+          // check is O(n^2) in the size of the components involved,
+          // so the total cost of checking whether there is already a
+          // registered representative of this component is O(n^2 * m)
+          // with m the number of components.
+          //
+          // We can do better! If we were to use either Jerome's or
+          // Michael's & Nicolas' canonical representations to
+          // properly implement a hashCode method in this class, we
+          // could store the patterns in a hash map instead and speed
+          // this up to O(n^2 + m log m)!
+          _modelIndex = patternComponents indexWhere {
+            c => c isEquivTo this
+          }
+
+          if (_modelIndex < 0) {  // No representative found, register this one
+
+            // Initialize embedding set
+            this._embeddings = new mutable.ArrayBuffer[PartialEmbedding]()
+            this._embeddingIndices =
+              new mutable.HashMap[Mixture.Agent, EmbeddingIndex]()
+            for (pe <- partialEmbeddingsIn(mix)) {
+              this.addEmbedding(pe)
+            }
+
+            // Let rules now about this component so they can update
+            // their positive influence map if necessary.
+            for (r <- rules) {
+              r.action.addPositiveInfluence(this)
+            }
+
+            // Register this component as the representative in its
+            // isomorphism class
+            _modelIndex = patternComponents.length
+            patternComponents += this
+          }
+          _modelIndex
+        }
+
+      // -- Matchable[Component] API --
+      @inline def isComplete = this.agents forall (_.isComplete)
+      @inline def matches(that: Component) =
+        !PartialEmbedding.findEmbedding(this(0), that(0)).isEmpty
 
       // -- Core Seq[Agent] API --
       @inline def apply(idx: Int): Agent = agents(idx)
@@ -688,4 +843,14 @@ trait Patterns {
     // p
 
   }
+
+  /**
+   * The collection of pattern components to track in this model.
+   *
+   * Actually, this list holds representatives of isomorphism classes
+   * of pattern components.  This reduces the total number of
+   * embeddings to track as we only ever track one representative of
+   * each isomorphism-class of embeddings.
+   */
+  val patternComponents = new mutable.ArrayBuffer[Pattern.Component]()
 }
