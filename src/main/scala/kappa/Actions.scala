@@ -32,19 +32,19 @@ trait Actions {
       var i: Int = 0
       val totalAgents = (embedding map (_.length)).sum + additions
       val agents = new Array[Mixture.Agent](totalAgents)
-      for ((pe, j) <- embedding.zipWithIndex; (v, k) <- pe.zipWithIndex) {
+      for ((ce, j) <- embedding.zipWithIndex; (v, k) <- ce.zipWithIndex) {
         agents(i) = v; i += 1
 
-        val u = pe.component(k)
+        val u = ce.component(k)
         val consistent = (u matches v) && ((0 until u.length) forall {
           s => (u.neighbour(s), v.neighbour(s)) match {
             case (None, _) => true
-            case (Some((w1, _)), Some((w2, _))) => pe(w1.index) == w2
+            case (Some((w1, _)), Some((w2, _))) => ce(w1.index) == w2
             case _ => false
           }
         })
         if (!consistent) {
-          pe.component.removeEmbedding(pe)
+          ce.component.removeEmbedding(ce)
           garbage += 1
         }
 
@@ -72,8 +72,8 @@ trait Actions {
         for ((ci, ie) <- positiveInfluenceMap; ps <- ie) {
           val comp = patternComponents(ci)
           val ps2 = ps map { case (sa, ta) => (comp(sa), agents(ta)) }
-          val pes = PartialEmbedding(ps2)
-          for (pe <- pes) comp.addEmbedding(pe)
+          val ces = ComponentEmbedding(ps2)
+          for (ce <- ces) comp.addEmbedding(ce)
         }
 
         // FIXME: Handle side effects.
@@ -265,8 +265,8 @@ trait Actions {
 
       import Pattern._
 
-      val peOffsets: Vector[Int] =
-        lhs.components.scanLeft(0) { (i, pe) => i + pe.length }
+      val ceOffsets: Vector[Int] =
+        lhs.components.scanLeft(0) { (i, ce) => i + ce.length }
       val lhsIndex = lhs.zipWithIndex.toMap
       val rhsIndex = rhs.zipWithIndex.toMap
 
@@ -286,7 +286,7 @@ trait Actions {
         }
 
       @inline def agentOffset(a: Agent) =
-        peOffsets(a.component.index) + a.index
+        ceOffsets(a.component.index) + a.index
 
       @inline def fixLink(
         atoms: mutable.Buffer[Atom],
@@ -313,7 +313,7 @@ trait Actions {
         if (firstDiffIndex > 0) firstDiffIndex else zipped.length
 
       @inline def addedAgentOffset(i: AgentIndex) =
-        peOffsets(lhs.length) + i - commonPrefixLength
+        ceOffsets(lhs.length) + i - commonPrefixLength
 
       val lhsAgentsModified = (
         for (_ <- 0 until lhs.components.length)

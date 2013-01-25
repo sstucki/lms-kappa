@@ -2,7 +2,7 @@ package kappa
 
 import scala.collection.mutable
 
-trait PartialEmbeddings {
+trait ComponentEmbeddings {
   this: Mixtures with Patterns =>
 
   /**
@@ -12,8 +12,8 @@ trait PartialEmbeddings {
    * ''WARNING'': For convenience, this class provides the interface
    * of a `Seq[Mixture.Agent]`.  However, using some methods from the
    * `Seq` API might not result in the expected behavior.  E.g. `++`
-   * will return a `Seq[PartialEmbedding]` rather than the expected
-   * `PartialEmbedding`.
+   * will return a `Seq[Mixture.Agent]` rather than the expected
+   * `ComponentEmbedding`.
    *
    * @param inj an array of [[Mixtures#Mixture.Agent]]s representing
    *        the injection from pattern agent indices to mixture
@@ -22,7 +22,7 @@ trait PartialEmbeddings {
    *        (of `pattern`) that conconstitutes the domain of this
    *        embedding.
    */
-  final case class PartialEmbedding private (
+  final case class ComponentEmbedding private (
     val inj: Array[Mixture.Agent], val component: Pattern.Component)
       extends Seq[Mixture.Agent] {
 
@@ -31,17 +31,17 @@ trait PartialEmbeddings {
 
     // TODO: Not used. Remove.
     // /**
-    //  * The index of the partial embedding within the collection of
+    //  * The index of the component embedding within the collection of
     //  * embeddings of the connected component that constitutes the
     //  * domain of this embedding.
     //  */
     // var index: EmbeddingIndex = -1
 
     /**
-     * Returns this [[PartialEmbedding]] as a map from agent indices
+     * Returns this [[ComponentEmbedding]] as a map from agent indices
      * to [[Mixtures#Mixture.Agent]]s.
      *
-     * @return this [[PartialEmbedding]] as a map from agent indices
+     * @return this [[ComponentEmbedding]] as a map from agent indices
      * to [[Mixtures#Mixture.Agent]]s.
      */
     def toMap: Map[Source, Target] = mapIterator.toMap
@@ -49,9 +49,9 @@ trait PartialEmbeddings {
     // -- Convenience functions from Map[Source, Target] API --
 
     /**
-     * Selects the first pair of this partial embedding.
+     * Selects the first pair of this component embedding.
      *
-     * @return the first pair of this partial embedding.
+     * @return the first pair of this component embedding.
      */
     @inline def mapHead: (Source, Target) = (0, inj.head)
 
@@ -85,7 +85,7 @@ trait PartialEmbeddings {
       this.copy(inj = this.inj updated (index, elem))
 
     // -- Equals API --
-    override def canEqual(that: Any) = that.isInstanceOf[PartialEmbedding]
+    override def canEqual(that: Any) = that.isInstanceOf[ComponentEmbedding]
 
     // -- Any API --
     /**
@@ -103,7 +103,7 @@ trait PartialEmbeddings {
      *         agent; `false` otherwise.
      */
     override def equals(that: Any): Boolean = that match {
-      case that: PartialEmbeddings#PartialEmbedding =>
+      case that: ComponentEmbeddings#ComponentEmbedding =>
         (that canEqual this) &&
         (this.component == that.component) &&
         (this.head == that.head)
@@ -111,57 +111,57 @@ trait PartialEmbeddings {
     }
 
     /**
-     * Calculate a hash code value for this partial embedding.
+     * Calculate a hash code value for this component embedding.
      *
-     * See [[PartialEmbedding.equals]] for why this method is
+     * See [[ComponentEmbedding.equals]] for why this method is
      * overridden.
      *
-     * @return the hash code value for this partial embedding.
+     * @return the hash code value for this component embedding.
      */
     override def hashCode(): Int =
       this.component.## + this.head.##
 
     override def toString =
-      "PE(" + (if (component == null) "?" else component.index) +
+      "CE(" + (if (component == null) "?" else component.index) +
         ": " + toMap.mkString(", ") + ")"
   }
 
 
-  object PartialEmbedding {
+  object ComponentEmbedding {
 
     /**
-     * Extend a pattern/mixture agent pair into a partial embedding.
+     * Extend a pattern/mixture agent pair into a component embedding.
      *
      * @param u the pattern agent in the agent pair
      * @param v the mixture agent in the agent pair
-     * @returns `Some(pe)`, where `pe` is a (partial) embedding from
-     *          the pattern containing `u` into the mixture containing
-     *          `v`, or `None` if no such embedding exists.
+     * @returns `Some(ce)`, where `ce` is an embedding from
+     *          the pattern component containing `u` into the mixture
+     *          containing `v`, or `None` if no such embedding exists.
      */
-    def apply(u: Pattern.Agent, v: Mixture.Agent): Option[PartialEmbedding] = {
+    def apply(u: Pattern.Agent, v: Mixture.Agent): Option[ComponentEmbedding] = {
       val component = u.component
       val inj = new Array[Mixture.Agent](component.length)
       if (extendInjection(u, v, inj, null))
-        Some(new PartialEmbedding(inj, u.component))
+        Some(new ComponentEmbedding(inj, u.component))
       else None
     }
 
     /**
      * Extend a multiple pattern/mixture agent pairs into a set of
-     * partial embeddings.
+     * component embeddings.
      *
      * All pattern/mixture agent pairs in `ps` must belong to the same
-     * pattern and mixture, respectively.  The partial embeddings
-     * returned by the method are guaranteed to be unique w.r.t each
-     * other.
+     * pattern component and mixture, respectively.  The component
+     * embeddings returned by the method are guaranteed to be pairwise
+     * unique.
      *
      * @param ps a collection of pattern/mixture agent pairs from the
-     *        same pattern and mixture, respectively.
-     * @returns all the (partial) embeddings the containing any of the
+     *        same pattern component and mixture, respectively.
+     * @returns all the embeddings the containing any of the
      *          pairs in `ps`.
      */
     def apply(ps: Iterable[(Pattern.Agent, Mixture.Agent)])
-        : Iterable[PartialEmbedding] = {
+        : Iterable[ComponentEmbedding] = {
 
       if (ps.isEmpty) Iterable.empty
       else {
@@ -174,20 +174,20 @@ trait PartialEmbeddings {
         (for ((u, v) <- ps) yield {
           val inj = new Array[Mixture.Agent](component.length)
           if (extendInjection(u, v, inj, conflicts))
-            Some(new PartialEmbedding(inj, u.component))
+            Some(new ComponentEmbedding(inj, u.component))
           else None
         }).flatten
       }
     }
 
     /**
-     * Extend a pair of pattern agents into a partial embedding.
+     * Extend a pair of pattern agents into a component embedding.
      *
      * @param u the first pattern agent in the agent pair
      * @param v the second pattern agent in the agent pair
-     * @returns `Some(pe)`, where `pe` is a (partial) embedding from
-     *          the pattern containing `u` into the pattern containing
-     *          `v`, or `None` if no such embedding exists.
+     * @returns `Some(ce)`, where `ce` is an embedding from
+     *          the pattern component containing `u` into the pattern
+     *          containing `v`, or `None` if no such embedding exists.
      */
     def findEmbedding(u: Pattern.Agent, v: Pattern.Agent)
         : Option[Array[Pattern.Agent]] = {

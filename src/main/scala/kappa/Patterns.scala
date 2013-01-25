@@ -4,7 +4,7 @@ import scala.collection.mutable
 
 trait Patterns {
   this: LanguageContext with Parser with Actions with Rules with Symbols
-      with Mixtures with PartialEmbeddings =>
+      with Mixtures with ComponentEmbeddings =>
 
   /**
    * A class representing patterns in [[Model]]s (i.e. site graphs).
@@ -258,10 +258,10 @@ trait Patterns {
      * As in [[Mixtures#Mixture.Link]], the target sites are stored in
      * a "relative" fashion, i.e. as (agent, site index) pairs rather
      * than just a reference to the target site.  This simplifies the
-     * process of matching patterns to mixtures (i.e. the process of
-     * extending pairs of patter and mixture agents into partial
-     * embeddings).  For more details, see the documentation of the
-     * [[Mixtures#Mixture.Link]] class.
+     * process of matching pattern components to mixtures (i.e. the
+     * process of extending pairs of pattern and mixture agents into
+     * component embeddings).  For more details, see the documentation
+     * of the [[Mixtures#Mixture.Link]] class.
      *
      * @param agent the target agent of this link.
      * @param site the index of the target site in the target agent of
@@ -569,7 +569,7 @@ trait Patterns {
         if (_modelIndex > 0) _modelIndex else register
 
       /**
-       * The partial embeddings from this component to the mixture.
+       * The component embeddings from this component to the mixture.
        *
        * NOTE: The role of this buffer allow random access to
        * embeddings (literally).  If we just kept embeddings in a map,
@@ -579,10 +579,10 @@ trait Patterns {
        * FIXME: Can we do better?
        */
       protected[Pattern] var _embeddings
-          : mutable.ArrayBuffer[PartialEmbedding] = null
+          : mutable.ArrayBuffer[ComponentEmbedding] = null
 
       /**
-       * The partial embeddings from this component to the mixture.
+       * The component embeddings from this component to the mixture.
        *
        * NOTE: This is just a convenience method for making sure we're
        * always accessing the correct set of embeddings.
@@ -628,23 +628,23 @@ trait Patterns {
       }
 
       /**
-       * Add a (partial) embedding to the collection of embeddings
+       * Add a component embedding to the collection of embeddings
        * from this component to the mixture.
        */
-      @inline def addEmbedding(pe: PartialEmbedding) {
-        if (!(embeddingIndices contains pe.head)) {
+      @inline def addEmbedding(ce: ComponentEmbedding) {
+        if (!(embeddingIndices contains ce.head)) {
           val i = embeddings.length
-          embeddings += pe
-          embeddingIndices += ((pe.head, i))
+          embeddings += ce
+          embeddingIndices += ((ce.head, i))
         }
       }
 
       /**
-       * Remove a (partial) embedding to the collection of embeddings
-       * from this component to the mixture.
+       * Remove a component embedding from the collection of
+       * embeddings from this component to the mixture.
        */
-      @inline def removeEmbedding(pe: PartialEmbedding) {
-        (embeddingIndices remove pe.head) match {
+      @inline def removeEmbedding(ce: ComponentEmbedding) {
+        (embeddingIndices remove ce.head) match {
           case Some(i) => {
             val j = embeddings.length - 1
             embeddings(i) = _embeddings(j)
@@ -661,13 +661,13 @@ trait Patterns {
       @inline def count: Int = embeddings.size
 
       /**
-       * Return all the (partial) embeddings from this pattern
-       * component in a given mixture.
+       * Return all the embeddings from this pattern component in a
+       * given mixture.
        *
-       * @return all the partial embeddings from `this` in `that`.
+       * @return all the component embeddings from `this` in `that`.
        */
-      def partialEmbeddingsIn(that: Mixture): Seq[PartialEmbedding] =
-        (for (u <- this; v <- that) yield PartialEmbedding(u, v)).flatten
+      def componentEmbeddingsIn(that: Mixture): Seq[ComponentEmbedding] =
+        (for (u <- this; v <- that) yield ComponentEmbedding(u, v)).flatten
 
       /**
        * If this component does not have a representative already
@@ -698,11 +698,11 @@ trait Patterns {
           if (_modelIndex < 0) {  // No representative found, register this one
 
             // Initialize embedding set
-            this._embeddings = new mutable.ArrayBuffer[PartialEmbedding]()
+            this._embeddings = new mutable.ArrayBuffer[ComponentEmbedding]()
             this._embeddingIndices =
               new mutable.HashMap[Mixture.Agent, EmbeddingIndex]()
-            for (pe <- partialEmbeddingsIn(mix)) {
-              this.addEmbedding(pe)
+            for (ce <- componentEmbeddingsIn(mix)) {
+              this.addEmbedding(ce)
             }
 
             // Let rules now about this component so they can update
@@ -722,7 +722,7 @@ trait Patterns {
       // -- Matchable[Component] API --
       @inline def isComplete = this.agents forall (_.isComplete)
       @inline def matches(that: Component) =
-        !PartialEmbedding.findEmbedding(this(0), that(0)).isEmpty
+        !ComponentEmbedding.findEmbedding(this(0), that(0)).isEmpty
 
       // -- Core Seq[Agent] API --
       @inline def apply(idx: Int): Agent = agents(idx)

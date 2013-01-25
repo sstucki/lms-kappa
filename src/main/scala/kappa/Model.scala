@@ -41,9 +41,9 @@ trait Model extends Patterns with Mixtures with Actions with Rules
       val lhss = for (i <- 0 until rules.length) yield (rules(i).action.lhs)
       val pats = lhss ++ obs
 
-      // Compute all partial embeddings.
+      // Compute all component embeddings.
       val embs =
-        for (p <- pats) yield (p.components map (_ partialEmbeddingsIn mix))
+        for (p <- pats) yield (p.components map (_ componentEmbeddingsIn mix))
 
       // Compute all observable counts.
       val obsCounts =
