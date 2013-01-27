@@ -6,7 +6,7 @@ trait ComponentEmbeddings {
   this: Mixtures with Patterns =>
 
   /**
-   * A class reperesenting an embedding form a single connected
+   * A class representing an embedding form a single connected
    * component of a site graph into a mixture.
    *
    * ''WARNING'': For convenience, this class provides the interface
@@ -59,7 +59,7 @@ trait ComponentEmbeddings {
       if (key > inj.size) None else Some(inj(key))
 
     @inline def mapIterator: Iterator[(Source, Target)] =
-      for ((v, k) <- inj.iterator.zipWithIndex) yield (k, v)
+      inj.iterator.zipWithIndex map (_.swap)
 
     // TODO: Potentially confusing?
     @inline def +(p: (Source, Target)) = this updated (p._1, p._2)

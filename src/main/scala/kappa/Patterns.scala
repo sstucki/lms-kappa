@@ -26,7 +26,7 @@ trait Patterns {
   final class Pattern private (
     val components: Vector[Pattern.Component],
     val agents: Vector[Pattern.Agent],
-    val siteGraphString: String)
+    val siteGraphString: String = "")
       extends Seq[Pattern.Agent] {
 
     import Pattern._
@@ -100,18 +100,6 @@ trait Patterns {
       components(ci).agents(ai)
 
 
-    /* RHZ: I think all of these are methods we really don't need for simulation
-     * that we can safely skip for now
-     *
-     * sstucki: These are used in test cases because we don't have a
-     * parser right now.  Without them the test breaks. :-( I believe
-     * you will also find these handy when you implement the parser.
-     * As I understood it you build patterns from the AST by first
-     * adding all the agents to a pattern in a first traversal and
-     * then connecting them in a second pass.  That's exactly what
-     * these methods are intended for.
-     */
-
     // -- Extra Seq[Agent] API --
 
     /**
@@ -142,15 +130,6 @@ trait Patterns {
       components foreach { c => c.agents foreach f }
 
 
-    // RHZ: Is this a Scala design pattern?
-    //
-    // sstucki: Not that I know of.  The reason I put this in a
-    // separate method is that I used a mutable variable in there and
-    // I didn't want that to become part of the class.  Maybe it would
-    // have been sufficient to just put it in a separate scope.
-    // Anyway, I changed this to a for comprehension now to make it
-    // more readable (since it's not performance critical anyway).
-
     /* Update the pattern pointers in the components. */
     for ((c, i) <- components.zipWithIndex) {
       c._pattern = this
@@ -158,7 +137,7 @@ trait Patterns {
     }
   }
 
-  /** Companion object of the [[Patterns.Pattern]] class. */
+
   // RHZ: Why not work with path-dependent types? There are things that can only
   // be done on agents in the same pattern (like connecting) and path-dependent
   // types let us enforce that with the type system... And for the things that
@@ -179,16 +158,20 @@ trait Patterns {
   // possible to make Agents inner classes in Mixtures as these are
   // already built in this way.  I added a comment about this in the
   // Mixture class.
+  /** Companion object of the [[Patterns#Pattern]] class. */
   object Pattern {
 
     /** A class representing links between [[Pattern.Site]]s. */
     sealed abstract class Link extends Matchable[Link]{
+
+      // -- Matchable[Link] API --
 
       /**
        * Compare this link against another [[Pattern.Link]].
        *
        * @return `true` if `this` matches `that`.
        */
+      @inline final
       def matches(that: Link): Boolean = (this, that) match {
         case (Undefined, _) => true
         case (Stub, Stub) => true
@@ -208,6 +191,7 @@ trait Patterns {
        *
        * @return `true` if `this` matches `that`.
        */
+      @inline final
       def matches(that: Mixture.Link): Boolean = (this, that) match {
         case (Undefined, _) => true
         case (Stub, Mixture.Stub) => true
@@ -215,9 +199,102 @@ trait Patterns {
           (a1 matches Some(a2.state)) &&
           (s1 matches Some(a2.sites(s2).state)) &&
           (l1 matches Some(l2))
-        case (Linked(_, _, l1), Mixture.Linked(_, _, l2)) =>
-          l1 matches l2
+        case (Linked(_, s1, l1), Mixture.Linked(_, s2, l2)) =>
+          (s1 == s2) && (l1 matches l2)
         case _ => false
+      }
+
+      /**
+       * Returns the join of this link and `that`.
+       *
+       * FIXME: There is one case that is a little problematic: if we
+       * find both `this` and `that` are instances of `Linked`
+       * pointing two the same site in two agents `u1`and `u2`, we
+       * don't really know what the join of `u1` and `u2` is, and we
+       * can't tell whether it even exists, because attempting to
+       * compute `u1 join u2` will throw us straight into a recursive
+       * loop (the join of `u1` and `u2` does, after all, depend on
+       * the join of the links `this` and `that`).  So we'll just
+       * assume that `u1` and `u2` do indeed have some join, return
+       * the appropriate instance of `Linked` (albeit pointing to `u1`
+       * for now), and leave it to whoever wants to traverse the
+       * entire site graph and construct a particular cogluing to
+       * decide whether they want to back-patch the link.
+       *
+       * @return the join of `this` and `that`.
+       */
+      final def join(that: Link): Option[Link] = (this, that) match {
+        case (Stub, Stub) => Some(Stub)
+        case (Wildcard(a1, s1, l1), Wildcard(a2, s2, l2)) => {
+          val wc =
+            for (a <- a1 join a2; s <- s1 join s2; l <- l1 join l2)
+            yield new Wildcard(a.om, s.om, l.om)
+          wc orElse Some(Undefined)
+        }
+        case (Wildcard(a1, s1, l1), Linked(u2, s2, l2)) => {
+          val wc = for {
+            a <- a1 join Some(u2.state)
+            s <- s1 join Some(u2.sites(s2).state)
+            l <- l1 join Some(l2)
+          } yield new Wildcard(a.om, s.om, l.om)
+          wc orElse Some(Undefined)
+        }
+        case (Linked(u1, s1, l1), Wildcard(a2, s2, l2)) => {
+          val wc = for {
+            a <- Some(u1.state)           join a2
+            s <- Some(u1.sites(s1).state) join s2
+            l <- Some(l1)                 join l2
+          } yield new Wildcard(a.om, s.om, l.om)
+          wc orElse Some(Undefined)
+        }
+        case (Linked(u1, s1, l1), Linked(u2, s2, l2)) if (s1 == s2) => {
+          val l = l1 join l2
+          l map (Linked(u1, s1, _)) orElse {
+            val a = u1.state           meet u2.state
+            val s = u1.sites(s1).state meet u2.sites(s2).state
+            Some(Wildcard(a, s, l))
+          }
+        }
+        case _ => Some(Undefined)
+      }
+
+      /**
+       * Returns the meet of this link and `that`.
+       *
+       * FIXME: This method has the same problem as [[Link.join]],
+       * except it may return instances of `Linked` even when only one
+       * of the links is an instance of `Linked` and the other one is
+       * a compatible Wildcard.
+       *
+       * @return the meet of `this` and `that`.
+       */
+      final def meet(that: Link): Option[Link] = (this, that) match {
+        case (_, Undefined) => Some(this)
+        case (Undefined, _) => Some(that)
+        case (Stub, Stub)   => Some(Stub)
+        case (Wildcard(a1, s1, l1), Wildcard(a2, s2, l2)) =>
+          for (a <- a1 meet a2; s <- s1 meet s2; l <- l1 meet l2)
+          yield new Wildcard(a.om, s.om, l.om)
+        case (Wildcard(a1, s1, l1), Linked(u2, s2, l2)) =>
+          // FIXME: See note above.
+          for {
+            a <- a1 meet Some(u2.state)
+            s <- s1 meet Some(u2.sites(s2).state)
+            l <- l1 meet Some(l2)
+          } yield new Linked(u2, s2, l.om.get)
+        case (Linked(u1, s1, l1), Wildcard(a2, s2, l2)) =>
+          // FIXME: See note above.
+          for {
+            a <- Some(u1.state)           meet a2
+            s <- Some(u1.sites(s1).state) meet s2
+            l <- Some(l1)                 meet l2
+          } yield new Linked(u1, s1, l.om.get)
+        case (Linked(u1, s1, l1), Linked(u2, s2, l2)) => {
+          // FIXME: See note above.
+          if (s1 == s2) (l1 meet l2) map (Linked(u1, s1, _))
+          else None
+        }
+        case _ => None
       }
 
       /**
@@ -225,11 +302,12 @@ trait Patterns {
        *
        * @return `true` if this link is valid in a mixture.
        */
-      def isComplete = this match {
+      @inline final def isComplete = this match {
         case _: Linked => true
         case _ => false
       }
 
+      // -- Any API --
       // FIXME!
       override def toString = this match {
         case Undefined => "?"
@@ -290,13 +368,13 @@ trait Patterns {
     /**
      * A class representing sites in [[Pattern.Agent]]s.
      */
-    final case class Site private (
+    final case class Site /*private*/ (
       val state: SiteState, var link: Link = Undefined) extends Matchable[Site] {
 
       // TODO: this is not used at the moment.  Remove?
 
       /** Internal reference to the agent this site belongs to. */
-      protected[Pattern] var _agent: Agent = null
+      //protected[Pattern] var _agent: Agent = null
 
       // RHZ: I prefer this exception rather than a null pointer exception
       //
@@ -307,10 +385,10 @@ trait Patterns {
       // purposes anyway.  I changed it accordingly.
 
       /** The agent this site belongs to. */
-      @inline def agent =
-        if (_agent == null) throw new NullPointerException(
-          "attempt to access parent agent of orphan site")
-        else _agent
+      // @inline def agent =
+      //   if (_agent == null) throw new NullPointerException(
+      //     "attempt to access parent agent of orphan site")
+      //   else _agent
 
       /** Convenience copy method. */
       def copy(state: SiteState = this.state, link: Link = this.link) =
@@ -332,6 +410,8 @@ trait Patterns {
           case _ => None
         }
 
+      // -- Matchable[Site] API --
+
       /**
        * Compare this site against another [[Pattern.Site]].
        *
@@ -348,7 +428,25 @@ trait Patterns {
       def matches(that: Mixture.Site): Boolean =
         (this.state matches that.state) && (this.link matches that.link)
 
-      override def toString = state.toString + link
+      /**
+       * Returns the join of this site and `that`.
+       *
+       * @return the join of `this` and `that`.
+       */
+      final def join(that: Site): Option[Site] = for {
+        s <- this.state join that.state
+        l <- this.link join that.link
+      } yield new Site(s, l)
+
+      /**
+       * Returns the meet of this site and `that`.
+       *
+       * @return the meet of `this` and `that`.
+       */
+      final def meet(that: Site): Option[Site] = for {
+        s <- this.state meet that.state
+        l <- this.link meet that.link
+      } yield new Site(s, l)
 
       /**
        * Checks if this site can be used in mixtures.
@@ -356,6 +454,9 @@ trait Patterns {
        * @return `true` if this site is valid in a mixture.
        */
       def isComplete = this.state.isComplete && this.link.isComplete
+
+      // -- Any API --
+      override def toString = state.toString + link
     }
 
     // RHZ: Why not as part of the class?
@@ -434,6 +535,8 @@ trait Patterns {
           case _ => None
         }
 
+      // -- Matchable[Agent] API --
+
       /**
        * Compare this agent against a [[Mixtures#Mixture.Agent]].
        *
@@ -450,9 +553,83 @@ trait Patterns {
        * @return `true` if this agent matches `that`.
        */
       def matches(that: Agent): Boolean =
-        that.sites.size == this.sites.size &&
+        (this.sites.size == that.sites.size) &&
         (this.state matches that.state) &&
         (this.sites zip that.sites forall { case (s1, s2) => s1 matches s2 })
+
+      /**
+       * Returns the join of this agent and `that`.
+       *
+       * ''WARNING'': Agents returned from this method are
+       * orphans, i.e. they don't belong to any component and should
+       * be handled with care.  Also, their links might be
+       * problematic, see comment at [[Link.join]].
+       *
+       * @return the join of `this` and `that`.
+       */
+      final def join(that: Agent): Option[Agent] =
+        if (this.sites.size != that.sites.size) None
+        else {
+
+          // Generate all "combinations" of site joins
+          def intfs = {
+            val sitesJoins =
+              for (i <- 0 until sites.size)
+              yield this.sites(i) join that.sites(i)
+
+            val intfs: Option[Vector[Site]] = Some(Vector())
+            sitesJoins.foldLeft(intfs) {
+              (intfs, siteJoins) =>
+              for (intf <- intfs; j <- siteJoins) yield intf :+ j
+            }
+          }
+
+          for {
+            st <- this.state join that.state
+            intf <- intfs
+          } yield {
+            val u = Agent(st, intf.toArray)
+            u._index = this._index
+            u
+          }
+        }
+
+      /**
+       * Returns the meet of this agent and `that`.
+       *
+       * ''WARNING'': Agents returned from this method are
+       * orphans, i.e. they don't belong to any component and should
+       * be handled with care.  Also, their links might be
+       * problematic, see comment at [[Link.meet]].
+       *
+       * @return the meet of `this` and `that`.
+       */
+      final def meet(that: Agent): Option[Agent] =
+        if (this.sites.size != that.sites.size) None
+        else {
+
+          // Generate all "combinations" of site meets
+          def intfs = {
+            val sitesMeets =
+              for (i <- 0 until sites.size)
+              yield this.sites(i) meet that.sites(i)
+
+            val intfs: Option[Vector[Site]] = Some(Vector())
+            sitesMeets.foldLeft(intfs) {
+              (intfs, siteMeets) =>
+              for (intf <- intfs; m <- siteMeets) yield intf :+ m
+            }
+          }
+
+          for {
+            st <- this.state meet that.state
+            intf <- intfs
+          } yield {
+            val u = Agent(st, intf.toArray)
+            u._index = this._index
+            u
+          }
+        }
 
       /**
        * Checks if this agent can be used in mixtures.
@@ -719,10 +896,62 @@ trait Patterns {
           _modelIndex
         }
 
+
       // -- Matchable[Component] API --
-      @inline def isComplete = this.agents forall (_.isComplete)
+
+      /**
+       * Compare this link against a [[Mixtures#Mixture.Link]].
+       *
+       * @return `true` if `this` matches `that`.
+       */
       @inline def matches(that: Component) =
         !ComponentEmbedding.findEmbedding(this(0), that(0)).isEmpty
+
+      /**
+       * Check if this component is equivalent to `that`.
+       *
+       * @return `true` if and only if `this` and `that` are equivalent.
+       */
+      // FIXME: Should override this for better performance
+      //override def isEquivTo[U <: Component](that: U): Boolean = ???
+
+      /**
+       * Returns the join of this component and `that`.
+       *
+       * NOTE: This method always returns `None`.  The minimal upper
+       * bounds of two pattern components are the ''coglueings'' (or
+       * ''relative products'') of the components, which are not
+       * unique in general.  More importantly though, the coglueings
+       * of two connected components need not be connected in general.
+       * Returning a pattern instead would be a type error.
+       *
+       * @return `None`.
+       */
+      def join(that: Component): Option[Component] = None
+
+      /**
+       * Returns the meet of this component and `that`.
+       *
+       * NOTE: For now, this method always returns `None`.  The
+       * maximal upper bounds of two pattern components are the
+       * ''minimal glueings'' (or ''relative coproducts'') of the
+       * components, which are not unique in general.  More
+       * importantly though, the one minimal glueing that is
+       * guaranteed to exist for any two connected components is the
+       * disjoint union of the two components.  Obviously, this
+       * minimal glueing is not a connected component.  Returning a
+       * pattern instead would be a type error.
+       *
+       * @return `None`.
+       */
+      def meet(that: Component): Option[Component] = None
+
+      /**
+       * Checks if this link can be used in mixtures.
+       *
+       * @return `true` if this link is valid in a mixture.
+       */
+      @inline def isComplete = this.agents forall (_.isComplete)
 
       // -- Core Seq[Agent] API --
       @inline def apply(idx: Int): Agent = agents(idx)
@@ -741,15 +970,71 @@ trait Patterns {
       }
     }
 
+    // /** Companion object of the [[Patterns#Pattern.Component]] class. */
+    // object Component {
+    // }
+
     /**
      * Factory method creating an empty pattern.
      *
      * @return an empty pattern.
      */
-    def apply() = new Pattern(Vector(), Vector(), "")
+    def apply() = new Pattern(Vector(), Vector())
 
     // def apply(agent: Agent) = new Pattern(Vector(
     //   new Component(Vector(agent))), Vector((0, 0)))
+
+    /**
+     * Convert a (sub) set of agents from a single pattern component
+     * into a new (single component) pattern.
+     *
+     * TODO: For now this is only used to safely build coglueing
+     * components.
+     *
+     * @return a new component consisting of the `agents`.
+     */
+    def apply(agents: Seq[Agent]): Pattern = {
+
+      // Build new set of agents
+      val oldAgents = agents.toArray
+      val newAgents = new Array[Agent](oldAgents.size)
+      for (i <- 0 until oldAgents.size) {
+        val u = oldAgents(i)
+        val v =  Agent(u.state, new Array[Site](u.sites.size))
+        v._index = i
+        newAgents(i) = v
+      }
+
+      // Map old to new
+      val oldToNew = {
+        for (i <- 0 until oldAgents.size) yield (oldAgents(i), newAgents(i))
+      }.toMap
+
+      // Copy sites and patch links
+      for (i <- 0 until oldAgents.size) {
+        val u = oldAgents(i)
+        val v = newAgents(i)
+        for (j <- 0 until u.sites.size) {
+          val su = u.sites(j)
+          val lv = su.link match {
+            case Linked(w, j2, lw) => Linked(oldToNew(w), j2, lw)
+            case lu => lu
+          }
+          v.sites(j) = new Site(su.state, lv)
+        }
+      }
+
+      // Create new component and patch component pointers
+      val newAgentsVector = newAgents.toVector
+      val c = new Component(newAgentsVector)
+      for (v <- newAgents) v._component = c
+
+      // Wrap everything in a pattern.
+      val p = new Pattern(Vector(c), newAgentsVector)
+      c._pattern = p
+      c._index = 0
+      p
+    }
 
     /**
      * Factory method creating a pattern from a string.

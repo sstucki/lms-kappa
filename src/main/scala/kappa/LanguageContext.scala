@@ -33,43 +33,101 @@ trait KappaContext extends LanguageContext {
   // to represent symbols, some of these wrappers would likely not be
   // necessary as we could use the symbols directly to represent the
   // states (in cases where the states are not tuples).
-  case class AgentStateImpl(atype: AgentTypeSym)
+  final case class AgentStateImpl(atype: AgentTypeSym)
       extends AgentStateIntf[AgentStateImpl] {
-    override def toString = agentTypes(atype)
-    def matches(that: AgentStateImpl) = this.atype == that.atype
-    def isComplete = true
-    def matchesInLongestCommonPrefix(that: AgentStateImpl) =
+
+    // -- AgentStateIntf[AgentStateImpl] API --
+
+    @inline def matchesInLongestCommonPrefix(that: AgentStateImpl) =
       this.atype == that.atype
+
+    // -- Matchable[AgentStateImpl] API --
+
+    @inline def matches(that: AgentStateImpl) = this.atype == that.atype
+
+    @inline override def isEquivTo[U <: AgentStateImpl](that: U): Boolean =
+      this.atype == that.atype
+
+    @inline def join(that: AgentStateImpl) =
+      if (this.atype == that.atype) Some(this) else None
+
+    @inline def meet(that: AgentStateImpl) =
+      if (this.atype == that.atype) Some(this) else None
+
+    @inline def isComplete = true
+
+    // -- Any API --
+    @inline override def toString = agentTypes(atype)
   }
 
-  case class SiteStateImpl(name: SiteNameSym, state: Option[SiteStateNameSym])
-       extends Matchable[SiteStateImpl] {
+  final case class SiteStateImpl(
+    name: SiteNameSym, state: Option[SiteStateNameSym])
+      extends Matchable[SiteStateImpl] {
 
-         // FIXME: Adjust to new syntax?
-         override def toString = siteNames(name) + (state match {
-           case None => ""
-           case Some(s) => "~" + siteStateNames(s)
-         })
+    // -- Matchable[SiteStateImpl] API --
 
-         def matches(that: SiteStateImpl) =
-           (this.name == that.name) && Matchable.optionMatches(
-             this.state, that.state)(_==_)
+    @inline def matches(that: SiteStateImpl) =
+      (this.name == that.name) && Matchable.optionMatches(
+        this.state, that.state)(_==_)
 
-         def isComplete = !state.isEmpty
-       }
+    @inline override def isEquivTo[U <: SiteStateImpl](that: U): Boolean =
+      (this.name == that.name) && (this.state == that.state)
 
-  case class LinkStateImpl(state: Option[LinkStateNameSym])
-       extends Matchable[LinkStateImpl] {
-         override def toString = state match {
-           case None => ""
-           case Some(s) => ": " + linkStateNames(s)
-         }
+    @inline def join(that: SiteStateImpl) =
+      if (this.name == that.name) (this.state, that.state) match {
+        case (Some(s1), Some(s2)) if s1 == s2 => Some(this)
+        case _ => Some(SiteStateImpl(this.name, None))
+      } else None
 
-         def matches(that: LinkStateImpl) = Matchable.optionMatches(
-           this.state, that.state)(_==_)
+    @inline def meet(that: SiteStateImpl) =
+      if (this.name == that.name) (this.state, that.state) match {
+        case (None, None) => Some(this)
+        case (None, Some(s2)) => Some(that)
+        case (Some(s2), None) => Some(this)
+        case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
+      } else None
 
-         def isComplete = !state.isEmpty
-       }
+    @inline def isComplete = !state.isEmpty
+
+    // -- Any API --
+
+    // FIXME: Adjust to new syntax?
+    override def toString = siteNames(name) + (state match {
+      case None => ""
+      case Some(s) => "~" + siteStateNames(s)
+    })
+  }
+
+  final case class LinkStateImpl(state: Option[LinkStateNameSym])
+      extends Matchable[LinkStateImpl] {
+
+    // -- Matchable[LinkStateImpl] API --
+
+    @inline def matches(that: LinkStateImpl) = Matchable.optionMatches(
+      this.state, that.state)(_==_)
+
+    @inline override def isEquivTo[U <: LinkStateImpl](that: U): Boolean =
+      this.state == that.state
+
+    @inline def join(that: LinkStateImpl) = (this.state, that.state) match {
+      case (Some(s1), Some(s2)) if s1 == s2 => Some(this)
+      case _ => Some(LinkStateImpl(None))
+    }
+
+    @inline def meet(that: LinkStateImpl) = (this.state, that.state) match {
+      case (_, None) => Some(this)
+      case (None, _) => Some(that)
+      case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
+    }
+
+    @inline def isComplete = !state.isEmpty
+
+    // -- Any API --
+    override def toString = state match {
+      case None => ""
+      case Some(s) => ": " + linkStateNames(s)
+    }
+  }
 }
 
 // trait KaSpaceContext extends LanguageContext {

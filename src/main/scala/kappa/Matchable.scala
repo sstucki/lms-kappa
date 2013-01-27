@@ -53,13 +53,6 @@ trait Matchable[T] extends Any {
   def matches(that: T): Boolean
 
   /**
-   * Checks if this matchable can be used in mixtures.
-   *
-   * @return `true` if this matchable is valid in a mixture.
-   */
-  def isComplete: Boolean
-
-  /**
    * Check if this matchable is equivalent to `that`.
    *
    * The function defines the following equivalence relation:
@@ -71,6 +64,72 @@ trait Matchable[T] extends Any {
   @inline
   def isEquivTo[U <: T with Matchable[T]](that: U): Boolean =
     (this matches that) && (that matches this)
+
+  /**
+   * Returns a the least upper bound of this matchable and `that`, if
+   * it exists.
+   *
+   * Values returned by this method should be ''least upper bounds''
+   * of the type `T` w.r.t. the partial order defined by the `matches`
+   * method.  An instance `val z = (x join y)` of `T` is the least
+   * upper bound (or ''join'', or ''supremum'') of two matchables `x`
+   * and `y` (of type `T`) if it satisfies all of the following:
+   *
+   *  - `z matches x` and `z matches y` (`z` is an upper bound of `x`
+   *    and `y`),
+   *
+   *  - for any instance `w` of type `T`, such that `w matches x` and
+   *    `w matches y`, we have `w matches z` (`z` is greater than or
+   *    equal to any upper bound of `x` and `y`).
+   *
+   * Note that a LUB does not necessarily exist for any pair of
+   * matchables.  If every pair of matchables with underlying type `T`
+   * have a LUB then the instances of `T` form a ''join-semilattice''
+   * (or ''upper semilattice'').
+   *
+   * See also [[http://en.wikipedia.org/wiki/Join_and_meet]].
+   *
+   * @return `Some(z)`, where `z` is the least upper bounds of `this`
+   *         and `that`, or `None` if no such `z` exists.
+   */
+  def join(that: T): Option[T]
+
+  /**
+   * Returns a the greatest lower bound of this matchable and `that`,
+   * if it exists.
+   *
+   * Values returned by this method should be ''greatest lower
+   * bounds'' of the type `T` w.r.t. the partial order defined by the
+   * `matches` method.  An instance `val z = (x meet y)` of `T` is the
+   * greatest lower bound (or ''meet'', or ''infimum'') of two
+   * matchables `x` and `y` (of type `T`) if it satisfies all of the
+   * following:
+   *
+   *  - `x matches z` and `y matches z` (`z` is a lower bound of `x`
+   *    and `y`),
+   *
+   *  - for any instance `w` of type `T`, such that `x matches w` and
+   *    `y matches w`, we have `z matches w` (`z` is lower than or
+   *    equal to any lower bound of `x` and `y`).
+   *
+   * Note that a GLB does not necessarily exist for any pair of
+   * matchables.  If every pair of matchables with underlying type `T`
+   * have a GLB then the instances of `T` form a ''meet-semilattice''
+   * (or ''lower semilattice'').
+   *
+   * See also [[http://en.wikipedia.org/wiki/Join_and_meet]].
+   *
+   * @return `Some(z)`, where `z` is the greatest lower bounds of
+   *         `this` and `that`, or `None` if no such `z` exists.
+   */
+  def meet(that: T): Option[T]
+
+  /**
+   * Checks if this matchable can be used in mixtures.
+   *
+   * @return `true` if this matchable is valid in a mixture.
+   */
+  def isComplete: Boolean
 
   // FIMXE: In the future we might to provide these for compatibility?
 
@@ -105,24 +164,74 @@ object Matchable {
   /**
    * Compare two `Option` values using a "matches" relation.
    *
-   * This function defines a new binary "matches" relation `M(ox, oy)`
-   * (w.r.t. the relation `mf`):
+   * This method defines a new binary "matches" relation `M(ox, oy)`
+   * (w.r.t. the relation `f`):
    *
-   *  - `M(None, oy)`, for any `oy`
-   *  - `M(Some(x), Some(y))`, if and only if `mf(x, y)`
+   *  - `M(None, oy)`, for any `oy`,
+   *  - `M(Some(x), Some(y))`, if and only if `f(x, y)`.
    *
    * @tparam T the underlying type of the `Option[T]` values.
    * @param ox the `Option` value to match.
    * @param oy the `Option` value to match against.
-   * @param mf a function representing the "matches" relation.
+   * @param f a function representing the "matches" relation.
    * @return `true` if `ox` matches `oy` according to `M(ox, oy)`.
    */
   @inline final def optionMatches[T](ox: Option[T], oy: Option[T])(
-    mf: (T, T) => Boolean): Boolean =
+    f: (T, T) => Boolean): Boolean =
       (ox, oy) match {
         case (None, _) => true
         case (Some(_), None) => false
-        case (Some(x), Some(y)) => mf(x, y)
+        case (Some(x), Some(y)) => f(x, y)
+      }
+
+  /**
+   * Compute the join of two `Option[T]` values for given underlying
+   * join operation `f` on `T`s.
+   *
+   * This method defines a new join operation `J(ox, oy)` (w.r.t. the
+   * join operation `f` on `T`s):
+   *
+   *  - `J(None, oy) = Some(None)`, for any `oy`,
+   *  - `J(ox, None) = Some(None)`, for any `ox`,
+   *  - `J(Some(x), Some(y)) = Some(f(x, y))`.
+   *
+   * @tparam T the underlying type of the `Option[T]` values.
+   * @param ox the first `Option[T]` value operand.
+   * @param oy the second `Option[T]` value operand.
+   * @param f the join operation over `T`.
+   * @return the join of `ox` and `oy` as defined above.
+   */
+  @inline final def optionJoin[T](ox: Option[T], oy: Option[T])(
+    f: (T, T) => Option[T]): Option[Option[T]] =
+      (ox, oy) match {
+        case (Some(x), Some(y)) => Some(f(x, y))
+        case _ => Some(None)
+      }
+
+  /**
+   * Compute the meet of two `Option[T]` values for given underlying
+   * meet operation `f` on `T`s.
+   *
+   * This method defines a new meet operation `M(ox, oy)` (w.r.t. the
+   * join operation `f` on `T`s):
+   *
+   *  - `M(None, oy) = Some(oy)`, for any `oy`,
+   *  - `M(ox, None) = Some(ox)`, for any `ox`,
+   *  - `M(Some(x), Some(y)) = Some(f(x, y))`, if `f(x, y)` exists,
+   *    and `None` otherwise.
+   *
+   * @tparam T the underlying type of the `Option[T]` values.
+   * @param ox the first `Option[T]` value operand.
+   * @param oy the second `Option[T]` value operand.
+   * @param f the meet operation over `T`.
+   * @return the meet of `ox` and `oy` as defined above.
+   */
+  @inline final def optionMeet[T](ox: Option[T], oy: Option[T])(
+    f: (T, T) => Option[T]): Option[Option[T]] =
+      (ox, oy) match {
+        case (_, None) => Some(ox)
+        case (None, _) => Some(oy)
+        case (Some(x), Some(y)) => f(x, y) map (Some(_))
       }
 
   /**
@@ -141,9 +250,24 @@ object Matchable {
    */
   final class OptionMatchable[T <: Matchable[T]](val om: Option[T])
       extends AnyVal with Matchable[OptionMatchable[T]] {
-    def matches(that: OptionMatchable[T]) =
+
+    @inline def matches(that: OptionMatchable[T]) =
       optionMatches(this.om, that.om)(_ matches _)
-    def isComplete = (this.om map (_.isComplete)) getOrElse false
+
+    @inline override def isEquivTo[U <: OptionMatchable[T]](that: U): Boolean =
+      (this.om, that.om) match {
+        case (None, None) => true
+        case (Some(m1), Some(m2)) => m1 isEquivTo m2
+        case _ => false
+      }
+
+    @inline def join(that: OptionMatchable[T]) =
+      optionJoin(this.om, that.om)(_ join _) map (new OptionMatchable(_))
+
+    @inline def meet(that: OptionMatchable[T]) =
+      optionMeet(this.om, that.om)(_ meet _) map (new OptionMatchable(_))
+
+    @inline def isComplete = (this.om map (_.isComplete)) getOrElse false
   }
 
   /** View from `Option[Matchable[T]]` to `OptionMatchable[T]` */

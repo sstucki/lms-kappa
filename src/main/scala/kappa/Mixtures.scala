@@ -671,6 +671,9 @@ trait Mixtures {
       val m = new Mixture
       for (c <- pattern.components) {
 
+        if (!c.isComplete) throw new IllegalArgumentException(
+          "attempt to create mixture from incomplete pattern: " + pattern)
+
         // Allocate "empty" copies of agents in this component
         val as = new Array[Agent](c.agents.size)
         for (u <- c.agents) {
