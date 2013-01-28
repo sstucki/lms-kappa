@@ -4,22 +4,25 @@ import scala.collection.mutable
 
 trait Actions {
   this: LanguageContext with Patterns with Mixtures with Embeddings
-      with Rules =>
+      with PartialEmbeddings with Rules =>
 
   // Actions
   final class Action(
     val lhs: Pattern, val rhs: Pattern, val atoms: Seq[Action.Atom],
     val additions: Int,
-    val lhsAgentsModified: Array[Map[AgentIndex, AgentIndex]],
-    val rhsAgentsModified: Array[Map[AgentIndex, AgentIndex]])
+    // val lhsAgentsModified: Array[Map[AgentIndex, AgentIndex]],
+    // val rhsAgentsModified: Array[Map[AgentIndex, AgentIndex]],
+    val pe: PartialEmbedding,
+    val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex])
       extends Function2[Embedding, Mixture, Unit] {
 
     import Action._
 
-    type InfluenceEntry = Iterable[Iterable[(AgentIndex, AgentIndex)]]
-    /** Positive influence map. */
-    val positiveInfluenceMap =
-      mutable.HashMap[ComponentIndex, InfluenceEntry]()
+    type ActivationEntry = Iterable[Iterable[(Pattern.Agent, AgentIndex)]]
+
+    /** Activation map. */
+    val activationMap =
+      mutable.HashMap[ComponentIndex, ActivationEntry]()
 
     /** Apply this action to a mixture along a given embedding. */
     def apply(embedding: Embedding, mixture: Mixture = mix) {
@@ -69,117 +72,79 @@ trait Actions {
         for (a <- atoms) a(agents, mixture)
 
         // Positive update
-        for ((ci, ie) <- positiveInfluenceMap; ps <- ie) {
-          val comp = patternComponents(ci)
-          val ps2 = ps map { case (sa, ta) => (comp(sa), agents(ta)) }
+        for ((ci, ae) <- activationMap; ps <- ae) {
+          val c = patternComponents(i)
+          val ps2 = ps map { case (u, v) => (u, agents(v)) }
           val ces = ComponentEmbedding(ps2)
-          for (ce <- ces) comp.addEmbedding(ce)
+          for (ce <- ces) {
+            c.addEmbedding(ce)
+            for (u <- ce) mix.unmark(u)
+          }
         }
 
-        // FIXME: Handle side effects.
+        // All the agents in the codomains of the embeddings we just
+        // created using the activation map are now unmarked.  Hence,
+        // the only agents left marked are those that were modified by
+        // side effects.  We now need to check them against all
+        // remaining registered components to make sure we have found
+        // every embedding.
+        //
+        // TODO: Is there a more efficient way to handle side effects?
+        val mas = mix.markedAgents
+        for (c <- patternComponents) {
+          val ps = for (u <- c; v <- mas) yield (u, v)
+          val ces = ComponentEmbedding(ps)
+          for (ce <- ces) {
+            c.addEmbedding(ce)
+          }
+        }
       }
     }
 
     def :@ (rate: => Double) = new Rule(this, ns => ns.product * rate)
     def !@ (law: (Int*) => Double) = new Rule(this, law) // see https:/ / github.com/jkrivine/KaSim/issues/9
 
-    /**
-     * Extend a partial map between agents corresponding represented
-     * as an array of [[Pattern.Agent]]s through a traversal of the
-     * respective site graphs.
-     *
-     * @param u the next agent in the pre-image of the map to inspect
-     *        in the traversal.
-     * @param v the next agent in the image of the map to inspect in
-     *        the traversal.
-     * @param m the partial map to extend.
-     * @param conflicts a conflict map used to avoid the construction
-     *        of redundant maps by recording pairs encountered during
-     *        previous traversals.
-     * @returns `true` if no conflict occurred during expansion.
-     */
-    private def extendGlueing(
-      u: Pattern.Agent, v: Pattern.Agent, m: Array[Pattern.Agent],
-      conflicts: Array[mutable.HashSet[Pattern.Agent]]): Boolean = {
-      val i = u.index
-      if (m(i) != null) true
-      else if (conflicts(i) contains v) false
-      else {
-        if ((u matches v) || (v matches u)) {
-          m(i) = v
-          conflicts(i) += v
-          (0 until u.sites.size) forall { j =>
-            (u.neighbour(j), v.neighbour(j)) match {
-              case (Some((w1, _)), Some((w2, _))) =>
-                extendGlueing(w1, w2, m, conflicts)
-              case _ => true
-            }
-          }
-        } else true
-      }
-    }
+    private def findActivation(component: Pattern.Component)
+        : ActivationEntry = {
 
-    /**
-     * Return a sequence of glueings between two pattern components.
-     *
-     * The partial maps between the agent sets of the two components
-     * are represented as maps from agent indices to
-     * agent indices.
-     *
-     * Please note the correct spelling of "glueings" ;-)
-     */
-    def findGlueings(c1: Pattern.Component, c2: Pattern.Component)
-        : Iterable[Map[AgentIndex, AgentIndex]] = {
-
-      val conflicts =
-        new Array[mutable.HashSet[Pattern.Agent]](c1.length)
-      for (i <- 0 until conflicts.size) {
-        conflicts(i) = new mutable.HashSet()
-      }
-      (for (u <- c1; v <- c2) yield {
-        val m = new Array[Pattern.Agent](c1.length)
-        if (extendGlueing(u, v, m, conflicts)) {
-          val glueing =
-            for (i <- (0 until c1.length) if m(i) != null)
-            yield (i, m(i).index)
-          Some(glueing.toMap)
-        } else None
-      }).flatten
-    }
-
-    private def findPositiveInfluence(component: Pattern.Component)
-        : Iterable[Iterable[(AgentIndex, AgentIndex)]] = {
-
-      import scala.util.Sorting
+      import PartialEmbedding._
 
       for (rhsComponent <- rhs.components) yield {
 
-        // Find all the glueings
-        val glueings = findGlueings(component, rhsComponent)
+        // Use the partial embedding corresponding to this action to
+        // generate a reverse map from RHS agents to LHS agents.
+        val rhsToLhs = pe.inverse.toMap
 
-        // Compose the glueings with the map from indices of modified
-        // agents in the RHS to indices in the action agent array.
-        // Retain only non-empty compositions, i.e. those resulting
-        // from glueings involving agents that are actually modified
-        // by this rule.
-        val rcamMods = rhsAgentsModified(rhsComponent.index)
-        val comps = glueings map { g =>
-          g collect {
-            case (k, v) if rcamMods isDefinedAt v => (k, rcamMods(v))
+        // Find all the partial embedding components from the current
+        // RHS component to the target component.
+        val pes = findPartialEmbeddings(rhsComponent, component)
+
+        // We are only interested in partial embeddings whose codomain
+        // does not have a meet with the LHS.  If such a meet exists,
+        // then the action did not produce a new instance (the
+        // instance already existed in the LHS), and hence no
+        // activation happened.
+        val pesFiltered = pes filter { pe =>
+          pe exists {
+            case (u, v) =>
+              !(rhsToLhs isDefinedAt u) || (rhsToLhs(u) meet v).isEmpty
           }
-        } filter (!_.isEmpty)
+        }
 
-        // Pick a single (representative) pair per glueing.
-        comps map (_.head)
+        // Pick a single (representative) pair per partial embedding.
+        pesFiltered map { pe =>
+          val (u, v) = pe.head
+          (v, rhsAgentOffsets(u))
+        }
       }
     }
 
-    def addPositiveInfluence(component: Pattern.Component) {
+    def addActivation(component: Pattern.Component) {
       val idx = component.modelIndex
-      if (!(positiveInfluenceMap isDefinedAt idx)) {
-        val influence = findPositiveInfluence(component)
-        if (!influence.isEmpty) {
-          positiveInfluenceMap += ((idx, influence))
+      if (!(activationMap isDefinedAt idx)) {
+        val activations = findActivation(component)
+        if (!activations.isEmpty) {
+          activationMap += ((idx, activations))
         }
       }
     }
@@ -265,11 +230,6 @@ trait Actions {
 
       import Pattern._
 
-      val ceOffsets: Vector[Int] =
-        lhs.components.scanLeft(0) { (i, ce) => i + ce.length }
-      val lhsIndex = lhs.zipWithIndex.toMap
-      val rhsIndex = rhs.zipWithIndex.toMap
-
       def findStateChange[T <: Matchable[T]](ls: T, rs: T): Option[T] =
         if (ls isEquivTo rs) None         // No state change
         else if (rs.isComplete) Some(rs)  // State refinement or change
@@ -277,28 +237,18 @@ trait Actions {
           "attempt to change state " + ls + " to incomplete state " +
             rs + " in rule: " + lhs + " -> " + rhs)
 
-      def linkState(a: Agent, s: SiteIndex): LinkState =
-        a.sites(s).link match {
+      def linkState(u: Agent, s: SiteIndex): LinkState =
+        u.sites(s).link match {
           case Linked(_, _, l) => l
           case _ => throw new IllegalArgumentException(
-            "expected state " + s + " of agent " + a +
+            "expected site " + s + " of agent " + u +
               " to be linked in RHS of rule " + lhs + " -> " + rhs)
         }
 
-      @inline def agentOffset(a: Agent) =
-        ceOffsets(a.component.index) + a.index
-
-      @inline def fixLink(
-        atoms: mutable.Buffer[Atom],
-        a1: Agent, i1: AgentIndex, s1: SiteIndex, l1: LinkState,
-        a2: Agent, i2: AgentIndex, s2: SiteIndex) {
-        if (i2 <= i1)
-          atoms += LinkAddition(
-            agentOffset(a1), s1, l1,
-            agentOffset(a2), s2, linkState(a2, s2))
-      }
-
-      val atoms = new mutable.ArrayBuffer[Atom]()
+      // Compute the offsets of the first agents of each component of
+      // the LHS in the agents array passed to an action application.
+      val ceOffsets: Vector[Int] =
+        lhs.components.scanLeft(0) { (i, ce) => i + ce.length }
 
       // Find the longest common prefix, i.e. longest prefix in the
       // sequences of agents making up the LHS and RHS, for which the
@@ -312,70 +262,106 @@ trait Actions {
       val commonPrefixLength =
         if (firstDiffIndex > 0) firstDiffIndex else zipped.length
 
-      @inline def addedAgentOffset(i: AgentIndex) =
-        ceOffsets(lhs.length) + i - commonPrefixLength
+      // Construct the partial embedding corresponding to this action
+      val pe = PartialEmbedding(
+        lhs take commonPrefixLength, rhs take commonPrefixLength)
 
-      val lhsAgentsModified = (
-        for (_ <- 0 until lhs.components.length)
-        yield Map[AgentIndex, AgentIndex]()).toArray
-      val rhsAgentsModified = (
-        for (_ <- 0 until rhs.components.length)
-        yield Map[AgentIndex, AgentIndex]()).toArray
+      @inline def lhsAgentOffset(a: Agent) =
+        ceOffsets(a.component.index) + a.index
 
-      @inline def addLhsMod(la: Agent) =
-        lhsAgentsModified(la.component.index) += ((la.index, agentOffset(la)))
+      // Compute the RHS agent offsets
+      val rhsPrefixAgentOffsets =
+        for (i <- 0 until commonPrefixLength)
+        yield (rhs(i), lhsAgentOffset(lhs(i)))
+      val rhsSuffixAgentOffsets =
+        for (i <- commonPrefixLength until rhs.length)
+        yield (rhs(i), lhs.length + i - commonPrefixLength)
+      val rhsAgentOffsets =
+        (rhsPrefixAgentOffsets ++ rhsSuffixAgentOffsets).toMap
 
-      @inline def addRhsMod(ri: AgentIndex) = {
-        val ra = rhs(ri)
-        rhsAgentsModified(ra.component.index) += (
-          (ra.index, addedAgentOffset(ri)))
+      @inline def rhsAgentOffset(a: Agent) =
+        rhsAgentOffsets(a)
+
+      @inline def linkDeletion(
+        atoms: mutable.Buffer[Atom], u1: Agent, j1: SiteIndex, u2: Agent) {
+        val o1 = lhsAgentOffset(u1)
+        val o2 = lhsAgentOffset(u2)
+        if (o2 <= o1) {
+          atoms += LinkDeletion(o1, j1)
+        }
       }
 
-      @inline def addLhsRhsMod(la: Agent, ra: Agent) = {
-        val offs = agentOffset(la)
-        lhsAgentsModified(la.component.index) += ((la.index, offs))
-        rhsAgentsModified(ra.component.index) += ((ra.index, offs))
+      @inline def linkAddition(
+        atoms: mutable.Buffer[Atom],
+        u1: Agent, s1: SiteIndex, l1: LinkState,
+        u2: Agent, s2: SiteIndex) {
+        val o1 = rhsAgentOffset(u1)
+        val o2 = rhsAgentOffset(u2)
+        if (o2 <= o1)
+          atoms += LinkAddition(o1, s1, l1, o2, s2, linkState(u2, s2))
       }
+
+      val atoms = new mutable.ArrayBuffer[Atom]()
+
+      // @inline def addedAgentOffset(i: AgentIndex) =
+      //   lhs.length + i - commonPrefixLength
+
+      // val lhsAgentsModified = (
+      //   for (_ <- 0 until lhs.components.length)
+      //   yield Map[AgentIndex, AgentIndex]()).toArray
+      // val rhsAgentsModified = (
+      //   for (_ <- 0 until rhs.components.length)
+      //   yield Map[AgentIndex, AgentIndex]()).toArray
+
+      // @inline def addLhsMod(la: Agent) =
+      //   lhsAgentsModified(la.component.index) += ((la.index, agentOffset(la)))
+
+      // @inline def addRhsMod(ri: AgentIndex) = {
+      //   val ra = rhs(ri)
+      //   rhsAgentsModified(ra.component.index) += (
+      //     (ra.index, addedAgentOffset(ri)))
+      // }
+
+      // @inline def addLhsRhsMod(la: Agent, ra: Agent) = {
+      //   val offs = agentOffset(la)
+      //   lhsAgentsModified(la.component.index) += ((la.index, offs))
+      //   rhsAgentsModified(ra.component.index) += ((ra.index, offs))
+      // }
 
       // Find all agent deletions
       for (la <- lhs drop commonPrefixLength) {
-        atoms += AgentDeletion(agentOffset(la))
-        addLhsMod(la)
+        atoms += AgentDeletion(lhsAgentOffset(la))
       }
 
       // Find all agent additions
-      var additions = 0
+      val additions = rhs.size - commonPrefixLength
       for (i <- commonPrefixLength until rhs.size) {
         val ra = rhs(i)
         if (ra.isComplete) atoms += AgentAddition(
-          addedAgentOffset(i), ra.state,
+          lhs.length + i - commonPrefixLength, ra.state,
           (for (s <- ra.sites) yield s.state))
         else throw new IllegalArgumentException(
           "attempt to add incomplete agent " + ra + " in rule: " +
             lhs + " -> " + rhs)
-        addRhsMod(i)
-        additions += 1
       }
 
       val longestCommonPrefix = zipped take commonPrefixLength
 
       // Find all agent state changes (in the longest common prefix)
       for {
-        (la, ra) <- longestCommonPrefix
-        s <- findStateChange(la.state, ra.state)
+        (lu, ru) <- longestCommonPrefix
+        s <- findStateChange(lu.state, ru.state)
       } {
-        atoms += AgentStateChange(agentOffset(la), s)
-        addLhsRhsMod(la, ra)
+        atoms += AgentStateChange(lhsAgentOffset(lu), s)
       }
 
       // Find all site state changes (in the longest common prefix)
       for {
-        (la, ra) <- longestCommonPrefix
-        i <- 0 until la.length
-        s <- findStateChange(la.sites(i).state, ra.sites(i).state)
+        (lu, ru) <- longestCommonPrefix
+        i <- 0 until lu.length
+        s <- findStateChange(lu.sites(i).state, ru.sites(i).state)
       } {
-        atoms += SiteStateChange(agentOffset(la), i, s)
-        addLhsRhsMod(la, ra)
+        atoms += SiteStateChange(lhsAgentOffset(lu), i, s)
       }
 
       // Find all the link changes in the longest common prefix
@@ -383,50 +369,42 @@ trait Actions {
         i <- 0 until commonPrefixLength
         j <- 0 until lhs(i).length
       } {
-        val la = lhs(i)
-        val ra = rhs(i)
-        val ls = la(j)
-        val rs = ra(j)
+        val lu = lhs(i)
+        val ru = rhs(i)
+        val ls = lu(j)
+        val rs = ru(j)
         (ls.link, rs.link) match {
           case (Stub | Wildcard(_, _, _) | Linked(_, _, _), Undefined) =>
             throw new IllegalArgumentException(
-              "attempt to undefine site " + j + " of agent " + la +
+              "attempt to undefine site " + j + " of agent " + lu +
                 " in rule: " + lhs + " -> " + rhs)
           case (Undefined | Wildcard(_, _, _), Stub) => {
-            atoms += LinkDeletion(agentOffset(la), j)
-            addLhsRhsMod(la, ra)
+            atoms += LinkDeletion(lhsAgentOffset(lu), j)
           }
-          case (Linked(la2, _, _), Stub) =>
-            if (lhsIndex(la2) <= i) {
-              atoms += LinkDeletion(agentOffset(la), j)
-              addLhsRhsMod(la, ra)
-            }
+          case (Linked(lu2, _, _), Stub) =>
+            linkDeletion(atoms, lu, j, lu2)
           case (Undefined | Stub | Linked(_, _, _), Wildcard(_, _, _)) =>
             throw new IllegalArgumentException(
               "attempt to add wildcard link to site " + j + " of agent " +
-                la + " in rule: " + lhs + " -> " + rhs)
-          case (Wildcard(la2, ls2, ll), Wildcard(ra2, rs2, rl)) =>
-            if (!(la2 matches ra2) && (ls2 matches rs2) && (ll matches rl))
+                lu + " in rule: " + lhs + " -> " + rhs)
+          case (Wildcard(la, ls2, ll), Wildcard(ra, rs2, rl)) =>
+            // FIXME: Should we allow link state changes in wildcards?
+            if (!(la matches ra) && (ls2 matches rs2) && (ll matches rl))
               throw new IllegalArgumentException(
                 "attempt to modify wildcard link at site " + j +
-                  " of agent " + la + " in rule: " + lhs + " -> " + rhs)
-          case (Undefined | Wildcard(_, _, _), Linked(ra2, rj2, rl)) => {
-            atoms += LinkDeletion(agentOffset(la), j)
-            fixLink(atoms, la, i, j, rl, ra2, rhsIndex(ra2), rj2)
-            addLhsRhsMod(la, ra)
+                  " of agent " + lu + " in rule: " + lhs + " -> " + rhs)
+          case (Undefined | Wildcard(_, _, _), Linked(ru2, rj2, rl)) => {
+            atoms += LinkDeletion(lhsAgentOffset(lu), j)
+            linkAddition(atoms, ru, j, rl, ru2, rj2)
           }
-          case (Stub, Linked(ra2, rj2, rl)) => {
-            fixLink(atoms, la, i, j, rl, ra2, rhsIndex(ra2), rj2)
-            addLhsRhsMod(la, ra)
+          case (Stub, Linked(ru2, rj2, rl)) => {
+            linkAddition(atoms, ru, j, rl, ru2, rj2)
           }
-          case (Linked(la2, lj2, ll), Linked(ra2, rj2, rl)) => {
-            val li = lhsIndex(la2)
-            val ri = rhsIndex(ra2)
-            if (!((li == ri) && (ls == rs) &&
-              findStateChange(ll, rl).isEmpty)) {
-              if (li <= i) atoms += LinkDeletion(agentOffset(la), j)
-              fixLink(atoms, la, i, j, rl, ra2, ri, rj2)
-              addLhsRhsMod(la, ra)
+          case (Linked(lu2, lj2, ll), Linked(ru2, rj2, rl)) => {
+            if (!((lhsAgentOffset(lu2) == rhsAgentOffset(ru2)) &&
+              (ls == rs) && findStateChange(ll, rl).isEmpty)) {
+              linkDeletion(atoms, lu, j, lu2)
+              linkAddition(atoms, ru, j, rl, ru2, rj2)
             }
           }
           case _ => {}
@@ -438,35 +416,26 @@ trait Actions {
         i <- commonPrefixLength until rhs.length
         j <- 0 until rhs(i).length
       } {
-        val ra = rhs(i)
-        val rs = ra(j)
+        val ru = rhs(i)
+        val rs = ru(j)
         rs.link match {
           case Undefined =>
             throw new IllegalArgumentException(
-              "attempt to add agent " + ra + " with undefined site " + j +
+              "attempt to add agent " + ru + " with undefined site " + j +
                 " in rule: " + lhs + " -> " + rhs)
           case Wildcard(_, _, _) =>
             throw new IllegalArgumentException(
-              "attempt to add agent " + ra + " with wildcard link at site " +
+              "attempt to add agent " + ru + " with wildcard link at site " +
                 j + " in rule: " + lhs + " -> " + rhs)
-          case Linked(ra2, j2, l) => {
-            val ri = rhsIndex(ra2)
-            if (ri <= i) {
-              val a2 =
-                if (ri < commonPrefixLength) agentOffset(lhs(ri))
-                else addedAgentOffset(ri)
-              atoms += LinkAddition(
-                addedAgentOffset(i), j, l, a2, j2, linkState(ra2, j2))
-              addRhsMod(i)
-            }
+          case Linked(ru2, j2, l) => {
+            linkAddition(atoms, ru, j, l, ru2, j2)
           }
           case _ => { }
         }
       }
 
       // Construct action
-      new Action(lhs, rhs, atoms.toList, additions,
-        lhsAgentsModified, rhsAgentsModified)
+      new Action(lhs, rhs, atoms.toList, additions, pe, rhsAgentOffsets)
     }
   }
 }

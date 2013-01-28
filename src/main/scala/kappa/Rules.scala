@@ -21,7 +21,7 @@ trait Rules {
       // component and initialize the positive influence map
       // of the action accordingly.
       for (c <- patternComponents) yield {
-        (c.modelIndex, action.addPositiveInfluence(c))
+        (c.modelIndex, action.addActivation(c))
       }
 
       // Add this rule to the rules vector of the model

@@ -885,7 +885,7 @@ trait Patterns {
             // Let rules now about this component so they can update
             // their positive influence map if necessary.
             for (r <- rules) {
-              r.action.addPositiveInfluence(this)
+              r.action.addActivation(this)
             }
 
             // Register this component as the representative in its

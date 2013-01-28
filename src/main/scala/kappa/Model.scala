@@ -3,7 +3,8 @@ package kappa
 import scala.language.implicitConversions
 
 trait Model extends Patterns with Mixtures with Actions with Rules
-    with Perturbations with Parser with Symbols with Embeddings {
+    with Perturbations with Parser with Symbols with Embeddings
+    with PartialEmbeddings {
   self: LanguageContext =>
 
   var time      : Double               = 0

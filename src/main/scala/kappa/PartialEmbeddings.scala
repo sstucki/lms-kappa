@@ -43,35 +43,11 @@ trait PartialEmbeddings {
     type Target = Pattern.Agent
 
     /**
-     * Returns this [[PartialEmbedding]] as a map from agent indices
-     * to [[Patterns#Pattern.Agent]]s.
-     *
-     * @return this [[PartialEmbedding]] as a map from agent indices
-     * to [[Patterns#Pattern.Agent]]s.
-     */
-    def toMap: Map[Source, Target] = mapIterator.toMap
-
-    /**
      * Returns the inverse of this [[PartialEmbedding]].
      *
      * @return the inverse of this [[PartialEmbedding]].
      */
     def inverse = new PartialEmbedding(rightInj, leftInj)
-
-    // -- Convenience functions from Map[Source, Target] API --
-
-    /**
-     * Selects the first pair of this partial embedding.
-     *
-     * @return the first pair of this partial embedding.
-     */
-    @inline def mapHead: (Source, Target) = (leftInj(0).index, rightInj(0))
-
-    @inline def mapIterator: Iterator[(Source, Target)] =
-      (0 until leftInj.size).iterator map {
-        i => (leftInj(i).index, rightInj(i))
-      }
-
 
     // -- Core Seq[(Target, Target)] API --
 
@@ -95,7 +71,7 @@ trait PartialEmbeddings {
       val rc = leftInj.head.component
       "PE(" + (if (lc == null) "?" else lc.index) +
       "/" + (if (rc == null) "?" else rc.index) +
-      ": " + mapIterator.toMap.mkString(", ")+ ")"
+      ": " + iterator.toMap.mkString(", ")+ ")"
     }
   }
 
@@ -103,6 +79,15 @@ trait PartialEmbeddings {
   object PartialEmbedding {
 
     import Pattern._
+
+    def apply(
+      leftInj: Seq[Agent], rightInj: Seq[Agent]): PartialEmbedding = {
+      if (leftInj.size != rightInj.size) throw new IllegalArgumentException(
+        "attempt to construct partial embedding with incompatible left " +
+          "and right legs (sizes of left and right domain do not match: " +
+          leftInj.size + " != " + rightInj.size + ")")
+      new PartialEmbedding(leftInj.toArray, rightInj.toArray)
+    }
 
     def apply(leftToRight: Map[Agent, Agent]): PartialEmbedding = {
       val (left, right) = leftToRight.toIterable.unzip
