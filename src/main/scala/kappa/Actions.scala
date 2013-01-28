@@ -14,7 +14,7 @@ trait Actions {
     // val rhsAgentsModified: Array[Map[AgentIndex, AgentIndex]],
     val pe: PartialEmbedding,
     val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex])
-      extends Function2[Embedding, Mixture, Unit] {
+      extends Function2[Embedding, Mixture, Boolean] {
 
     import Action._
 
@@ -24,8 +24,16 @@ trait Actions {
     val activationMap =
       mutable.HashMap[ComponentIndex, ActivationEntry]()
 
-    /** Apply this action to a mixture along a given embedding. */
-    def apply(embedding: Embedding, mixture: Mixture = mix) {
+    /**
+     * Apply this action to a mixture along a given embedding.
+     *
+     * @param embedding the embedding along which the action should
+     *        be applied.
+     * @param mix the mixture to which the action should be applied.
+     * @return `true` if the action application resulted in a
+     *         productive event, `false` otherwise.
+     */
+    def apply(embedding: Embedding, mixture: Mixture = mix): Boolean = {
 
       // Copy the agents array, check consistency of the embedding and
       // detect clashes
@@ -35,50 +43,63 @@ trait Actions {
       var i: Int = 0
       val totalAgents = (embedding map (_.length)).sum + additions
       val agents = new Array[Mixture.Agent](totalAgents)
-      for ((ce, j) <- embedding.zipWithIndex; (v, k) <- ce.zipWithIndex) {
-        agents(i) = v; i += 1
+      for (ce <- embedding) {
 
-        val u = ce.component(k)
-        val consistent = (u matches v) && ((0 until u.length) forall {
-          s => (u.neighbour(s), v.neighbour(s)) match {
-            case (None, _) => true
-            case (Some((w1, _)), Some((w2, _))) => ce(w1.index) == w2
-            case _ => false
+        // Check embedding consistency
+        val consistent = (0 until ce.length) forall { k =>
+
+          // Add agent
+          val v = ce(k)
+          agents(i) = v; i += 1
+
+          // Check for clashes
+          if (v.marked) {
+            clash = true // Agent already in image => clash!
+          } else {
+            mix.mark(v)
           }
-        })
+
+          // Check agent consistency
+          val u = ce.component(k)
+          (u matches v) && ((0 until u.length) forall {
+            j => (u.neighbour(j), v.neighbour(j)) match {
+              case (None, _) => true
+              case (Some((w1, _)), Some((w2, _))) => ce(w1.index) == w2
+              case _ => false
+            }
+          })
+        }
         if (!consistent) {
           ce.component.removeEmbedding(ce)
           garbage += 1
         }
-
-        if (v.marked) {
-          clash = true // Agent already in image => clash!
-        } else {
-          mix.mark(v)
-        }
       }
 
-      if (clash) {
-        println("# clash!")
-      } else if (garbage > 0) {
+      if (garbage > 0) {
         println("# found and collected " + garbage +
           " garbage component embeddings.")
+        false
+      } else if (clash) {
+        println("# clash!")
+        false
       } else {
 
         // Clear the marked agents list of mix
         mix.clearMarkedAgents
 
-        // Apply all actions
+        // Apply all atomic actions
         for (a <- atoms) a(agents, mixture)
 
         // Positive update
+        //var updates = 0
         for ((ci, ae) <- activationMap; ps <- ae) {
-          val c = patternComponents(i)
+          val c = patternComponents(ci)
           val ps2 = ps map { case (u, v) => (u, agents(v)) }
           val ces = ComponentEmbedding(ps2)
           for (ce <- ces) {
             c.addEmbedding(ce)
             for (u <- ce) mix.unmark(u)
+            //updates += 1
           }
         }
 
@@ -90,19 +111,25 @@ trait Actions {
         // every embedding.
         //
         // TODO: Is there a more efficient way to handle side effects?
+        //var sideEffects = 0
         val mas = mix.markedAgents
         for (c <- patternComponents) {
           val ps = for (u <- c; v <- mas) yield (u, v)
           val ces = ComponentEmbedding(ps)
           for (ce <- ces) {
             c.addEmbedding(ce)
+            //sideEffects += 1
           }
         }
+        //println("# updates: " + updates + ", side effects: " + sideEffects)
+
+        true
       }
     }
 
-    def :@ (rate: => Double) = new Rule(this, ns => ns.product * rate)
-    def !@ (law: (Int*) => Double) = new Rule(this, law) // see https:/ / github.com/jkrivine/KaSim/issues/9
+    // see https:/ / github.com/jkrivine/KaSim/issues/9
+    def :@ (rate: => Double) = new Rule(this, () => lhs.count * rate)
+    def !@ (law: => Double) = new Rule(this, () => law)
 
     private def findActivation(component: Pattern.Component)
         : ActivationEntry = {
@@ -145,6 +172,16 @@ trait Actions {
         val activations = findActivation(component)
         if (!activations.isEmpty) {
           activationMap += ((idx, activations))
+
+          if (!activations.isEmpty && !activations.head.isEmpty) {
+            println ("# Added activation entry for action " + lhs + " -> " +
+              rhs + " on component # " + idx + " (CC " +
+              component.index + " of pattern " + component.pattern + ")")
+            for ((ae, i) <- activations.zipWithIndex; (u, ai) <- ae) {
+              println ("#    RHS component " + i + ": " + ai +
+                " --(+)--> " + u)
+            }
+          }
         }
       }
     }

@@ -1,6 +1,7 @@
 package kappa
 
 import scala.language.implicitConversions
+import scala.util.Random
 
 trait Model extends Patterns with Mixtures with Actions with Rules
     with Perturbations with Parser with Symbols with Embeddings
@@ -9,56 +10,41 @@ trait Model extends Patterns with Mixtures with Actions with Rules
 
   var time      : Double               = 0
   var events    : Int                  = 0
+  var nullEvents : Int                 = 0
   var maxTime   : Option[Double]       = None
   var maxEvents : Option[Int]          = None
   var obs       : Vector[Pattern]      = Vector()
-  //val mix       : Mixture              = new Mixture() // Use Mixtures.mix
+  var obsNames  : Vector[String]       = Vector()
 
   def withInit(mix: Mixture) = { this.mix ++= mix; this }
-  def withObs(obs: Pattern) = { this.obs = this.obs :+ obs; this }
+  def withObs(obs: Pattern, description: String = "") = {
+    val name = if (description == "") obs.toString else description
+    this.obs = this.obs :+ obs
+    this.obsNames = this.obsNames :+ name
+    this
+  }
   def withMaxTime(t: Double) = { maxTime = Some(t); this }
   def withMaxEvents(e: Int) = { maxEvents = Some(e); this }
 
-  def run() {
-    // FXIME: Naive simulator....
+  def runNormal(rand: Random) {
 
-    println("# == Rules:")
-    for (r <- rules) println("#    " + r)
-    println
-    println("# == Observables:")
-    for (o <- obs) println("#    " + o)
-    println
+    // (Re-)compute all component embeddings.  This is necessary as
+    // some components might have been registered before the mixture
+    // was initialized (i.e. the LHS' of the rules).
+    for (c <- patternComponents) {
+      c.initEmbeddings
+    }
 
-    // Create a new random number generator
-    val rand = new util.Random
+    // Print the initial event number, time and the observable counts.
+    println("" + events + "\t" + time + "\t" +
+      (obs map (_.count)).mkString("\t"))
 
-    println("# === Start of simulation ===")
-    println("# Event\tTime\tObservables")
-
-    // Main loop
-    while (events < (maxEvents getOrElse (events + 1))) {
-
-      // Collect all patterns (LHS' and observables)
-      val lhss = for (i <- 0 until rules.length) yield (rules(i).action.lhs)
-      val pats = lhss ++ obs
-
-      // Compute all component embeddings.
-      val embs =
-        for (p <- pats) yield (p.components map (_ componentEmbeddingsIn mix))
-
-      // Compute all observable counts.
-      val obsCounts =
-        for (i <- rules.size until rules.length + obs.length) yield {
-          (embs(i) map (_.length)).product
-        }
-
-      println("" + events + "\t" + time + "\t" + obsCounts.mkString("\t"))
+    // == Normal simulator main event loop ==
+    while ((events < (maxEvents getOrElse (events + 1))) &&
+      (time < (maxTime getOrElse Double.PositiveInfinity))) {
 
       // Compute all rule weights.
-      val weights =
-        for (i <- 0 until rules.size) yield {
-          rules(i).rate((embs(i) map (_.length)): _*)
-        }
+      val weights = for (r <- rules) yield r.law()
 
       // Build the activity tree
       val tree = RandomTree(weights, rand)
@@ -69,23 +55,119 @@ trait Model extends Patterns with Mixtures with Actions with Rules
         maxEvents = Some(0)
       } else {
 
-        // Pick a rule and event at random
-        val ri = tree.nextRandom._1
-        val e = for (pes <- embs(ri)) yield pes(rand.nextInt(pes.size))
-        val emb = new Embedding(e.toVector, rules(ri).action.lhs)
-
-        // Apply the rule/event
-        rules(ri).action(emb, mix)
-
-        // Compute time advance
+        // Advance time
         val dt = -math.log(rand.nextDouble) / totalActivity
         time += dt
+
+        // Pick a rule and event at random
+        val r = rules(tree.nextRandom._1)
+        val e = r.action.lhs.randomEmbedding(rand)
+
+        // Apply the rule/event
+        if (r.action(e, mix)) {
+          events += 1 // Productive event
+
+          // FIXME: We need to garbage collect embeddings of
+          // observables for now.  This is really terribly inefficient
+          // as it's linear in the number of embeddings (whether they
+          // are consistent or not) :-(
+          for (o <- obs) o.pruneEmbeddings
+
+          // FIXME: This, on the other hand, should _NOT_ be
+          // necessary.  Somehow the lazy embedding garbage collection
+          // does not work as it should...
+          for (r <- rules) r.action.lhs.pruneEmbeddings
+
+          // Print the event number, time and the observable counts.
+          println("" + events + "\t" + time + "\t" +
+            (obs map (_.count)).mkString("\t"))
+        } else {
+          nullEvents += 1 // Null event
+        }
+      }
+    }
+  }
+
+  def runNaive(rand: Random) {
+
+    // Print the initial event number, time and the observable counts.
+    println("" + events + "\t" + time + "\t" +
+      (obs map (_.count)).mkString("\t"))
+
+    // == Naive simulator main event loop ==
+    while ((events < (maxEvents getOrElse (events + 1))) &&
+      (time < (maxTime getOrElse Double.PositiveInfinity))) {
+
+      // (Re-)compute all component embeddings.
+      for (c <- patternComponents) {
+        c.initEmbeddings
       }
 
-      events += 1
+      // Compute all rule weights.
+      val weights = for (r <- rules) yield r.law()
+
+      // Build the activity tree
+      val tree = RandomTree(weights, rand)
+      val totalActivity = tree.totalWeight
+
+      if (totalActivity == 0) {
+        println("# No more events. Terminating.")
+        maxEvents = Some(0)
+      } else {
+
+        // Advance time
+        val dt = -math.log(rand.nextDouble) / totalActivity
+        time += dt
+
+        // Pick a rule and event at random
+        val r = rules(tree.nextRandom._1)
+        val e = r.action.lhs.randomEmbedding(rand)
+
+        // Apply the rule/event
+        if (r.action(e, mix)) {
+          events += 1 // Productive event
+
+          // Print the event number, time and the observable counts.
+          println("" + events + "\t" + time + "\t" +
+            (obs map (_.count)).mkString("\t"))
+        } else {
+          nullEvents += 1 // Null event
+        }
+
+      }
     }
+  }
+
+  def run() {
+
+    // Create a new random number generator
+    val rand = new util.Random
+
+    // Print model info
+    println("# == Rules:")
+    for (r <- rules) println("#    " + r + ": " + r.action.atoms)
+    println
+    println("# == Observables:")
+    for ((n, o) <- obsNames zip obs) println("#    " + n + ": " + o)
+    println
+
+    println("# === Start of simulation ===")
+    println("Event\tTime\t" + obsNames.mkString("\"", "\"\t\"", "\""))
+
+    // Call normal main loop
+    runNormal(rand)
+    //runNaive(rand)
 
     println("# === End of simulation ===")
+    println
+
+    println("# == Statistics:")
+    println("#    Productive events : " + events)
+    println("#    Null events       : " + nullEvents)
+    println("#    Total time        : " + time)
+    println
+
+    println("# == K THX BYE!")
   }
 
   // Implicit conversions and other functions

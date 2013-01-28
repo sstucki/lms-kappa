@@ -101,13 +101,13 @@ class KaSimAbcTest extends KappaModel("") with FlatSpec {
   // #### Variables (cont)
   // %obs: 'AB' A(x!x.B)
   withObs(Pattern() :+ (a, Site(sx, Wildcard(Some(b), Some(sx), None)),
-    Site(sc)))
+    Site(sc)), "AB")
   // %obs: 'Cuu' C(x1~u?,x2~u?)
-  withObs(Pattern() :+ (c, Site(sx1u), Site(sx2u)))
+  withObs(Pattern() :+ (c, Site(sx1u), Site(sx2u)), "Cuu")
   // %obs: 'Cpu' C(x1~p?,x2~u?)
-  withObs(Pattern() :+ (c, Site(sx1p), Site(sx2u)))
+  withObs(Pattern() :+ (c, Site(sx1p), Site(sx2u)), "Cpu")
   // %obs: 'Cpp' C(x1~p?,x2~p?)
-  withObs(Pattern() :+ (c, Site(sx1p), Site(sx2p)))
+  withObs(Pattern() :+ (c, Site(sx1p), Site(sx2p)), "Cpp")
 
   // %var: 'n_a' 1000
   val n_a = 100
@@ -127,7 +127,7 @@ class KaSimAbcTest extends KappaModel("") with FlatSpec {
 
 
   withMaxEvents(10000)
-  withMaxTime(200)
+  withMaxTime(3000)
   run
 }
 

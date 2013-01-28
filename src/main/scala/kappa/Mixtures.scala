@@ -396,10 +396,12 @@ trait Mixtures {
       this
     }
 
-    /** Generates and returns `x` concatenated copies of this mixture. */
-    def *(x: Int): Mixture =
-      if (x == 0) Mixture()
-      else if (x < 0) throw new IllegalArgumentException(
+    /**
+     * Generates and appends `x - 1` copies of this mixture to this
+     * mixture.
+     */
+    def *=(x: Int): Mixture =
+      if (x <= 0) throw new IllegalArgumentException(
         "attempt to create a negative number of copies of a mixture")
       else {
         val m = Mixture()
@@ -407,6 +409,19 @@ trait Mixtures {
           m ++= this.copy
         }
         this ++= m
+      }
+
+    /**
+     * Generates `x` concatenated copies of this mixture and returns
+     * the result.
+     */
+    def *(x: Int): Mixture =
+      if (x == 0) Mixture()
+      else if (x < 0) throw new IllegalArgumentException(
+        "attempt to create a negative number of copies of a mixture")
+      else {
+        val m = this.copy
+        m *= x
       }
 
 

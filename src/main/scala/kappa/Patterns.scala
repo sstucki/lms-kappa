@@ -4,7 +4,7 @@ import scala.collection.mutable
 
 trait Patterns {
   this: LanguageContext with Parser with Actions with Rules with Symbols
-      with Mixtures with ComponentEmbeddings =>
+      with Mixtures with ComponentEmbeddings with Embeddings =>
 
   /**
    * A class representing patterns in [[Model]]s (i.e. site graphs).
@@ -36,6 +36,28 @@ trait Patterns {
      * in the target mixture
      */
     def count: Double = (components map (_.count)).product
+
+    /**
+     * Pick one of the embeddings candidates from this pattern to the
+     * mixture uniformly at random.
+     *
+     * NOTE: The embedding returned by this method might contain
+     * clashes!
+     *
+     * @param rand the PRNG used as a source of randomness.
+     */
+    @inline def randomEmbedding(rand: util.Random) = {
+      new Embedding(
+        for (c <- components) yield c.randomEmbedding(rand),
+        this)
+    }
+
+    /** Prune the embedding set of each component of this pattern. */
+    def pruneEmbeddings {
+      for (c <- components) {
+        c.pruneEmbeddings
+      }
+    }
 
     /** Register the components of this pattern in the model. */
     def registerComponents = for (c <- components) c.register
@@ -303,7 +325,8 @@ trait Patterns {
        * @return `true` if this link is valid in a mixture.
        */
       @inline final def isComplete = this match {
-        case _: Linked => true
+        case Stub => true
+        case Linked(_, _, _) => true
         case _ => false
       }
 
@@ -795,13 +818,20 @@ trait Patterns {
       }
 
       /**
-       * Pick one of the embeddings from this component to the mixture
-       * uniformly at random.
+       * Return all the embeddings from this pattern component in a
+       * given mixture.
        *
-       * @param rand the PRNG used as a source of randomness.
+       * @return all the component embeddings from `this` in `that`.
        */
-      @inline def randomEmbedding(rand: util.Random) = {
-        embeddings(rand.nextInt(embeddings.size))
+      def embeddingsIn(that: Mixture): Seq[ComponentEmbedding] =
+        (for (u <- this; v <- that) yield ComponentEmbedding(u, v)).flatten
+
+      @inline def initEmbeddings {
+        this.embeddings.clear
+        this.embeddingIndices.clear
+        for (ce <- embeddingsIn(mix)) {
+          this.addEmbedding(ce)
+        }
       }
 
       /**
@@ -824,7 +854,11 @@ trait Patterns {
         (embeddingIndices remove ce.head) match {
           case Some(i) => {
             val j = embeddings.length - 1
-            embeddings(i) = _embeddings(j)
+            if (i != j) {
+              val ce = embeddings(j)
+              embeddings(i) = ce
+              embeddingIndices.update(ce.head, i)
+            }
             embeddings.reduceToSize(j)
           }
           case None => { }
@@ -838,13 +872,46 @@ trait Patterns {
       @inline def count: Int = embeddings.size
 
       /**
-       * Return all the embeddings from this pattern component in a
-       * given mixture.
+       * Pick one of the embeddings from this component to the mixture
+       * uniformly at random.
        *
-       * @return all the component embeddings from `this` in `that`.
+       * @param rand the PRNG used as a source of randomness.
        */
-      def componentEmbeddingsIn(that: Mixture): Seq[ComponentEmbedding] =
-        (for (u <- this; v <- that) yield ComponentEmbedding(u, v)).flatten
+      @inline def randomEmbedding(rand: util.Random) = {
+        embeddings(rand.nextInt(embeddings.size))
+      }
+
+      /**
+       * Remove inconsistent embeddings from the embedding set of this
+       * pattern component.
+       */
+      def pruneEmbeddings {
+        var garbage = 0
+        var k = 0
+        while (k < embeddings.length) {
+          val ce = embeddings(k)
+          val consistent = (0 until agents.length) forall { i =>
+            val u = agents(i)
+            val v = ce(i)
+            (u matches v) && ((0 until u.length) forall {
+              j =>
+              (u.neighbour(j), v.neighbour(j)) match {
+                case (None, _) => true
+                case (Some((w1, _)), Some((w2, _))) => ce(w1.index) == w2
+                case _ => false
+              }
+            })
+          }
+          if (!consistent) {
+            removeEmbedding(ce)
+            garbage += 1
+          } else {
+            k += 1
+          }
+        }
+        // println("# found and collected " + garbage +
+        //   " garbage embeddings for component # " + modelIndex + ".")
+      }
 
       /**
        * If this component does not have a representative already
@@ -854,7 +921,7 @@ trait Patterns {
        *         in the model.
        */
       def register: ComponentIndex =
-        if (_modelIndex > 0) _modelIndex else {
+        if (_modelIndex >= 0) _modelIndex else {
 
           // FIXME: This "isEquivTo" in the following loop is an
           // isomorphism check, so this loop is expensive! One iso
@@ -872,27 +939,30 @@ trait Patterns {
             c => c isEquivTo this
           }
 
-          if (_modelIndex < 0) {  // No representative found, register this one
+          if (_modelIndex < 0) {
+            // No representative found.  Register this component as
+            // the representative of its isomorphism class.
+            _modelIndex = patternComponents.length
+            patternComponents += this
 
-            // Initialize embedding set
+            // Allocate the embedding set
             this._embeddings = new mutable.ArrayBuffer[ComponentEmbedding]()
             this._embeddingIndices =
               new mutable.HashMap[Mixture.Agent, EmbeddingIndex]()
-            for (ce <- componentEmbeddingsIn(mix)) {
-              this.addEmbedding(ce)
-            }
+
+            // Initialize the embedding set
+            initEmbeddings
+
+            println("# Registered component # " + _modelIndex + ": CC " +
+              _index + " of pattern " + _pattern)
 
             // Let rules now about this component so they can update
             // their positive influence map if necessary.
             for (r <- rules) {
               r.action.addActivation(this)
             }
-
-            // Register this component as the representative in its
-            // isomorphism class
-            _modelIndex = patternComponents.length
-            patternComponents += this
           }
+
           _modelIndex
         }
 

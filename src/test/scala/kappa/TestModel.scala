@@ -45,8 +45,8 @@ class TestModel extends KappaModel("A(s:{p,q}!{1,1}") with FlatSpec {
       connect (1, 0, l, 0, 0, l)) :@ 2
   println(r1.action.atoms)
 
-  withObs(lhs0)
-  withObs(r1.action.lhs)
+  withObs(lhs0, "LHS r0")
+  withObs(r1.action.lhs, "LHS r1")
   withObs(Pattern() :+ (b, Site(s)))
   withObs(Pattern() :+ (a, Site(s)))
 
