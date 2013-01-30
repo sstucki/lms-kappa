@@ -76,9 +76,11 @@ trait Actions {
       }
 
       if (garbage > 0) {
-        println("# found and collected " + garbage +
+        //println(
+        throw new IllegalStateException(
+          "# found and collected " + garbage +
           " garbage component embeddings.")
-        false
+        //false
       } else if (clash) {
         println("# clash!")
         false
@@ -90,7 +92,21 @@ trait Actions {
         // Apply all atomic actions
         for (a <- atoms) a(agents, mixture)
 
-        // Positive update
+        // -- Negative update --
+        //
+        // NOTE: We need to eagerly garbage collect embeddings of
+        // observables (otherwise their overestimated count will be
+        // plotted).
+        //
+        // FIXME: However, we should be able to do the negative update
+        // for LHS embeddings lazily.  But somehow the lazy garbage
+        // collection does not work as it should, so we perform
+        // negative updates for all modified agents for now.  To be
+        // investigated.
+        val mas = mix.markedAgents
+        for (v <- mas) v.pruneLifts
+
+        // -- Positive update --
         //var updates = 0
         for ((ci, ae) <- activationMap; ps <- ae) {
           val c = patternComponents(ci)
@@ -112,9 +128,9 @@ trait Actions {
         //
         // TODO: Is there a more efficient way to handle side effects?
         //var sideEffects = 0
-        val mas = mix.markedAgents
+        val mas2 = mix.markedAgents
         for (c <- patternComponents) {
-          val ps = for (u <- c; v <- mas) yield (u, v)
+          val ps = for (u <- c; v <- mas2) yield (u, v)
           val ces = ComponentEmbedding(ps)
           for (ce <- ces) {
             c.addEmbedding(ce)

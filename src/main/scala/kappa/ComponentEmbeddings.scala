@@ -85,9 +85,12 @@ trait ComponentEmbeddings {
       this.copy(inj = this.inj updated (index, elem))
 
     // -- Equals API --
+
     override def canEqual(that: Any) = that.isInstanceOf[ComponentEmbedding]
 
+
     // -- Any API --
+
     /**
      * Compares the this embedding with the argument (`that`) for
      * equality.
@@ -124,6 +127,23 @@ trait ComponentEmbeddings {
     override def toString =
       "CE(" + (if (component == null) "?" else component.index) +
         ": " + toMap.mkString(", ") + ")"
+
+
+    // -- Private methods --
+
+    /**
+     * Register this component embedding in the appropriate lift sets
+     * of the target agents.
+     */
+    private def updateLiftSets = {
+      for (i <- 0 until inj.size) {
+        inj(i).addLift(component(i), this)
+      }
+    }
+
+    // Register this embedding in the lift sets of all its target
+    // agents.
+    updateLiftSets
   }
 
 

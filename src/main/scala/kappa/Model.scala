@@ -67,17 +67,6 @@ trait Model extends Patterns with Mixtures with Actions with Rules
         if (r.action(e, mix)) {
           events += 1 // Productive event
 
-          // FIXME: We need to garbage collect embeddings of
-          // observables for now.  This is really terribly inefficient
-          // as it's linear in the number of embeddings (whether they
-          // are consistent or not) :-(
-          for (o <- obs) o.pruneEmbeddings
-
-          // FIXME: This, on the other hand, should _NOT_ be
-          // necessary.  Somehow the lazy embedding garbage collection
-          // does not work as it should...
-          for (r <- rules) r.action.lhs.pruneEmbeddings
-
           // Print the event number, time and the observable counts.
           println("" + events + "\t" + time + "\t" +
             (obs map (_.count)).mkString("\t"))

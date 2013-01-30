@@ -266,7 +266,7 @@ trait Mixtures {
       this += (new Agent(state, sites))
     }
 
-    /** Remove a single agent to this mixture. */
+    /** Remove a single agent from this mixture. */
     def -=(agent: Agent): Mixture = {
 
       // Disconnect agent
@@ -521,20 +521,16 @@ trait Mixtures {
      *
      * @param state the state of this site
      * @param link whether this site is linked to another site.
-     * @param stateLiftSet lift set for site state modifications
-     * @param linkLiftSet lift set for link modifications
      */
     final case class Site(
       var state: SiteState,
-      var link: Link = Stub,
-      val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet(),
-      val linkLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet()) {
+      var link: Link = Stub) {
 
       // RHZ: should we reference the parent Agent in Mixtures as well?
       //
-      // sstucki: no I think this is total overkill unless we change
-      // the definition of Liked (see comment of Linked above) or want
-      // to have a "nice and intuitive" interface for manipulating
+      // sstucki: no I think this is unnecessary unless we change the
+      // definition of Liked (see comment of Linked above) or want to
+      // have a "nice and intuitive" interface for manipulating
       // mixtures and their agents, states, etc. but that is not the
       // goal here, really.
 
@@ -560,7 +556,7 @@ trait Mixtures {
      *
      * @param state the state of this agent.
      * @param sites the interface of this agent.
-     * @param stateLiftSet lift set for agent state modifications
+     * @param liftSet lift set for component embeddings.
      * @param mixture a reference to the [[Mixture]] this agent belongs to.
      * @param next a reference to the next agent in the [[Mixture]]
      *        this agent belongs to.
@@ -570,17 +566,10 @@ trait Mixtures {
     final case class Agent protected[Mixture] (
       var state: AgentState,
       val sites: Array[Site],
-      val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet())
+      val liftSet: mutable.HashSet[(Pattern.Agent, ComponentEmbedding)] =
+        new mutable.HashSet())
         extends Seq[Site] {
 
-      // RHZ: Maybe we should make this type-safe as well
-      // Since it's mutable I'll just turn a blind eye to it for now
-      //
-      // sstucki: Noooo! Making those pointers an Options adds
-      // overhead and does not make them any more safe for any
-      // practical purpose!  These pointers are not part of a "public"
-      // interface, i.e. they are not supposed to be used anywhere
-      // outside of Mixture.  I "fixed" that now by protecting them.
       protected[Mixture] var mixture: Mixture = null
       protected[Mixture] var next: Agent = null
       protected[Mixture] var prev: Agent = null
@@ -613,6 +602,37 @@ trait Mixtures {
           case Linked(a, s, _) => Some((a, s))
           case _ => None
         }
+
+      /**
+       * Register a component embedding in the lift set of this agent.
+       *
+       * @param u the pre-image of this agent in the component embedding.
+       * @param ce the component embedding to add.
+       */
+      def addLift(u: Pattern.Agent, ce: ComponentEmbedding) {
+        liftSet += ((u, ce))
+      }
+
+      /**
+       * Remove a component embedding from the lift set of this agent.
+       *
+       * @param u the pre-image of this agent in the component embedding.
+       * @param ce the component embedding to remove.
+       */
+      def removeLift(u: Pattern.Agent, ce: ComponentEmbedding) {
+        liftSet -= ((u, ce))
+      }
+
+      /**
+       * Check all component embeddings in the lift set for
+       * consistency and remove those that are no longer valid.
+       */
+      def pruneLifts {
+        val invalidLifts = liftSet filter { p => !(p._1 matches this) }
+        for ((u, ce) <- invalidLifts) {
+          ce.component.removeEmbedding(ce)
+        }
+      }
 
       // -- Core Seq[Site] API --
       @inline def apply(idx: Int): Site = sites(idx)

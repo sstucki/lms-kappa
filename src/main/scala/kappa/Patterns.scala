@@ -823,8 +823,10 @@ trait Patterns {
        *
        * @return all the component embeddings from `this` in `that`.
        */
-      def embeddingsIn(that: Mixture): Seq[ComponentEmbedding] =
-        (for (u <- this; v <- that) yield ComponentEmbedding(u, v)).flatten
+      def embeddingsIn(that: Mixture): Seq[ComponentEmbedding] = {
+        val u = this.head
+        (for (v <- that) yield ComponentEmbedding(u, v)).flatten
+      }
 
       @inline def initEmbeddings {
         this.embeddings.clear
@@ -853,6 +855,10 @@ trait Patterns {
       @inline def removeEmbedding(ce: ComponentEmbedding) {
         (embeddingIndices remove ce.head) match {
           case Some(i) => {
+            // Clear lifts
+            for (i <- 0 until ce.length) ce(i).removeLift(ce.component(i), ce)
+
+            // Remove embedding from collection
             val j = embeddings.length - 1
             if (i != j) {
               val ce = embeddings(j)
