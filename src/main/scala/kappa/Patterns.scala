@@ -1,10 +1,11 @@
 package kappa
 
+import language.implicitConversions
 import scala.language.postfixOps
 
 trait Patterns {
   this: LanguageContext with Parser with Rules with Symbols with Mixtures
-      with PartialEmbeddings =>
+                        with PartialEmbeddings =>
 
   /**
    * A class representing patterns in [[Model]]s (i.e. site graphs).
@@ -21,69 +22,33 @@ trait Patterns {
    *        to query the individual agents in this pattern given their
    *        position within the pattern (i.e. in the order in which
    *        they were added to the pattern).
-   * @param siteGraphString the string associated with this pattern
    */
   final class Pattern private (
     val components: Vector[Pattern.Component],
     val agents: Vector[Pattern.Agent],
     val siteGraphString: String)
-      extends Seq[Pattern.Agent] {
-
+        extends Seq[Pattern.Agent]
+  {
     import Pattern._
 
     /**
      * Return the (overestimated) number of matchings of this pattern
      * in the target mixture
      */
-    def count: Double = (components map (_.count)).product
+    def inMix: Double = (components map (_.count)).product
 
 
-    /**
-     * Return a new pattern connecting two unconnected sites from this
-     * pattern.
-     *
-     * If the two sites do not belong to the same connected component
-     * of this pattern, the two respecive components will be merged.
-     *
-     * FIXME: Merging is O(n) in the size of the pattern...
-     *
-     * @param agent the agent to add.
-     * @return a new pattern extending this pattern with an additional
-     *         (unconnected) agent.
-     */
-    def connect(a1: AgentIndex, s1: SiteIndex, l1: LinkState,
-                a2: AgentIndex, s2: SiteIndex, l2: LinkState): Pattern = {
-      val u1 = agents(a1)
-      val u2 = agents(a2)
-      val c1 = u1.component
-      val c2 = u2.component
-      u1.sites(s1).link = Linked(u2, s2, l1)
-      u2.sites(s2).link = Linked(u1, s1, l2)
-      if (c1 != c2) merge(c1, c2) else this
-    }
-
-    /**
-     * Return a new pattern where two components have been merged.
-     *
-     * FIXME: This is O(n) in the size of the pattern...
-     */
-    @inline private def merge(c1: Component, c2: Component): Pattern = {
-      val (k1, k2) = if (c1.index < c2.index) (c1.index, c2.index)
-                     else (c2.index, c1.index)
-      val as1 = components(k1).agents
-      val as2 = components(k2).agents
-      val c = new Component(as1 ++ as2)
-      val cs =
-        (components updated (k1, c) take (k2)) ++ (components drop (k2 + 1))
-      new Pattern(cs, agents, siteGraphString)
-    }
-
+    // RHZ: @Sandro Beware that connect has side-effects and therefore
+    // siteGraphString won't return the correct string after any of these
+    // modifications. An easy fix is to create new Patterns giving
+    // an empty string as siteGraphString when connecting or merging.
+    // That doesn't solve the problem that the original sites will have
+    // their links changed when connecting though.
     override def toString =
       if (!siteGraphString.isEmpty) siteGraphString
       else iterator.mkString("", ",", "")
 
     // Action constructor
-    // FIXME: Should delegate to a factory method in Action object instead.
     def -> (rhs: Pattern) = new Action(this, rhs)
 
 
@@ -95,57 +60,6 @@ trait Patterns {
     @inline def apply(ci: ComponentIndex, ai: AgentIndex): Agent =
       components(ci).agents(ai)
 
-
-    /* RHZ: I think all of these are methods we really don't need for simulation
-     * that we can safely skip for now
-     *
-     * sstucki: These are used in test cases because we don't have a
-     * parser right now.  Without them the test breaks. :-( I believe
-     * you will also find these handy when you implement the parser.
-     * As I understood it you build patterns from the AST by first
-     * adding all the agents to a pattern in a first traversal and
-     * then connecting them in a second pass.  That's exactly what
-     * these methods are intended for.
-     */
-
-    // -- Extra Seq[Agent] API --
-
-    /**
-     * Return a new pattern extending this pattern with an additional
-     * (unconnected) agent.
-     *
-     * @param elem the agent to add.
-     * @return a new pattern extending this pattern with an additional
-     *         (unconnected) agent.
-     */
-    @inline def :+(elem: Agent): Pattern = new Pattern(
-      components :+ new Component(Vector(elem)),
-      agents :+ elem, siteGraphString)
-
-    /**
-     * Create a single unconnected agent and return a new pattern
-     * extending this pattern with the newly created agent.
-     *
-     * @param state the state of the agent to add.
-     * @param sites the sites of the agent to add.
-     * @return a new pattern extending this pattern with an additional
-     *         (unconnected) agent.
-     */
-    @inline def :+(state: AgentState, sites: Site*): Pattern =
-      this :+ Agent(state, sites.toArray)
-
-    @inline override def foreach[U](f: Agent => U): Unit =
-      components foreach { c => c.agents foreach f }
-
-
-    // RHZ: Is this a Scala design pattern?
-    //
-    // sstucki: Not that I know of.  The reason I put this in a
-    // separate method is that I used a mutable variable in there and
-    // I didn't want that to become part of the class.  Maybe it would
-    // have been sufficient to just put it in a separate scope.
-    // Anyway, I changed this to a for comprehension now to make it
-    // more readable (since it's not performance critical anyway).
 
     /* Update the pattern pointers in the components. */
     for ((c, i) <- components.zipWithIndex) {
@@ -192,19 +106,18 @@ trait Patterns {
           (a1 map (_ matches a2.state) getOrElse true) &&
           (s1 map (_ matches a2.sites(s2).state) getOrElse true) &&
           (l1 map (_ matches l2) getOrElse true)
-        case (Linked(_, _, l1), Mixture.Linked(_, _, l2)) =>
+        case (Linked(_, l1), Mixture.Linked(_, _, l2)) =>
           l1 matches l2
         case _ => false
       }
 
-      // FIXME!
       override def toString = this match {
         case Undefined => "?"
         case Wildcard(a, s, l) =>
           "!" + (a getOrElse "_") + "." + (s getOrElse "_") + "." + (l getOrElse "_")
         case Stub => ""
-        case Linked(a, s, l) =>
-          "!" + a.state + "." + a.sites(s).state + "." + l
+        case Linked(s, l) =>
+          "!" + s.agent.state + "." + s.state + "." + l
       }
     }
 
@@ -222,20 +135,15 @@ trait Patterns {
      * site (i.e. the site that stores the instance) to the target
      * site (i.e. the site that is pointed to by the instance).
      *
-     * As in [[Mixtures#Mixture.Link]], the target sites are stored in
-     * a "relative" fashion, i.e. as (agent, site index) pairs rather
-     * than just a reference to the target site.  This simplifies the
-     * process of matching patterns to mixtures (i.e. the process of
-     * extending pairs of patter and mixture agents into partial
-     * embeddings).  For more details, see the documentation of the
-     * [[Mixtures#Mixture.Link]] class.
+     * As opposed to [[Mixtures#Mixture.Link]], the target sites are stored
+     * in an "absolute" fashion, i.e. as just a reference to the target site.
      *
      * @param agent the target agent of this link.
      * @param site the index of the target site in the target agent of
      *        this link.
      * @param state the state of the link from source to target.
      */
-    final case class Linked(agent:Agent, site: SiteIndex, state: LinkState)
+    final case class Linked(site: Site, state: LinkState)
         extends Link
 
     /**
@@ -258,20 +166,14 @@ trait Patterns {
      * A class representing sites in [[Pattern.Agent]]s.
      */
     final class Site private (
-      val state: SiteState, var link: Link = Undefined) {
-
-      // TODO: this is not used at the moment.  Remove?
+      val state: SiteState,
+      var link: Link = Undefined)
+    {
+      // RHZ: There's redundant information in sites since the state
+      // contains the site name sym which is the same as index
 
       /** Internal reference to the agent this site belongs to. */
       protected[Pattern] var _agent: Agent = null
-
-      // RHZ: I prefer this exception rather than a null pointer exception
-      //
-      // sstucki: Fair enough.  I assume what you really care about is
-      // the message in the exception rather than the type of the
-      // exception?  This can still be done without using the overhead
-      // of an Option.  The pointer should remain invisible form most
-      // purposes anyway.  I changed it accordingly.
 
       /** The agent this site belongs to. */
       @inline def agent =
@@ -279,13 +181,12 @@ trait Patterns {
           "attempt to access parent agent of orphan site")
         else _agent
 
-      /** Convenience copy method. */
-      def copy(state: SiteState = this.state, link: Link = this.link) =
-        new Site(state, link match {
-          case l: Linked => throw new IllegalArgumentException(
-            "attempt to copy a linked site!") // don't duplicate links!
-          case l => l
-        })
+      /** The index of the agent within the component. */
+      protected[Pattern] var _index: SiteIndex = -1
+      @inline def index =
+        if (_index < 0) throw new NullPointerException(
+          "I have no index =(")
+        else _index
 
       /**
        * Returns the neighbor of a site if it is connected.
@@ -295,7 +196,7 @@ trait Patterns {
        */
       @inline def neighbor: Option[Site] =
         link match {
-          case Linked(a, s, _) => Some(a.sites(s))
+          case Linked(s, _) => Some(s)
           case _ => None
         }
 
@@ -316,31 +217,24 @@ trait Patterns {
     // defined in companion objects in Scala.  See
     // http://daily-scala.blogspot.ch/2009/09/factory-methods-and-companion-objects.html
     // and http://www.scala-lang.org/node/112
+    //
+    // RHZ: Thanks for the references
 
     /** Companion object of [[Site]] containing factory methods */
     object Site {
       def apply(state: SiteState) = new Site(state)
-      def apply(state: SiteState, stub: Boolean) =
-        new Site(state, if (stub) Stub else Undefined)
-      def apply(state: SiteState, wildcard: Wildcard) = new Site(state, wildcard)
+      def apply(state: SiteState, link: Link) = new Site(state, link)
       def unapply(site: Site) = (site.state, site.link)
     }
 
     /**
      * A class representing agents in [[Pattern.Component]]s.
      *
-     * ''WARNING'': For convenience, this class provides the interface
-     * of a `Seq[Pattern.Site]`.  However, using some methods from the
-     * `Seq` API might not result in the expected behavior.  E.g. `++`
-     * will return a `Seq[Pattern.Site]` rather than the expected
-     * `Pattern.Agent`.
-     *
      * @param state the state of the agent.
      * @param sites the sites of the agent.
      */
-    case class Agent(val state: AgentState, val sites: Array[Site])
-        extends Seq[Site] {
-
+    case class Agent(val state: AgentState, val sites: Vector[Site])
+    {
       /** The component this agent belongs to. */
       // RHZ: made this type-safe
       //
@@ -351,37 +245,24 @@ trait Patterns {
       // useful.  I reverted it and made the pointer protected.  Now
       // expressive error messages on the other hand are very useful,
       // so I kept that.
+      //
+      // RHZ: I disagree! Option is type-safe compared to a null pointer
+      // since the compiler forces you to do the "if (ptr == null) ..."
+      // That's what I mean by type-safe
+      // Now I agree that a getter is a good type-safe solution too
+      // since it guarantees that the returned pointer can't be null
       protected[Pattern] var _component: Component = null
       @inline def component =
         if (_component == null) throw new NullPointerException(
           "attempt to access parent component of orphan agent")
         else _component
 
-      // RHZ: Should we make this an Option[AgentIndex] to have a
-      // type-safe behaviour?
-      //
-      // sstucki: No! Using an option does not make it type-safe.  But
-      // we ought to protect it.  Fixed this.
       /** The index of the agent within the component. */
       protected[Pattern] var _index: AgentIndex = -1
       @inline def index =
         if (_index < 0) throw new NullPointerException(
-          "attempt to  parent component of orphan agent")
+          "I have no index =(")
         else _index
-
-      /**
-       * Returns the neighbor of a site if it is connected.
-       *
-       * @param site the index of the site whose neighbor we try to find.
-       * @return `Some(a, s)`, where `a` is the neighboring agent of
-       *         this site and `s` is the index of the neighboring site
-       *         in `a`, or `None` if this site is not connected.
-       */
-      @inline def neighbor(site: SiteIndex): Option[(Agent, SiteIndex)] =
-        sites(site).link match {
-          case Linked(a, s, _) => Some((a, s))
-          case _ => None
-        }
 
       /**
        * Compare this agent against a [[Mixtures#Mixture.Agent]].
@@ -395,17 +276,11 @@ trait Patterns {
 
       override def toString() = state + sites.mkString("(", ",", ")")
 
-      // -- Core Seq[Site] API --
-      @inline def apply(idx: Int): Site = sites(idx)
-      @inline def iterator: Iterator[Site] = sites.iterator
-      @inline def length: Int = sites.length
-
-      // -- Extra Seq[Site] API --
-      @inline override def foreach[U](f: Site => U): Unit =
-        sites foreach f
-
       // Register sites.
-      //for (s <- sites) s.agent = this
+      for ((s, i) <- sites.zipWithIndex) {
+        s._agent = this
+        s._index = i
+      }
     }
 
     /**
@@ -420,8 +295,8 @@ trait Patterns {
      *
      * @param agents the agents in this component
      */
-    case class Component(val agents: Vector[Agent]) extends Seq[Agent] {
-
+    case class Component(val agents: Vector[Agent]) extends Seq[Agent]
+    {
       /** The pattern this component belongs to. */
       protected[Pattern] var _pattern: Pattern = null
       def pattern =
@@ -438,14 +313,16 @@ trait Patterns {
 
       /**
        * Return the number of matchings of this pattern component in
-       * the target mixture
+       * the target mixture.
        */
-      // FIXME: implement!
       def count: Int = 1
 
       /**
        * Return all the (partial) embeddings from this pattern
        * component in a given mixture.
+       *
+       * RHZ: The idea is to use this method to find all the initial
+       * embeddings?
        *
        * @return all the partial embeddings from `this` in `that`.
        */
@@ -458,12 +335,13 @@ trait Patterns {
       @inline def iterator: Iterator[Agent] = agents.iterator
       @inline def length: Int = agents.length
 
+      /* RHZ: Why is this different to the foreach given by extends Seq?
       // -- Extra Seq[Agent] API --
       @inline override def foreach[U](f: Agent => U): Unit =
         agents foreach f
+      */
 
-
-      // Update the component pointers in the agents.
+      // Update the component pointers in the agents
       for ((a, i) <- agents.zipWithIndex) {
         a._component = this
         a._index = i
@@ -477,9 +355,6 @@ trait Patterns {
      */
     def apply() = new Pattern(Vector(), Vector(), "")
 
-    // def apply(agent: Agent) = new Pattern(Vector(
-    //   new Component(Vector(agent))), Vector((0, 0)))
-
     /**
      * Factory method creating a pattern from a string.
      *
@@ -492,84 +367,112 @@ trait Patterns {
     // TODO: Fix this. The problem right now is that the way states
     // are handled is inconsistent.  States should point to the symbol
     // table (environment), not the other way around.
-    
-    // def apply(expr: String) = {
-    //   val ast = parseSiteGraph(expr) match {
-    //     case Success(ast, _) => ast
-    //     case msg => println(msg); println();
-    //     throw new IllegalArgumentException(
-    //       "given site graph '" + expr + "' is invalid")
-    //   }
+    //
+    // RHZ: I'm not sure I understand what you mean by the states should
+    // point to the symbol table and not the other way around
+    def apply(expr: String) = {
+      val ast = parseSiteGraph(expr) match {
+        case Success(ast, _) => ast
+        case msg => println(msg); println();
+                    throw new IllegalArgumentException(
+                      "given site graph '" + expr + "' is invalid")
+      }
 
-    //   val lstates = for (AST.LinkAnnot(label, lstate) <- ast)
-    //                 yield (label, lstate)
-    //   val lstateMap = Map(lstates: _*).lift
+      val agents: Vector[Agent] =
+        (for ((AST.Agent(aname, astate, intf), id) <- ast.zipWithIndex)
+         yield {
+           val anameSym = agentTypeSyms(aname)
+           val sites = for (AST.Site(sname, sstate, lnk) <- intf)
+                       yield {
+                         val siteIndex = siteNameSyms(aname)(sname)
+                         val siteState = mkSiteState(
+                           siteIndex,
+                           sstate map siteStateNameSyms(aname)(sname))
 
-    //   val links = for {
-    //     (AST.Agent(aname, _, intf), id) <- ast.zipWithIndex
-    //     AST.Site(sname, _, AST.Linked(label)) <- intf
-    //   } yield (label, id, env.sitenameId(aname)(sname))
+                         (siteIndex, Site(siteState, lnk match {
+                           case AST.Stub          => Stub
+                           case AST.Undefined     => Undefined
+                           case AST.Wildcard      => Wildcard(None, None, None)
+                           case AST.Linked(label) => Undefined // should be Linked
+                         }))
+                       }
+           val siteMap = sites.toMap withDefault (sn => Site(mkSiteState(sn, None)))
+           val interface = siteNames(anameSym).keys map siteMap toVector
+           val agentState = mkAgentState(anameSym, astate map agentStateNameSyms(aname))
+           // RHZ: I think we actually don't want a symbol table (as in a finite table)
+           // but just a function to create symbols from names
+           new Agent(agentState, interface)
+         }).toVector
 
-    // val pairs = (links groupBy (_._1) values) map {
-    //   case (label, a1, s1) :: (_, a2, s2) :: Nil => (a1, s1, a2, s2, label)
-    //   case _ => throw new IllegalArgumentException("every bond label must appear exactly twice")
-    // }
+      val lstateMap = (for (AST.LinkAnnot(label, lstate) <- ast)
+                       yield (label, lstate)).toMap.lift
 
-    // val agents : Seq[Agent] =
-    //   for ((AST.Agent(aname, astate, intf), id) <- ast.zipWithIndex)
-    //   yield {
-    //     val anameId = env.agentnameId(aname)
-    //     val sites = for (AST.Site(sname, sstate, lnk) <- intf)
-    //                 yield new Site(env.sitenameId(aname)(sname), sstate map env.sitestateId(aname)(sname), lnk match {
-    //                   case AST.Stub          => Stub
-    //                   case AST.Undefined     => Undefined
-    //                   case AST.Wildcard      => Wildcard(None)
-    //                   case AST.Linked(label) => Undefined // Linked
-    //                 })
-    //     val siteMap : Map[SiteId, Site] = Map(sites map (site => (site.name, site)):_*) withDefault (sId => Site(sId, None, Undefined))
-    //     val interface : Seq[Site] = 0 until env.sitename(anameId).length map siteMap
-    //     val agent = new Agent(anameId, astate map env.agentstateId(aname), interface.to[Vector], id)
-    //     agent foreach (_.agent = Some(agent))
-    //     agent
-    //   }
+      val links = for {
+        (AST.Agent(aname, _, intf), aindex) <- ast.zipWithIndex
+        AST.Site(sname, _, AST.Linked(label)) <- intf
+      } yield (label, aindex, aname, sname)
 
-    // // Connect sites
-    // pairs foreach {
-    //   case (a1, s1, a2, s2, label) => val lstate = lstateMap(label) map (env.linkstateId((agents(a1).name, s1, agents(a2).name, s2))(_))
-    //                                   agents(a1)(s1).link = Linked(agents(a2)(s2), lstate) ;
-    //                                   agents(a2)(s2).link = Linked(agents(a1)(s1), lstate)
-    // }
+      val pairs = (links groupBy (_._1) values) map {
+        case List((label, aindex1, aname1, sname1), (_, aindex2, aname2, sname2)) =>
+          (aindex1, aname1, sname1, aindex2, aname2, sname2, label)
+        case _ => throw new IllegalArgumentException("every bond label must appear exactly twice")
+      }
 
-    // val agentIds : Set[AgentId] = agents.indices.to[Set]
+      val componentMaker = new ComponentMaker(agents)
 
-    // // Compute connected components
-    // def traverse(agent: Agent, queue: Seq[Agent], visited: Set[AgentId], ccId: ComponentId, ccMap: CcMap) : CcMap = {
-    //   def next(queue: Seq[Agent]) = {
-    //     val vis = visited + agent.id
-    //     queue match {
-    //       case next :: tl => traverse(next, tl, vis, ccId, ccMap updated (agent.id, ccId))
-    //       case Nil => (agentIds -- vis) headOption match {
-    //         case Some(nextId) => traverse(agents(nextId), List(), vis, ccId + 1, ccMap updated (agent.id, ccId))
-    //         case None => ccMap updated (agent.id, ccId)
-    //       }
-    //     }
-    //   }
-    //   if (visited contains agent.id)
-    //     next(queue)
-    //   else {
-    //     val nbs = for (Site(_, _, Linked(nb, _)) <- agent) yield nb.agent.get
-    //     next(queue ++ nbs)
-    //   }
-    // }
+      // Connect sites
+      // NB What I didn't like about the merge and connect function
+      // is that they looked like pure functions but connect had side
+      // effects: the original graph would have the same number of
+      // connected components as before but the sites are Linked
+      //
+      // It would be nicer I think if the merge function had side
+      // effects too: that it merge the two components in place instead
+      // of giving you back a new Pattern. Note that the problem is not
+      // really in the merge function but in the connect function: it
+      // returns a new Pattern but the original one is not valid anymore.
+      // I think both functions should return return `this`.
+      pairs foreach {
+        case (aindex1, aname1, sname1, aindex2, aname2, sname2, label) => {
+          if (! (linkStateNameSyms contains (aname1, sname1, aname2, sname2)))
+            throw new IllegalArgumentException(
+              "link (" + aname1 + ", " + sname1 + ", " + aname2 + ", " + sname2 + ") is not allowed by contact graph")
 
-    // val ccMap = agents match {
-    //   case a1 :: _ => traverse(a1, List(), Set(), 0, Vector.fill(agents.length)(-1))
-    //   case Nil     => Vector()
-    // }
+          val lstate = lstateMap(label) map linkStateNameSyms((aname1, sname1, aname2, sname2))
+          val s1 = agents(aindex1).sites(siteNameSyms(aname1)(sname1))
+          val s2 = agents(aindex2).sites(siteNameSyms(aname2)(sname2))
+          s1.link = Linked(s1, mkLinkState(lstate))
+          // TODO What do we do about the directed link states issue?
+          s2.link = Linked(s2, mkLinkState(lstate))
 
-    // val p = new Pattern(ccMap.max, ccMap, agents.to[Vector], siteGraph)
-    // p foreach (_.pattern = Some(p))
-    // p
+          componentMaker.merge(s1.agent, s2.agent)
+        }
+      }
 
+      new Pattern(componentMaker.components, agents, expr)
+    }
+
+    // RHZ: This class is for creating connected components
+    // When you create it every agent is in a different component
+    // You can merge two components using `merge`
+    // Finally you get the vector of components calling `components`
+    private class ComponentMaker(val agents: Vector[Agent])
+    {
+      var ccs: Map[ComponentIndex, Vector[Agent]] = agents.zipWithIndex map { case (a, i) => (i, Vector(a)) } toMap
+      var ccIds: Map[Agent, ComponentIndex] = agents.zipWithIndex.toMap
+
+      def merge(a1: Agent, a2: Agent) {
+        val id1 = ccIds(a1)
+        val id2 = ccIds(a2)
+        val (minId, maxId) = if (id1 < id2) (id1, id2) else (id2, id1)
+        ccs(maxId) foreach { agent => ccIds = ccIds updated (agent, minId) }
+        ccs = ccs - maxId
+      }
+
+      def components(): Vector[Component] = ccs.values map (new Component(_)) toVector
+    }
   }
+
+  implicit def stringToPattern(s: String) : Pattern = Pattern(s)
 }
+

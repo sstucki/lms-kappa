@@ -100,10 +100,10 @@ trait PartialEmbeddings {
           if (u matches v) {
             inj(i) = v
             (0 until u.sites.size) forall { j =>
-              (u.neighbor(j), v.neighbor(j)) match {
+              (u.sites(j).neighbor, v.neighbor(j)) match {
                 case (None, _) => true
-                case (Some((a1, s1)), Some((a2, s2))) =>
-                  (s1 == s2) && extend(a1.index, a2)
+                case (Some(s1), Some((a2, s2))) =>
+                  (s1.index == s2) && extend(s1.agent.index, a2)
                 case _ => false
               }
             }

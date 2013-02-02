@@ -77,11 +77,6 @@ trait Mixtures {
    * @constructor create an empty Mixture.
    */
   final class Mixture extends Seq[Mixture.Agent] {
-    // RHZ any particular reason to make this like a cons cell instead of just
-    // wrapping around an Array of Agents? I find it quite cumbersome this way
-    //
-    // sstucki: Yes! See the description above.
-    //
     // Finally, there are two more advantages of this design over
     // using a standard class from the collections library:
     //
@@ -234,7 +229,7 @@ trait Mixtures {
     // sense they are functions on mixtures (i.e. for agent/subgraph
     // addition and deletion) and agents (i.e. for state changes and
     // link addition and deletion).  The actual instances of both the
-    // mixture and the agents specific agents they will act on are
+    // mixture and the specific agents they will act on are
     // only defined w.r.t. an embedding.  In that sense the embedding
     // is sequence of actual agent parameters to the action, an
     // environment that binds the formal agent parameter to actual
@@ -247,7 +242,7 @@ trait Mixtures {
     // actual sites, only about their index with respect to the formal
     // agent parameter.
     //
-    // Now granted, the way this Agents are set up in this class, it's
+    // Now granted, the way Agents are set up in this class, it's
     // not necessary to refer to a mixture in order to establish a
     // connection and we can always find the site for a given
     // agent-site index pair.  So we might as well implement these
@@ -276,10 +271,6 @@ trait Mixtures {
       this
     }
 
-    // This should receive only one site as input, as in KaSim, to easily handle
-    // wildcard destruction
-    //
-    // sstucki: that's a good point! I adjusted it.
     /** Disconnect a site in this mixture. */
     def disconnect(a: Agent, s: SiteIndex): Mixture = {
       val s1 = a.sites(s)
@@ -435,17 +426,9 @@ trait Mixtures {
       var state: SiteState,
       var link: Link = Stub,
       val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet(),
-      val linkLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet()) {
-
-      // RHZ: should we reference the parent Agent in Mixtures as well?
-      //
-      // sstucki: no I think this is total overkill unless we change
-      // the definition of Liked (see comment of Linked above) or want
-      // to have a "nice and intuitive" interface for manipulating
-      // mixtures and their agents, states, etc. but that is not the
-      // goal here, really.
-
-      //var agent: Agent = null
+      val linkLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet())
+    {
+      //var _agent: Agent = null
 
       override def toString = state.toString + link
     }
@@ -479,14 +462,6 @@ trait Mixtures {
       val sites: Array[Site],
       val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet()) {
 
-      // RHZ: Maybe we should make this type-safe as well
-      // Since it's mutable I'll just turn a blind eye to it for now
-      //
-      // sstucki: Noooo! Making those pointers an Options adds
-      // overhead and does not make them any more safe for any
-      // practical purpose!  These pointers are not part of a "public"
-      // interface, i.e. they are not supposed to be used anywhere
-      // outside of Mixture.  I "fixed" that now by protecting them.
       protected[Mixture] var mixture: Mixture = null
       protected[Mixture] var next: Agent = null
       protected[Mixture] var prev: Agent = null
@@ -520,6 +495,10 @@ trait Mixtures {
     /** Creates an empty mixture. */
     @inline def apply(): Mixture = new Mixture
 
+    // RHZ: I don't like very much the idea of creating mixtures from patterns
+    // since Scala can't apply 2 implicit conversions in a row (modulo some
+    // weird trickery). I'd prefer to create mixtures from strings, as we do
+    // with patterns
     /** Converts a pattern into a mixture. */
     def apply(pattern: Pattern): Mixture = {
       val m = new Mixture
@@ -538,7 +517,7 @@ trait Mixtures {
           var j = 0
           for (s <- u.sites) {
             val l = s.link match {
-              case Pattern.Linked(a, s, l) => Linked(as(a.index), s, l)
+              case Pattern.Linked(s, l) => Linked(as(s.agent.index), s.index, l)
               case Pattern.Stub => Stub
               case _ => throw new IllegalArgumentException(
                 "attempt to create mixture with an undefined or wildcard link")

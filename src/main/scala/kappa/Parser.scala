@@ -7,21 +7,23 @@ import scala.util.parsing.combinator._
  */
 trait Parser extends JavaTokenParsers {
   this: LanguageContext =>
-/*  
-  val agentState : Parser[AgentState]
-  val siteState : Parser[SiteState]
-  val linkState : Parser[LinkState]
+
+  val agentType  : Parser[AgentType]
+  val siteName   : Parser[SiteName]
+  val agentState : Parser[AgentStateName]
+  val siteState  : Parser[SiteStateName]
+  val linkState  : Parser[LinkStateName]
 
   object AST {
     /* Site graphs */
     abstract class Term
-    case class LinkAnnot(lnk: BondLabel, state: LinkState) extends Term
-    case class Agent(name: String, state: Option[AgentState], intf: Intf) extends Term
+    case class LinkAnnot(lnk: BondLabel, state: LinkStateName) extends Term
+    case class Agent(name: AgentType, state: Option[AgentStateName], intf: Intf) extends Term
 
     type Expr = List[Term]
     type Intf = List[Site]
 
-    case class Site(name: String, int: Option[SiteState], lnk: Link)
+    case class Site(name: SiteName, int: Option[SiteStateName], lnk: Link)
 
     abstract class Link
     case object Stub extends Link
@@ -37,16 +39,15 @@ trait Parser extends JavaTokenParsers {
       { case bondLabel ~ state => LinkAnnot(bondLabel, state) }
 
     // agent : agent_name [: agent_state] [( interface )]
-    lazy val agent : Parser[Agent] = ident ~ opt(":" ~> agentState) ~ opt(interface) ^^
+    lazy val agent : Parser[Agent] = agentType ~ opt(":" ~> agentState) ~ opt(interface) ^^
       { case name ~ state ~ intf => Agent(name, state, intf getOrElse List()) }
 
     // interface : [ site [, interface] ]
     lazy val interface : Parser[Intf] = "(" ~> repsep(site, ",") <~ ")"
 
     // site : site_name | site : site_state | site ! bond_label
-    lazy val site : Parser[Site] = ident ^^ (Site(_, None, Undefined)) |
-                                   site ~ (":" ~> siteState) ^^ { case Site(name, _, link) ~ state => Site(name, Some(state), link) } |
-                                   site ~ link  ^^ { case Site(name, state, _) ~ link => Site(name, state, link) }
+    lazy val site : Parser[Site] = siteName ~ opt(":" ~> siteState) ~ opt(link) ^^ {
+      case name ~ state ~ link => Site(name, state, link getOrElse Undefined) }
 
     lazy val link : Parser[Link] = "!" ~> (bondLabel ^^ (Linked(_)) |
                                            "_" ^^ (_ => Wildcard))  |
@@ -59,44 +60,43 @@ trait Parser extends JavaTokenParsers {
     type ContactGraph = List[CGTerm]
 
     abstract class CGTerm
-    case class CGAgent(name: String, states: List[AgentState], intf: CGIntf) extends CGTerm
-    case class CGLinkAnnot(lnk: BondLabel, states: List[LinkState]) extends CGTerm
+    case class CGAgent(name: AgentType, states: List[AgentStateName], intf: CGIntf) extends CGTerm
+    case class CGLinkAnnot(lnk: BondLabel, states: List[LinkStateName]) extends CGTerm
 
     type CGIntf = List[CGSite]
-    case class CGSite(name: String, ints: List[SiteState], lnks: List[BondLabel])
+    case class CGSite(name: SiteName, ints: List[SiteStateName], lnks: List[BondLabel])
 
     def list[T](p: Parser[T]) = "{" ~> rep1sep(p, ",") <~ "}"
 
     lazy val cgLinkAnnot : Parser[CGLinkAnnot] = bondLabel ~ (":" ~> list(linkState)) ^^
       { case bondLabel ~ states => CGLinkAnnot(bondLabel, states) }
 
-    lazy val cgAgent : Parser[CGAgent] = ident ~ opt(":" ~> list(agentState)) ~ opt(cgIntf) ^^
+    lazy val cgAgent : Parser[CGAgent] = agentType ~ opt(":" ~> list(agentState)) ~ opt(cgIntf) ^^
       { case name ~ states ~ intf => CGAgent(name, states getOrElse List(), intf getOrElse List()) }
 
     lazy val cgIntf : Parser[CGIntf] = "(" ~> repsep(cgSite, ",") <~ ")"
 
-    lazy val cgSite : Parser[CGSite] = ident ^^ (CGSite(_, List(), List())) |
-                                       cgSite ~ (":" ~> list(siteState)) ^^ {
-                                         case CGSite(name, states1, links) ~ states2 => CGSite(name, states1 ++ states2, links) } |
-                                       cgSite ~ ("!" ~> list(bondLabel)) ^^ {
-                                         case CGSite(name, states, links1) ~ links2 => CGSite(name, states, links1 ++ links2) }
+    lazy val cgSite : Parser[CGSite] =
+      siteName ~ opt(":" ~> list(siteState)) ~ opt("!" ~> list(bondLabel)) ^^ {
+        case name ~ states ~ links => CGSite(name, states getOrElse List(), links getOrElse List()) }
 
     lazy val cg : Parser[ContactGraph] = repsep(cgAgent | cgLinkAnnot, ",")
   }
 
   def parseSiteGraph(s: String) = parseAll(AST.expr, s)
   def parseContactGraph(s: String) = parseAll(AST.cg, s)
-*/
 }
 
 trait KappaParser extends Parser {
-  self: KappaContext =>
-/*
+  this: KappaContext =>
+
+  lazy val agentType : Parser[AgentType] = ident
+  lazy val siteName  : Parser[SiteName]  = ident
+
   // agentState and linkState are not really part of core Kappa
-  lazy val agentState : Parser[AgentState] = ident
-  lazy val siteState : Parser[SiteState] = ident
-  lazy val linkState : Parser[LinkState] = ident
-*/
+  lazy val agentState : Parser[AgentStateName] = failure("agent states are not accepted in Kappa")
+  lazy val siteState  : Parser[SiteStateName]  = """\w+""".r
+  lazy val linkState  : Parser[LinkStateName]  = failure("link states are not accepted in Kappa")
 }
 
 /*

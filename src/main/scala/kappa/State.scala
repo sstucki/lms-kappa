@@ -1,8 +1,9 @@
 package kappa
 
+import scala.language.implicitConversions
+
 import scala.math.PartialOrdering
 //import scala.math.PartiallyOrdered
-import scala.language.implicitConversions
 
 
 /**
@@ -15,7 +16,7 @@ import scala.language.implicitConversions
  *     states, i.e. it specifies whether `this` state "matches" `that`
  *     state;
  *
- *  2. [[isConcrete]] is an unary realtion that defines whether a
+ *  2. [[isConcrete]] is an unary relation that defines whether a
  *     given state is admissible in a mixture, i.e whether it is
  *     a "concrete" state.
  *
@@ -56,7 +57,7 @@ trait State[A] {
    */
   def isConcrete: Boolean
 
-  // FIMXE: In the future we might to provide these for compatibility?
+  // FIMXE: In the future we might want to provide these for compatibility?
 
   // /** Returns `true` if `this` is less than or equal to `that`. */
   // def <=(that: A): Boolean
@@ -117,7 +118,7 @@ object State {
     mf: (T, T) => Boolean): Boolean =
       (x, y) match {
         case (None, _) => true
-        case (Some(_), None) => false
+        case (_, None) => false
         case (Some(x), Some(y)) => mf(x, y)
       }
 }

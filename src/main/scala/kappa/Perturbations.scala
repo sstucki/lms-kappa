@@ -33,5 +33,9 @@ trait Perturbations {
   case class SideEffect(cond: self.type => Boolean, effect: () => Unit) extends Perturbation
   case class Add(cond: self.type => Boolean, n: Int, m: Pattern) extends Perturbation
   case class Del(cond: self.type => Boolean, n: Int, m: Pattern) extends Perturbation
+
+  def when(cond: => Boolean) = Cond(_ => cond)
+  def when(cond: self.type => Boolean) = new Cond(cond)
+  // TODO define every for "every 10 seconds set/add/del ..." or "every 10 events ..."
 }
 

@@ -18,29 +18,14 @@ with Parser with Symbols with Embeddings {
   def withMaxEvents(e: Int) = { maxEvents = Some(e); this }
 
   def run() { }
-
-  // Implicit conversions and other functions
-  // FIXME: Why are these in a separate object?
-  // RHZ: Just because I want to import only those after I create my model object
-  // sstucki: but *everything* in Parser is in scope automatically anyway
-  // because we mix in Parser into Model...
-  // object HelperFns {
-  //   implicit def stringToPattern(s: String) : Pattern = createPattern(s)
-
-  //   def when(cond: => Boolean) = Cond(_ => cond)
-  //   def when(cond: self.type => Boolean) = new Cond(cond)
-
-  //   // TODO define every for "every 10 seconds set/add/del ..." or "every 10 events ..."
-  // }
 }
 
-class KappaModel(val contactGraph: String) extends Model with KappaContext
-with KappaParser with KappaSymbols {
-  /*
+class KappaModel(val contactGraph: String) extends Model
+  with KappaContext with KappaParser with KappaSymbols
+{
   initSymbols(parseContactGraph(contactGraph) match {
     case Success(cg, _) => cg
     case msg => throw new IllegalArgumentException(
       "given contact graph is invalid: " + msg)
   })
-  */
 }
