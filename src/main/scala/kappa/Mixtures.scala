@@ -129,6 +129,56 @@ trait Mixtures {
       def hasNext = nextAgent != null
     }
 
+    /** The stream used to track marked agents. */
+    private var _markedAgents: List[Agent] = Nil
+
+    /**
+     * The collection used to track marked agents.
+     *
+     * NOTE: A call to this method will prune the marked agents list
+     * before returning it, which may take O(n) time.  However, if the
+     * list is subsequently iterated over, the total amortized access
+     * time of the call to this method is just O(1) as the pruning
+     * time is proportional to previous calls to [[Mixture.unmark]]
+     * plus the number of subsequent iteration steps over the pruned
+     * list.
+     *
+     * FIXME: We could do better.  We could prune the list lazily,
+     * thereby fixing the amortized cost to O(1) even for cases where
+     * the list is not iterated over completely.
+     *
+     * @return the collection used to track marked agents.
+     */
+    def markedAgents = {
+      _markedAgents = _markedAgents filter (_._marked == true)
+      _markedAgents
+    }
+
+    /**
+     * Mark a given agent and add it to the marked agents list (unless
+     * it was already marked).
+     */
+    @inline def mark(agent: Agent) {
+      if (!agent._marked) {
+        agent._marked = true
+        _markedAgents = agent :: _markedAgents
+      }
+    }
+
+    /** Unmark a given agent and add it to the marked agents list. */
+    @inline def unmark(agent: Agent) {
+      agent._marked = false
+    }
+
+    /**
+     * Unmark all the agents in the marked agents list and clear the
+     * list.
+     */
+    @inline def clearMarkedAgents {
+      for (agent <- _markedAgents) agent._marked = false
+      _markedAgents = Nil
+    }
+
     /**
      * Make a copy of this mixture.
      *
@@ -160,10 +210,10 @@ trait Mixtures {
       u = _head
       while(u != null) {
         val v = u.copy
-        for (i <- 0 until u.sites.size) {
-          val s = u.sites(i)
+        for (i <- 0 until u.length) {
+          val s = u(i)
           val l = s.link match {
-            case Linked(a, s, l) => Linked(a.copy, s, l)
+            case Linked(a, j, l) => Linked(a.copy, j, l)
             case Stub => Stub
           }
           v.sites(i) = Site(s.state, l)
@@ -189,23 +239,43 @@ trait Mixtures {
       if (_head != null) _head.prev = agent
       _head = agent
       _length += 1
+
+      unmark(agent)
+      mark(agent)
+
       this
     }
 
     /** Create a [[Mixture.Agent]] and add it to this mixture. */
     def +=(state: AgentState, siteStates: Seq[SiteState]): Mixture = {
-      val n = siteStates.size
+
+      // Create and initialize sites
       var i: Int = 0
-      val sites = new Array[Site](n)
-      val it = siteStates.iterator
-      while (it.hasNext) {
-        sites(i) = new Site(it.next)
+      val sites = new Array[Site](siteStates.size)
+      for (s <- siteStates) {
+        sites(i) = new Site(s)
+        i += 1
       }
+
+      // Add agent to mixture
       this += (new Agent(state, sites))
     }
 
-    /** Remove a single agent to this mixture. */
+    /** Remove a single agent from this mixture. */
     def -=(agent: Agent): Mixture = {
+
+      // Disconnect agent
+      for (s <- agent) {
+        s.link match {
+          case Linked(a2, i, _) => {
+            a2.sites(i).link = Stub
+            mark(a2)
+          }
+          case _ => { }
+        }
+      }
+
+      // Remove agent
       val ap = agent.prev
       val an = agent.next
       if (ap != null) ap.next = an
@@ -268,20 +338,26 @@ trait Mixtures {
                 a2: Agent, s2: SiteIndex, l2: LinkState): Mixture = {
       a1.sites(s1).link = Linked(a2, s2, l1)
       a2.sites(s2).link = Linked(a1, s1, l2)
+
+      mark(a1)
+      mark(a2)
+
       this
     }
 
     /** Disconnect a site in this mixture. */
     def disconnect(a: Agent, s: SiteIndex): Mixture = {
       val s1 = a.sites(s)
-      val l = a.sites(s).link
-      val s2 = l match {
-        case Linked(a2, i, _) => a2.sites(i)
-        case _ => throw new IllegalArgumentException(
-          "attempt to disconnect an unconnected site")
+      s1.link match {
+        case Linked(a2, i, _) => {
+          a2.sites(i).link = Stub
+          mark(a2)
+        }
+        case _ => { }
       }
       s1.link = Stub
-      s2.link = Stub
+      mark(a)
+
       this
     }
 
@@ -290,13 +366,15 @@ trait Mixtures {
      *
      * The doubly-linked list representing the mixture `that` will be
      * appended to this mixture.  After this concatenation `that`
-     * becomes invalid and should not be operated on any longer. 
+     * becomes invalid and should not be operated on any longer.
      */
     def ++=(that: Mixture): Mixture = {
       var a: Agent = that._head
       var last: Agent = null
       while (a != null) {
         a.mixture = this
+        unmark(a)
+        mark(a)
         last = a
         a = a.next
       }
@@ -309,10 +387,12 @@ trait Mixtures {
       this
     }
 
-    /** Generates and returns `x` concatenated copies of this mixture. */
-    def *(x: Int): Mixture =
-      if (x == 0) Mixture()
-      else if (x < 0) throw new IllegalArgumentException(
+    /**
+     * Generates and appends `x - 1` copies of this mixture to this
+     * mixture.
+     */
+    def *=(x: Int): Mixture =
+      if (x <= 0) throw new IllegalArgumentException(
         "attempt to create a negative number of copies of a mixture")
       else {
         val m = Mixture()
@@ -320,6 +400,19 @@ trait Mixtures {
           m ++= this.copy
         }
         this ++= m
+      }
+
+    /**
+     * Generates `x` concatenated copies of this mixture and returns
+     * the result.
+     */
+    def *(x: Int): Mixture =
+      if (x == 0) Mixture()
+      else if (x < 0) throw new IllegalArgumentException(
+        "attempt to create a negative number of copies of a mixture")
+      else {
+        val m = this.copy
+        m *= x
       }
 
 
@@ -419,16 +512,20 @@ trait Mixtures {
      *
      * @param state the state of this site
      * @param link whether this site is linked to another site.
-     * @param stateLiftSet lift set for site state modifications
-     * @param linkLiftSet lift set for link modifications
      */
     final case class Site(
       var state: SiteState,
-      var link: Link = Stub,
-      val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet(),
-      val linkLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet())
+      var link: Link = Stub)
     {
-      //var _agent: Agent = null
+      // RHZ: should we reference the parent Agent in Mixtures as well?
+      //
+      // sstucki: no I think this is unnecessary unless we change the
+      // definition of Liked (see comment of Linked above) or want to
+      // have a "nice and intuitive" interface for manipulating
+      // mixtures and their agents, states, etc. but that is not the
+      // goal here, really.
+
+      //var agent: Agent = null
 
       override def toString = state.toString + link
     }
@@ -450,7 +547,7 @@ trait Mixtures {
      *
      * @param state the state of this agent.
      * @param sites the interface of this agent.
-     * @param stateLiftSet lift set for agent state modifications
+     * @param liftSet lift set for component embeddings.
      * @param mixture a reference to the [[Mixture]] this agent belongs to.
      * @param next a reference to the next agent in the [[Mixture]]
      *        this agent belongs to.
@@ -460,7 +557,9 @@ trait Mixtures {
     final case class Agent protected[Mixture] (
       var state: AgentState,
       val sites: Array[Site],
-      val stateLiftSet: mutable.HashSet[Embedding] = new mutable.HashSet()) {
+      val liftSet: mutable.HashSet[(Pattern.Agent, ComponentEmbedding)] =
+        new mutable.HashSet())
+        extends Seq[Site] {
 
       protected[Mixture] var mixture: Mixture = null
       protected[Mixture] var next: Agent = null
@@ -470,6 +569,18 @@ trait Mixtures {
       protected[Mixture] var copy: Agent = null
 
       /**
+       * Marker flag for agents to be considered checked (used to
+       * track clashes in actions, updates made by actions, etc.).
+       */
+      protected[Mixture] var _marked: Boolean = false
+
+      /**
+       * Marker flag for agents to be considered checked (used to
+       * track clashes in actions, updates made by actions, etc.).
+       */
+      @inline def marked: Boolean = _marked
+
+      /**
        * Returns the neighbor of a site if it is connected.
        *
        * @param site the index of the site whose neighbor we try to find.
@@ -477,18 +588,105 @@ trait Mixtures {
        *         this site and `s` is the index of the neighboring site
        *         in `a`, or `None` if this site is not connected.
        */
-      @inline def neighbor(site: SiteIndex): Option[(Agent, SiteIndex)] =
+      // Wow! BE!! =)
+      @inline def neighbour(site: SiteIndex): Option[(Agent, SiteIndex)] =
         sites(site).link match {
           case Linked(a, s, _) => Some((a, s))
           case _ => None
         }
 
-      override def toString() = state + sites.mkString("(", ",", ")")
+      /**
+       * Register a component embedding in the lift set of this agent.
+       *
+       * @param u the pre-image of this agent in the component embedding.
+       * @param ce the component embedding to add.
+       */
+      def addLift(u: Pattern.Agent, ce: ComponentEmbedding) {
+        liftSet += ((u, ce))
+      }
+
+      /**
+       * Remove a component embedding from the lift set of this agent.
+       *
+       * @param u the pre-image of this agent in the component embedding.
+       * @param ce the component embedding to remove.
+       */
+      def removeLift(u: Pattern.Agent, ce: ComponentEmbedding) {
+        liftSet -= ((u, ce))
+      }
+
+      /**
+       * Check all component embeddings in the lift set for
+       * consistency and remove those that are no longer valid.
+       */
+      def pruneLifts {
+        val invalidLifts = liftSet filter { p => !(p._1 matches this) }
+        for ((u, ce) <- invalidLifts) {
+          ce.component.removeEmbedding(ce)
+        }
+      }
 
       // -- Core Seq[Site] API --
       @inline def apply(idx: Int): Site = sites(idx)
       @inline def iterator: Iterator[Site] = sites.iterator
       @inline def length: Int = sites.length
+
+      // -- Extra Seq[Site] API --
+      @inline override def foreach[U](f: Site => U): Unit =
+        sites.foreach(f)
+
+      // -- Equals API --
+      /** TODO: Is this method redundant? */
+      override def canEqual(that: Any) = that.isInstanceOf[Agent]
+
+      // -- Any API --
+      /**
+       * Tests whether the argument (`that`) is a reference to the
+       * receiver object (`this`).
+       *
+       * NOTE: There are multiple reasons fro overriding the `equals`
+       * method in this class:
+       *
+       *  1) Since this class is also a sequence of [[Site]]s (it
+       *     extends `Seq[Site]`), it inherits its `equals`
+       *     implementation from [[scala.collection.GenSeqLike]].
+       *     This method eventually ends up calling [[Site.equals]]
+       *     (via [[scala.collection.IterableLike.sameElements]]).
+       *     But because sites contain links, which in turn may
+       *     contain references to [[Agent]]s (i.e. if they are
+       *     instances of [[Linked]]), a call to the default `equals`
+       *     method may end up in a recursive loop, eventually causing
+       *     a stack overflow.
+       *
+       *  2) For efficiency.  We really consider different instances
+       *     of this class as different agents.  If you want to test
+       *     for structural equality, use [[Agent.isEquivTo]] instead.
+       *
+       * @return `true` if the argument is a reference to the receiver
+       *         agent; `false` otherwise.
+       */
+      override def equals(that: Any): Boolean =
+        that.isInstanceOf[Agent] && (this eq that.asInstanceOf[Agent])
+
+      /**
+       * Calculate a hash code value for the agent.
+       *
+       * NOTE: The reasons for overriding the `hashCode` method in
+       * this class are the same as those mentioned in
+       * [[Agent.equals]].
+       *
+       * TODO: Is it OK to rely on
+       * [[java.lang.System.identityHashCode]]?  A possible
+       * alternative would be, to use a counter in the companion
+       * object to provide unique (up to counter wrap-around) hash
+       * codes when creating an instance of this class.
+       *
+       * @return the hash code value for this agent.
+       */
+      override def hashCode(): Int =
+        java.lang.System.identityHashCode(this)
+
+      override def toString() = state + sites.mkString("(", ",", ")")
     }
 
 
@@ -499,22 +697,26 @@ trait Mixtures {
     // since Scala can't apply 2 implicit conversions in a row (modulo some
     // weird trickery). I'd prefer to create mixtures from strings, as we do
     // with patterns
+
     /** Converts a pattern into a mixture. */
     def apply(pattern: Pattern): Mixture = {
       val m = new Mixture
       for (c <- pattern.components) {
 
+        if (!c.isComplete) throw new IllegalArgumentException(
+          "attempt to create mixture from incomplete pattern: " + pattern)
+
         // Allocate "empty" copies of agents in this component
         val as = new Array[Agent](c.agents.size)
         for (u <- c.agents) {
-          val v = new Agent(u.state, new Array[Site](u.sites.size))
+          val v = Agent(u.state, new Array[Site](u.sites.size))
           m += v
           as(u.index) = v
         }
 
         // Setup the interfaces of the agents in the component
         for (u <- c.agents) {
-          var j = 0
+          var i = 0
           for (s <- u.sites) {
             val l = s.link match {
               case Pattern.Linked(s, l) => Linked(as(s.agent.index), s.index, l)
@@ -522,7 +724,8 @@ trait Mixtures {
               case _ => throw new IllegalArgumentException(
                 "attempt to create mixture with an undefined or wildcard link")
             }
-            as(u.index).sites(j) = new Site(s.state, l)
+            as(u.index).sites(i) = Site(s.state, l)
+            i += 1
           }
         }
       }
@@ -532,4 +735,7 @@ trait Mixtures {
     /** Converts a pattern into a mixture. */
     implicit def patternToMixture(pattern: Pattern) = apply(pattern)
   }
+
+  /** Default Mixture of the enclosing model. */
+  val mix = Mixture()
 }

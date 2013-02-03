@@ -47,7 +47,7 @@ trait Parser extends JavaTokenParsers {
 
     // site : site_name | site : site_state | site ! bond_label
     lazy val site : Parser[Site] = siteName ~ opt(":" ~> siteState) ~ opt(link) ^^ {
-      case name ~ state ~ link => Site(name, state, link getOrElse Undefined) }
+      case name ~ state ~ link => Site(name, state, link getOrElse Stub) }
 
     lazy val link : Parser[Link] = "!" ~> (bondLabel ^^ (Linked(_)) |
                                            "_" ^^ (_ => Wildcard))  |
