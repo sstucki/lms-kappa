@@ -3,6 +3,7 @@ package kappa
 import scala.language.implicitConversions
 import scala.util.Random
 
+/** A class representing generic models. */
 trait Model extends Patterns with Mixtures with Actions with Rules
     with Perturbations with Parser with Symbols with Embeddings
     with PartialEmbeddings {
@@ -172,15 +173,4 @@ trait Model extends Patterns with Mixtures with Actions with Rules
 
   //   // TODO define every for "every 10 seconds set/add/del ..." or "every 10 events ..."
   // }
-}
-
-class KappaModel(val contactGraph: String) extends Model with KappaContext
-with KappaParser with KappaSymbols {
-  /*
-  initSymbols(parseContactGraph(contactGraph) match {
-    case Success(cg, _) => cg
-    case msg => throw new IllegalArgumentException(
-      "given contact graph is invalid: " + msg)
-  })
-  */
 }

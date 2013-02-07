@@ -1,6 +1,9 @@
 package kappa
 
+import scala.language.postfixOps
+
 import org.scalatest.FlatSpec
+
 
 class KaSimAbcTest extends KappaModel("") with FlatSpec {
 
@@ -26,8 +29,6 @@ class KaSimAbcTest extends KappaModel("") with FlatSpec {
                                   ("x2" -> 3)
   siteStateNames     = siteStateNames    :+ "."       :+ "u"       :+ "p"
   siteStateNameSyms  = siteStateNameSyms + ("." -> 0) + ("u" -> 1) + ("p" -> 2)
-  linkStateNames     = linkStateNames    :+ "."
-  linkStateNameSyms  = linkStateNameSyms + ("." -> 0)
 
   val a  = new AgentState(0)
   val b  = new AgentState(1)
@@ -42,7 +43,7 @@ class KaSimAbcTest extends KappaModel("") with FlatSpec {
   val sx2  = new SiteState(3, None)
   val sx2u  = new SiteState(3, Some(1))
   val sx2p  = new SiteState(3, Some(2))
-  val l  = new LinkState(Some(0))
+  val l = KappaSiteBuilder.defaultLinkState // FIXME: Hack!
 
 
   // #### Variables
@@ -62,52 +63,39 @@ class KaSimAbcTest extends KappaModel("") with FlatSpec {
   // #### Rules
 
   // 'a.b' A(x),B(x) <-> A(x!1),B(x!1) @ 'on_rate','off_rate' #A binds B
-  val r0f = (Pattern() :+ (a, Site(sx, true), Site(sc)) :+
-    (b, Site(sx, true))) -> (
-    (Pattern() :+ (a, Site(sx), Site(sc)) :+ (b, Site(sx))) connect
-      (1, 0, l, 0, 0, l)) :@ on_rate
+  val r0f = a(sx, sc?) ~ b(sx) -> a(sx!1, sc?) ~ b(sx!1) :@ on_rate
 
-  // #'a..b' A(x!1),B(x!1) -> A(x),B(x) @ 'off_rate' #AB dissociation
-  val r0r = ((Pattern() :+ (a, Site(sx), Site(sc)) :+ (b, Site(sx)))
-    connect (1, 0, l, 0, 0, l)) -> (
-    Pattern() :+ (a, Site(sx, true), Site(sc)) :+
-      (b, Site(sx, true))) :@ off_rate
+  // #'a..b' A(x!1),B(x!1) -> A(x),B(x) @ 'off_rate' # AB dissociation
+  val r0r = a(sx!1, sc?) ~ b(sx!1) -> a(sx, sc?) ~ b(sx) :@ off_rate
 
-  // 'ab.c' A(x!_,c),C(x1~u) ->A(x!_,c!2),C(x1~u!2) @ 'on_rate' #AB binds C
-  val r1 = (Pattern() :+ (a, Site(sx, Wildcard(None, None, None)),
-    Site(sc, true)) :+ (c, Site(sx1u, true), Site(sx2))) -> (
-    (Pattern() :+ (a, Site(sx, Wildcard(None, None, None)), Site(sc)) :+
-      (c, Site(sx1u), Site(sx2))) connect (0, 1, l, 1, 0, l)) :@ on_rate
+  // 'ab.c' A(x!_,c),C(x1~u) ->A(x!_,c!2),C(x1~u!2) @ 'on_rate' # AB binds C
+  val r1 =
+    a(sx!*, sc) ~ c(sx1u, sx2?) -> a(sx!*, sc!2) ~ c(sx1u!2, sx2?) :@ on_rate
 
-  // 'mod x1' C(x1~u!1),A(c!1) ->C(x1~p),A(c) @ 'mod_rate' #AB modifies x1
-  val r2 = ((Pattern() :+ (c, Site(sx1u), Site(sx2))) :+
-    (a, Site(sx), Site(sc)) connect (0, 0, l, 1, 1, l)) -> (
-    Pattern() :+ (c, Site(sx1p, true), Site(sx2)) :+
-      (a, Site(sx), Site(sc, true))) :@ mod_rate
+  // 'mod x1' C(x1~u!1),A(c!1) ->C(x1~p),A(c) @ 'mod_rate' # AB modifies x1
+  val r2 =
+    c(sx1u!1, sx2?) ~ a(sx?, sc!1) -> c(sx1p, sx2?) ~ a(sx?, sc) :@ mod_rate
 
-  // 'a.c' A(x,c),C(x1~p,x2~u) -> A(x,c!1),C(x1~p,x2~u!1) @ 'on_rate' #A binds C on x2
-  val r3 = (Pattern() :+ (a, Site(sx, true), Site(sc, true)) :+
-    (c, Site(sx1p, true), Site(sx2u, true))) -> (
-    (Pattern() :+ (a, Site(sx, true), Site(sc)) :+
-      (c, Site(sx1p, true), Site(sx2u))) connect (0, 1, l, 1, 1, l)) :@ on_rate
+  // 'a.c' A(x,c),C(x1~p,x2~u) -> A(x,c!1),C(x1~p,x2~u!1) @ 'on_rate'
+  // # A binds C on x2
+  val r3 =
+    a(sx, sc) ~ c(sx1p, sx2u) -> a(sx, sc!1) ~ c(sx1p, sx2u!1) :@ on_rate
 
-  // 'mod x2' A(x,c!1),C(x1~p,x2~u!1) -> A(x,c),C(x1~p,x2~p) @ 'mod_rate' #A modifies x2
-  val r4 = ((Pattern() :+ (a, Site(sx, true), Site(sc)) :+
-    (c, Site(sx1p, true), Site(sx2u))) connect (0, 1, l, 1, 1, l)) -> (
-    Pattern() :+ (a, Site(sx, true), Site(sc, true)) :+
-      (c, Site(sx1p, true), Site(sx2p, true))) :@ mod_rate
+  // 'mod x2' A(x,c!1),C(x1~p,x2~u!1) -> A(x,c),C(x1~p,x2~p) @ 'mod_rate'
+  // # A modifies x2
+  val r4 =
+    a(sx, sc!1) ~ c(sx1p, sx2u!1) -> a(sx, sc) ~ c(sx1p, sx2p) :@ mod_rate
 
 
   // #### Variables (cont)
   // %obs: 'AB' A(x!x.B)
-  withObs(Pattern() :+ (a, Site(sx, Wildcard(Some(b), Some(sx), None)),
-    Site(sc)), "AB")
+  withObs(a(sx!Wildcard(Some(b), Some(sx), None), sc?), "AB")
   // %obs: 'Cuu' C(x1~u?,x2~u?)
-  withObs(Pattern() :+ (c, Site(sx1u), Site(sx2u)), "Cuu")
+  withObs(c(sx1u?, sx2u?), "Cuu")
   // %obs: 'Cpu' C(x1~p?,x2~u?)
-  withObs(Pattern() :+ (c, Site(sx1p), Site(sx2u)), "Cpu")
+  withObs(c(sx1p?, sx2u?), "Cpu")
   // %obs: 'Cpp' C(x1~p?,x2~p?)
-  withObs(Pattern() :+ (c, Site(sx1p), Site(sx2p)), "Cpp")
+  withObs(c(sx1p?, sx2p?), "Cpp")
 
   // %var: 'n_a' 1000
   val n_a = 100

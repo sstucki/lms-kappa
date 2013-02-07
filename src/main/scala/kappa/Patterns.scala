@@ -106,12 +106,6 @@ trait Patterns {
       if (!siteGraphString.isEmpty) siteGraphString
       else iterator.mkString("", ",", "")
 
-    /**
-     * Construct and action with `this` and `that` as LHS and RHS,
-     * respectively.
-     */
-    def -> (that: Pattern) = Action(this, that)
-
 
     // -- Core Seq[Agent] API --
     @inline def apply(idx: Int): Agent = agents(idx)

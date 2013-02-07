@@ -18,7 +18,7 @@ trait PartialEmbeddings {
    * FIXME:
    *
    *  1. Partial embeddings are spans.  As such they should have a
-   *     "top" object, i.e. the [[Patterns#Pattern.Component]] that
+   *     context object, i.e. the [[Patterns#Pattern.Component]] that
    *     conconstitutes the domain of left and right legs (`leftInj`
    *     and `rightInj`).
    *
@@ -48,6 +48,7 @@ trait PartialEmbeddings {
      * @return the inverse of this [[PartialEmbedding]].
      */
     def inverse = new PartialEmbedding(rightInj, leftInj)
+
 
     // -- Core Seq[(Target, Target)] API --
 

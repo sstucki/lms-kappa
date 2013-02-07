@@ -6,23 +6,91 @@ trait Actions {
   this: LanguageContext with Patterns with Mixtures with Embeddings
       with PartialEmbeddings with Rules =>
 
-  // Actions
+  /**
+   * A class representing actions.
+   *
+   * TODO: Should we replace the pre/post condition functions by
+   * abstract methods of this class?  If yes, how should "undefined"
+   * pre/post conditions be handled?  Simply defining them to return
+   * the constant `true` does not easily allow us to check whether we
+   * need to checkpoint the mixture before applying the action.
+   * Always checkpointing the mixture would lead to performance
+   * degradations in cases where the preconditions always hold.
+   *
+   * @param lhs the left-hand side of the action.
+   * @param rhs the right-hand side of the action.
+   * @param pe the partial embedding of this action.
+   * @param rhsAgentOffsets a map containing the offsets in the
+   *        agents array of the agents in the RHS.
+   * @param preCondition an optional predicate to execute ''before''
+   *        applying the action.  If `preCondition` is `Some(f)` and
+   *        if `f` applied to the agents array returns `false`, the
+   *        action will not be applied and the mixture remains
+   *        untouched.
+   * @param postCondition a predicate to execute ''after'' applying
+   *        the action.  If `postCondition` is `Some(f)` and `f`
+   *        applied to the agents array returns `false` the action
+   *        application will be canceled and the state of the mixture
+   *        prior to the action application will be restored.
+   */
   final class Action(
-    val lhs: Pattern, val rhs: Pattern, val atoms: Seq[Action.Atom],
-    val additions: Int,
-    // val lhsAgentsModified: Array[Map[AgentIndex, AgentIndex]],
-    // val rhsAgentsModified: Array[Map[AgentIndex, AgentIndex]],
+    val lhs: Pattern, val rhs: Pattern,
     val pe: PartialEmbedding,
-    val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex])
+    val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
+    val preCondition: Option[Action.Agents => Boolean] = None,
+    val postCondition: Option[Action.Agents => Boolean] = None)
       extends Function2[Embedding, Mixture, Boolean] {
 
     import Action._
 
     type ActivationEntry = Iterable[Iterable[(Pattern.Agent, AgentIndex)]]
 
+    /** The atomic actions making up this action. */
+    val atoms: Seq[Action.Atom] = mkAtoms(lhs, rhs, pe, rhsAgentOffsets)
+
     /** Activation map. */
     val activationMap =
       mutable.HashMap[ComponentIndex, ActivationEntry]()
+
+
+    // -- Rule construction operators --
+
+    // FIXME: Add documentation! see also
+    // https://github.com/jkrivine/KaSim/issues/9
+    def :@ (rate: => Double) = new Rule(this, () => lhs.count * rate)
+    def !@ (law: => Double) = new Rule(this, () => law)
+
+    /**
+     * Extend the activation map with an entry for a given component.
+     *
+     * Given a connected component `component`, check whether this
+     * rule activates that component and if yes, add the appropriate
+     * activation entry to the activation map.
+     *
+     * @param component the [[Patterns#Pattern.Component]] to check.
+     */
+    def addActivation(component: Pattern.Component) {
+      val idx = component.modelIndex
+      if (!(activationMap isDefinedAt idx)) {
+        val activations = findActivation(component)
+        if (!activations.isEmpty) {
+          activationMap += ((idx, activations))
+
+          if (!activations.isEmpty && !activations.head.isEmpty) {
+            println ("# Added activation entry for action " + lhs + " -> " +
+              rhs + " on component # " + idx + " (CC " +
+              component.index + " of pattern " + component.pattern + ")")
+            for ((ae, i) <- activations.zipWithIndex; (u, ai) <- ae) {
+              println ("#    RHS component " + i + ": " + ai +
+                " --(+)--> " + u)
+            }
+          }
+        }
+      }
+    }
+
+
+    // -- Function2[Embedding, Mixture, Boolean] API --
 
     /**
      * Apply this action to a mixture along a given embedding.
@@ -35,18 +103,83 @@ trait Actions {
      */
     def apply(embedding: Embedding, mixture: Mixture = mix): Boolean = {
 
-      // Copy the agents array, check consistency of the embedding and
-      // detect clashes
+      // Check consistency and populate the agents array.
+      val additions = rhs.length - pe.length
+      val totalAgents = (embedding map (_.length)).sum + additions
+      val agents = new Array[Mixture.Agent](totalAgents)
+      val (clash, garbage) = checkConsistency(embedding, agents)
+      if (garbage > 0) {
+        //println(
+        throw new IllegalStateException(
+          "# found and collected " + garbage +
+          " garbage component embeddings.")
+        //false
+      } else if (clash) {
+        println("# clash!")
+        false
+      } else if (!(preCondition map { f => f(agents) } getOrElse true)) {
+        println("# precondition = false.")
+        false
+      } else {
+
+        // FIXME: Checkpoint mixture
+
+        // Clear the marked agents list of mix
+        mix.clearMarkedAgents
+
+        // Apply all atomic actions
+        for (a <- atoms) a(agents, mixture)
+
+        // The list of currently marked agents contains exactly those
+        // agents that have been modified by the action.  Make a copy
+        // for the negative/positive updates.
+        val mas = mix.markedAgents
+
+        // Check post-conditions
+        if (postCondition map { f => f(agents) } getOrElse true) {
+          // Perform negative/positive updates.
+          performUpdates(agents, mas)
+          true
+        } else {
+          // FIXME: Roll back to previous state of mixture.
+          false
+        }
+      }
+    }
+
+
+    // -- Any API --
+    override def toString: String = atoms.toString
+
+
+    // -- Protected/private methods --
+
+    /**
+     * Check the consistency of an embedding and fill the agents array.
+     *
+     * The method checks the consistency of an embedding, i.e. whether
+     * it is injective and whether every agent in the domain matches
+     * its image.  As a side effect, it populates the `agents` array
+     * with agents from the codomain of the embeddings.
+     *
+     * @param embedding the embedding to check.
+     * @param agents the agents array to fill.
+     * @return a `(clash, garbage)` pair, where `clash` is `true` if
+     *         the embedding is not injective and `garbage` is the
+     *         number of component embeddings that contained agents in
+     *         their domain that did not match their images.
+     */
+    protected[Action] def checkConsistency(
+      embedding: Embedding, agents: Agents): (Boolean, Int) = {
+
       mix.clearMarkedAgents
       var clash: Boolean = false
       var garbage: Int = 0
       var i: Int = 0
-      val totalAgents = (embedding map (_.length)).sum + additions
-      val agents = new Array[Mixture.Agent](totalAgents)
       for (ce <- embedding) {
 
         // Check embedding consistency
-        val consistent = (0 until ce.length) forall { k =>
+        val consistent = ce.indices forall { k =>
 
           // Add agent
           val v = ce(k)
@@ -61,92 +194,92 @@ trait Actions {
 
           // Check agent consistency
           val u = ce.component(k)
-          (u matches v) && ((0 until u.length) forall {
-            j => (u.neighbour(j), v.neighbour(j)) match {
-              case (None, _) => true
-              case (Some((w1, _)), Some((w2, _))) => ce(w1.index) == w2
-              case _ => false
-            }
-          })
+            (u matches v) && ((0 until u.length) forall {
+              j => (u.neighbour(j), v.neighbour(j)) match {
+                case (None, _) => true
+                case (Some((w1, _)), Some((w2, _))) => ce(w1.index) == w2
+                case _ => false
+              }
+            })
         }
         if (!consistent) {
           ce.component.removeEmbedding(ce)
           garbage += 1
         }
       }
-
-      if (garbage > 0) {
-        //println(
-        throw new IllegalStateException(
-          "# found and collected " + garbage +
-          " garbage component embeddings.")
-        //false
-      } else if (clash) {
-        println("# clash!")
-        false
-      } else {
-
-        // Clear the marked agents list of mix
-        mix.clearMarkedAgents
-
-        // Apply all atomic actions
-        for (a <- atoms) a(agents, mixture)
-
-        // -- Negative update --
-        //
-        // NOTE: We need to eagerly garbage collect embeddings of
-        // observables (otherwise their overestimated count will be
-        // plotted).
-        //
-        // FIXME: However, we should be able to do the negative update
-        // for LHS embeddings lazily.  But somehow the lazy garbage
-        // collection does not work as it should, so we perform
-        // negative updates for all modified agents for now.  To be
-        // investigated.
-        val mas = mix.markedAgents
-        for (v <- mas) v.pruneLifts
-
-        // -- Positive update --
-        //var updates = 0
-        for ((ci, ae) <- activationMap; ps <- ae) {
-          val c = patternComponents(ci)
-          val ps2 = ps map { case (u, v) => (u, agents(v)) }
-          val ces = ComponentEmbedding(ps2)
-          for (ce <- ces) {
-            c.addEmbedding(ce)
-            for (u <- ce) mix.unmark(u)
-            //updates += 1
-          }
-        }
-
-        // All the agents in the codomains of the embeddings we just
-        // created using the activation map are now unmarked.  Hence,
-        // the only agents left marked are those that were modified by
-        // side effects.  We now need to check them against all
-        // remaining registered components to make sure we have found
-        // every embedding.
-        //
-        // TODO: Is there a more efficient way to handle side effects?
-        //var sideEffects = 0
-        val mas2 = mix.markedAgents
-        for (c <- patternComponents) {
-          val ps = for (u <- c; v <- mas2) yield (u, v)
-          val ces = ComponentEmbedding(ps)
-          for (ce <- ces) {
-            c.addEmbedding(ce)
-            //sideEffects += 1
-          }
-        }
-        //println("# updates: " + updates + ", side effects: " + sideEffects)
-
-        true
-      }
+      (clash, garbage)
     }
 
-    // see https:/ / github.com/jkrivine/KaSim/issues/9
-    def :@ (rate: => Double) = new Rule(this, () => lhs.count * rate)
-    def !@ (law: => Double) = new Rule(this, () => law)
+    /**
+     * Perform the negative and positive updates after applying an
+     * action.
+     *
+     * @param agents the array of agents array operated on by the
+     *        action.
+     * @param modifiedAgents the agents that have actually been
+     *        modified by the action.
+     */
+    protected def performUpdates(agents: Agents,
+      modifiedAgents: Iterable[Mixture.Agent]): Unit = {
 
+      // -- Negative update --
+      //
+      // NOTE: We need to eagerly garbage collect embeddings of
+      // observables (otherwise their overestimated count will be
+      // plotted).
+      //
+      // FIXME: However, we should be able to do the negative update
+      // for LHS embeddings lazily.  But somehow the lazy garbage
+      // collection does not work as it should, so we perform
+      // negative updates for all modified agents for now.  To be
+      // investigated.
+      for (v <- modifiedAgents) v.pruneLifts
+
+      // -- Positive update --
+      //var updates = 0
+      mix.clearMarkedAgents
+      for (v <- modifiedAgents) mix.mark(v)
+      for ((ci, ae) <- activationMap; ps <- ae) {
+        val c = patternComponents(ci)
+        val ps2 = ps map { case (u, v) => (u, agents(v)) }
+        val ces = ComponentEmbedding(ps2)
+        for (ce <- ces) {
+          c.addEmbedding(ce)
+          for (v <- ce) mix.unmark(v)
+          //updates += 1
+        }
+      }
+
+      // All the agents in the codomains of the embeddings we just
+      // created using the activation map are now unmarked.  Hence,
+      // the only agents left marked are those that were modified by
+      // side effects.  We now need to check them against all
+      // remaining registered components to make sure we have found
+      // every embedding.
+      //
+      // TODO: Is there a more efficient way to handle side effects?
+      //var sideEffects = 0
+      val mas2 = mix.markedAgents
+      for (c <- patternComponents) {
+        val ps = for (u <- c; v <- mas2) yield (u, v)
+        val ces = ComponentEmbedding(ps)
+        for (ce <- ces) {
+          c.addEmbedding(ce)
+          //sideEffects += 1
+        }
+      }
+      //println("# updates: " + updates + ", side effects: " + sideEffects)
+    }
+
+    /**
+     * Find an activation entry for a given component.
+     *
+     * Given a connected component `component`, check whether this
+     * rule activates that component and if yes, return an appropriate
+     * activation entry.
+     *
+     * @param component the [[Patterns#Pattern.Component]] to check.
+     */
     private def findActivation(component: Pattern.Component)
         : ActivationEntry = {
 
@@ -181,33 +314,14 @@ trait Actions {
         }
       }
     }
-
-    def addActivation(component: Pattern.Component) {
-      val idx = component.modelIndex
-      if (!(activationMap isDefinedAt idx)) {
-        val activations = findActivation(component)
-        if (!activations.isEmpty) {
-          activationMap += ((idx, activations))
-
-          if (!activations.isEmpty && !activations.head.isEmpty) {
-            println ("# Added activation entry for action " + lhs + " -> " +
-              rhs + " on component # " + idx + " (CC " +
-              component.index + " of pattern " + component.pattern + ")")
-            for ((ae, i) <- activations.zipWithIndex; (u, ai) <- ae) {
-              println ("#    RHS component " + i + ": " + ai +
-                " --(+)--> " + u)
-            }
-          }
-        }
-      }
-    }
   }
 
+  /** Companion object of the [[Actions#Action]] class. */
   object Action {
 
     type Agents = Array[Mixture.Agent]
 
-    sealed abstract class Atom {//extends Function2[Embedding, Mixture, Unit]
+    sealed abstract class Atom {
       def apply(agents: Agents, mixture: Mixture)
     }
 
@@ -278,8 +392,14 @@ trait Actions {
     /**
      * Construct an action from a LHS and RHS pattern using the
      * longest-common-prefix rule.
+     *
+     * @param lhs the left-hand side of this action.
+     * @param rhs the right-hand side of this action.
+     * @param pe the partial embedding of this action.
      */
-    def apply(lhs: Pattern, rhs: Pattern): Action = {
+    def mkAtoms(lhs: Pattern, rhs: Pattern, pe: PartialEmbedding,
+      rhsAgentOffsets: Map[Pattern.Agent, AgentIndex])
+        : Seq[Action.Atom] = {
 
       import Pattern._
 
@@ -303,34 +423,8 @@ trait Actions {
       val ceOffsets: Vector[Int] =
         lhs.components.scanLeft(0) { (i, ce) => i + ce.length }
 
-      // Find the longest common prefix, i.e. longest prefix in the
-      // sequences of agents making up the LHS and RHS, for which the
-      // number of sites and the agent states match up.
-      val zipped = (lhs zip rhs)
-      val firstDiffIndex = zipped indexWhere {
-        case (la, ra) =>
-          !((la.length == ra.length) &&
-            (la.state matchesInLongestCommonPrefix ra.state))
-      }
-      val commonPrefixLength =
-        if (firstDiffIndex > 0) firstDiffIndex else zipped.length
-
-      // Construct the partial embedding corresponding to this action
-      val pe = PartialEmbedding(
-        lhs take commonPrefixLength, rhs take commonPrefixLength)
-
       @inline def lhsAgentOffset(a: Agent) =
         ceOffsets(a.component.index) + a.index
-
-      // Compute the RHS agent offsets
-      val rhsPrefixAgentOffsets =
-        for (i <- 0 until commonPrefixLength)
-        yield (rhs(i), lhsAgentOffset(lhs(i)))
-      val rhsSuffixAgentOffsets =
-        for (i <- commonPrefixLength until rhs.length)
-        yield (rhs(i), lhs.length + i - commonPrefixLength)
-      val rhsAgentOffsets =
-        (rhsPrefixAgentOffsets ++ rhsSuffixAgentOffsets).toMap
 
       @inline def rhsAgentOffset(a: Agent) =
         rhsAgentOffsets(a)
@@ -356,74 +450,42 @@ trait Actions {
 
       val atoms = new mutable.ArrayBuffer[Atom]()
 
-      // @inline def addedAgentOffset(i: AgentIndex) =
-      //   lhs.length + i - commonPrefixLength
-
-      // val lhsAgentsModified = (
-      //   for (_ <- 0 until lhs.components.length)
-      //   yield Map[AgentIndex, AgentIndex]()).toArray
-      // val rhsAgentsModified = (
-      //   for (_ <- 0 until rhs.components.length)
-      //   yield Map[AgentIndex, AgentIndex]()).toArray
-
-      // @inline def addLhsMod(la: Agent) =
-      //   lhsAgentsModified(la.component.index) += ((la.index, agentOffset(la)))
-
-      // @inline def addRhsMod(ri: AgentIndex) = {
-      //   val ra = rhs(ri)
-      //   rhsAgentsModified(ra.component.index) += (
-      //     (ra.index, addedAgentOffset(ri)))
-      // }
-
-      // @inline def addLhsRhsMod(la: Agent, ra: Agent) = {
-      //   val offs = agentOffset(la)
-      //   lhsAgentsModified(la.component.index) += ((la.index, offs))
-      //   rhsAgentsModified(ra.component.index) += ((ra.index, offs))
-      // }
-
       // Find all agent deletions
-      for (la <- lhs drop commonPrefixLength) {
-        atoms += AgentDeletion(lhsAgentOffset(la))
+      for (lu <- lhs drop pe.length) {
+        atoms += AgentDeletion(lhsAgentOffset(lu))
       }
 
       // Find all agent additions
-      val additions = rhs.size - commonPrefixLength
-      for (i <- commonPrefixLength until rhs.size) {
-        val ra = rhs(i)
-        if (ra.isComplete) atoms += AgentAddition(
-          lhs.length + i - commonPrefixLength, ra.state,
-          (for (s <- ra.sites) yield s.state))
+      val rhsAdditions = rhsAgentOffsets filter {
+        case (ru, ro) => ro >= pe.length
+      }
+      for ((ru, ro) <- rhsAdditions) {
+        if (ru.isComplete) atoms += AgentAddition(
+          ro, ru.state, (for (s <- ru.sites) yield s.state))
         else throw new IllegalArgumentException(
-          "attempt to add incomplete agent " + ra + " in rule: " +
+          "attempt to add incomplete agent " + ru + " in rule: " +
             lhs + " -> " + rhs)
       }
 
-      val longestCommonPrefix = zipped take commonPrefixLength
-
-      // Find all agent state changes (in the longest common prefix)
+      // Find all agent state changes (in the common context)
       for {
-        (lu, ru) <- longestCommonPrefix
+        (lu, ru) <- pe
         s <- findStateChange(lu.state, ru.state)
       } {
         atoms += AgentStateChange(lhsAgentOffset(lu), s)
       }
 
-      // Find all site state changes (in the longest common prefix)
+      // Find all site state changes (in the common context)
       for {
-        (lu, ru) <- longestCommonPrefix
-        i <- 0 until lu.length
-        s <- findStateChange(lu.sites(i).state, ru.sites(i).state)
+        (lu, ru) <- pe
+        j <- lu.indices
+        s <- findStateChange(lu.sites(j).state, ru.sites(j).state)
       } {
-        atoms += SiteStateChange(lhsAgentOffset(lu), i, s)
+        atoms += SiteStateChange(lhsAgentOffset(lu), j, s)
       }
 
-      // Find all the link changes in the longest common prefix
-      for {
-        i <- 0 until commonPrefixLength
-        j <- 0 until lhs(i).length
-      } {
-        val lu = lhs(i)
-        val ru = rhs(i)
+      // Find all the link changes (in the common context)
+      for ((lu, ru) <- pe; j <- lu.indices) {
         val ls = lu(j)
         val rs = ru(j)
         (ls.link, rs.link) match {
@@ -466,10 +528,9 @@ trait Actions {
 
       // Find all remaining link additions (between newly added agents)
       for {
-        i <- commonPrefixLength until rhs.length
-        j <- 0 until rhs(i).length
+        (ru, ro) <- rhsAdditions
+        j <- ru.indices
       } {
-        val ru = rhs(i)
         val rs = ru(j)
         rs.link match {
           case Undefined =>
@@ -487,8 +548,7 @@ trait Actions {
         }
       }
 
-      // Construct action
-      new Action(lhs, rhs, atoms.toList, additions, pe, rhsAgentOffsets)
+      atoms.toList
     }
   }
 }
