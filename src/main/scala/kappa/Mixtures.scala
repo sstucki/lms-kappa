@@ -35,7 +35,7 @@ trait Mixtures {
    * "collection" in the mixture (e.g. the order in which agents are
    * stored) is largely irrelevant for efficient extension.
    *
-   * To apply actions efficiently, it is important that we be able to
+   * To apply actions efficiently, it is important that we are able to
    * quickly ''add and delete'' agents to mixtures.  Deleting agents
    * in e.g. an Array or a Vector is a no-go as this takes O(n) time.
    * Instead, we need a data structure where these operations are
@@ -47,7 +47,7 @@ trait Mixtures {
    *
    * The [[scala.collection.mutable.HashSet]] class from the Scala
    * collections library would be a good choice for convenience:
-   * accessing/adding/deleting an element is O(n log n).  But compared
+   * accessing/adding/deleting an element is O(log n).  But compared
    * to a simple doubly-linked list, hash sets are still rather slow,
    * and the fact that we have to make sure we don't accidentally add
    * "duplicate" agents, etc. just increase complexity unnecessarily.

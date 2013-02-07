@@ -164,9 +164,5 @@ trait Model extends Patterns
 class KappaModel(val contactGraph: String) extends Model
   with KappaContext with KappaParser with KappaSymbols
 {
-  initSymbols(parseContactGraph(contactGraph) match {
-    case Success(cg, _) => cg
-    case msg => throw new IllegalArgumentException(
-      "given contact graph is invalid: " + msg)
-  })
+  initSymbols(parseContactGraph(contactGraph))
 }

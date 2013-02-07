@@ -83,8 +83,15 @@ trait Parser extends JavaTokenParsers {
     lazy val cg : Parser[ContactGraph] = repsep(cgAgent | cgLinkAnnot, ",")
   }
 
-  def parseSiteGraph(s: String) = parseAll(AST.expr, s)
-  def parseContactGraph(s: String) = parseAll(AST.cg, s)
+  def simpleParse[T](p: Parser[T], s: String, name: String) = parseAll(p, s) match {
+    case Success(ast, _) => ast
+    case msg => println(msg); println();
+                throw new IllegalArgumentException(
+                  "given " + name + " is invalid: " + s)
+  }
+
+  def parseSiteGraph(s: String) = simpleParse(AST.expr, s, "site graph")
+  def parseContactGraph(s: String) = simpleParse(AST.cg, s, "contact graph")
 }
 
 trait KappaParser extends Parser {

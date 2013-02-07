@@ -15,52 +15,22 @@ trait AgentStateIntf[T] extends Matchable[T] {
 
 
 trait LanguageContext {
-  // RHZ: Does it make any sense to have an extension of
-  // Kappa that doesn't have agent types or site names?
-  // I understand that putting everything together in a
-  // "state" makes pattern matching simpler, but that
-  // doesn't mean we will use a different syntax than
-  // agentType[:agentState](siteName1[:siteState1][link])
-  // right?
-  // If we are using that syntax I think we should keep
-  // the distinction between agent types and agent states
-  // at the abstract level.
-  // Even more, I think we should say that states are
-  // always optional (here I'm talking about the raw states,
-  // not the composite ones that include the agent type or
-  // site name).
-  // In the end do we want to write any extension for
-  // which the states aren't optional?
   type AgentType
   type SiteName
-
-  type AgentTypeSym
-  // FIXME this shouldn't be fixed here but maybe we shouldn't
-  // index sites in an agent by their site name either
-  // Or maybe we should have a function SiteNameSym => SiteIndex
-  type SiteNameSym = Int
 
   // State types
   type AgentStateName
   type SiteStateName
   type LinkStateName
 
-  type AgentStateNameSym
-  type SiteStateNameSym
-  type LinkStateNameSym
-
   // Composite state types
   type AgentState <: AgentStateIntf[AgentState]
   type SiteState <: Matchable[SiteState]
   type LinkState <: Matchable[LinkState]
 
-  // RHZ: We need functions to create these states.
-  // Another option would be to do the evaluation of the AST
-  // in the derived classes, but that doesn't make so much
-  // sense since most of that code is state-agnostic
-  def mkAgentState(agentType: AgentTypeSym, state: Option[AgentStateNameSym]): AgentState
-  def mkSiteState(agentType: AgentTypeSym, siteName: SiteNameSym, state: Option[SiteStateNameSym]): SiteState
-  def mkLinkState(state: Option[LinkStateNameSym]): LinkState
+  def mkAgentState(agentType: AgentType, state: Option[AgentStateName]): AgentState
+  def mkSiteState(agentType: AgentType, siteName: SiteName, state: Option[SiteStateName]): SiteState
+  def mkLinkState(state: Option[LinkStateName]): LinkState
 }
 
 
@@ -70,98 +40,93 @@ trait KappaContext extends LanguageContext {
   type AgentType = String
   type SiteName  = String
 
-  // TODO: Is using Ints as symbols a good choice or should we use a
-  // dedicated symbol class?
-  type AgentTypeSym = Int
-  //type SiteNameSym  = Int
-
   // State types
   type AgentStateName = Unit
   type SiteStateName  = String
   type LinkStateName  = Unit
-
-  type AgentStateNameSym = Unit
-  type SiteStateNameSym  = Int
-  type LinkStateNameSym  = Unit
 
   // Composite state types
   type AgentState = AgentStateImpl
   type SiteState  = SiteStateImpl
   type LinkState  = LinkStateImpl
 
-  def mkAgentState(agentType: AgentTypeSym, state: Option[AgentStateNameSym]) =
-    // We discard the state because Kappa doesn't have them
+  // RHZ: We discard states in agents and links because Kappa doesn't have them
+  def mkAgentState(agentType: AgentType, state: Option[AgentStateName]) =
     AgentStateImpl(agentType)
-  def mkSiteState(agentType: AgentTypeSym, siteName: SiteNameSym, state: Option[SiteStateNameSym]) =
+  def mkSiteState(agentType: AgentType, siteName: SiteName, state: Option[SiteStateName]) =
     SiteStateImpl(agentType, siteName, state)
-  def mkLinkState(state: Option[LinkStateNameSym]) = LinkStateImpl()
+  def mkLinkState(state: Option[LinkStateName]) = LinkStateImpl()
 
   // TODO: If we were to use dedicated symbol classes rather than Ints
   // to represent symbols, some of these wrappers would likely not be
   // necessary as we could use the symbols directly to represent the
   // states (in cases where the states are not tuples).
-  final case class AgentStateImpl(atype: AgentTypeSym)
+  final case class AgentStateImpl(atype: AgentType)
       extends AgentStateIntf[AgentStateImpl]
   {
+    val atypeSym: AgentTypeSym = agentTypeSyms(atype)
+
     // -- AgentStateIntf[AgentStateImpl] API --
 
     @inline def matchesInLongestCommonPrefix(that: AgentStateImpl) =
-      this.atype == that.atype
+      this.atypeSym == that.atypeSym
 
     // -- Matchable[AgentStateImpl] API --
 
-    @inline def matches(that: AgentStateImpl) = this.atype == that.atype
+    @inline def matches(that: AgentStateImpl) = this.atypeSym == that.atypeSym
 
     @inline override def isEquivTo[U <: AgentStateImpl](that: U): Boolean =
-      this.atype == that.atype
+      this.atypeSym == that.atypeSym
 
     @inline def join(that: AgentStateImpl) =
-      if (this.atype == that.atype) Some(this) else None
+      if (this.atypeSym == that.atypeSym) Some(this) else None
 
     @inline def meet(that: AgentStateImpl) =
-      if (this.atype == that.atype) Some(this) else None
+      if (this.atypeSym == that.atypeSym) Some(this) else None
 
     @inline def isComplete = true
 
     // -- Any API --
-    @inline override def toString = agentTypes(atype)
+    @inline override def toString = atype
   }
 
-  final case class SiteStateImpl(agentType: AgentTypeSym,
-                                 name: SiteNameSym,
-                                 state: Option[SiteStateNameSym])
+  final case class SiteStateImpl(atype: AgentType,
+                                 name: SiteName,
+                                 state: Option[SiteStateName])
       extends Matchable[SiteStateImpl]
   {
+    val nameSym: SiteNameSym = siteNameSyms(atype)(name)
+    val stateSym: Option[SiteStateNameSym] = state map siteStateNameSyms(atype)(name)
+
     // -- Matchable[SiteStateImpl] API --
 
     @inline def matches(that: SiteStateImpl) =
-      (this.name == that.name) &&
-      Matchable.optionMatches(this.state, that.state)(_==_)
+      (this.nameSym == that.nameSym) &&
+      Matchable.optionMatches(this.stateSym, that.stateSym)(_==_)
 
     @inline override def isEquivTo[U <: SiteStateImpl](that: U): Boolean =
-      (this.name == that.name) && (this.state == that.state)
+      (this.nameSym == that.nameSym) && (this.stateSym == that.stateSym)
 
     @inline def join(that: SiteStateImpl) =
-      if (this.name == that.name) (this.state, that.state) match {
+      if (this.nameSym == that.nameSym) (this.stateSym, that.stateSym) match {
         case (Some(s1), Some(s2)) if s1 == s2 => Some(this)
-        case _ => Some(SiteStateImpl(agentType, this.name, None))
+        case _ => Some(SiteStateImpl(atype, name, None))
       } else None
 
     @inline def meet(that: SiteStateImpl) =
-      if (this.name == that.name) (this.state, that.state) match {
+      if (this.nameSym == that.nameSym) (this.stateSym, that.stateSym) match {
         case (None, None) => Some(this)
         case (None, Some(s2)) => Some(that)
         case (Some(s2), None) => Some(this)
         case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
       } else None
 
-    val noStateInCG = siteStateNames(agentType)(name).isEmpty
+    val noStateInCG = siteStateNameSyms(atype)(name).isEmpty
     @inline def isComplete = noStateInCG || !state.isEmpty
 
     // -- Any API --
 
-    override def toString = siteNames(agentType)(name) +
-      (state map (":" + siteStateNames(agentType)(name)(_)) getOrElse "")
+    override def toString = name + (state map (":" + _) getOrElse "")
   }
 
   case class LinkStateImpl()
