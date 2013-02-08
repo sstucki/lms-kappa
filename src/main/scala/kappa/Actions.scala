@@ -143,9 +143,19 @@ trait Actions {
       }
     }
 
-    // see https:/ / github.com/jkrivine/KaSim/issues/9
-    def :@ (rate: => Double) = new Rule(this, () => lhs.inMix * rate)
-    def !@ (law: () => Double) = new Rule(this, law)
+    /** Constructor of rules that follow mass-action kinetics.
+     *
+     * @param rate stochastic kinetic rate constant
+     */
+    def :@(rate: => Double) = new Rule(this, () => lhs.inMix * rate)
+
+    /** Constructor of rules that follow an arbitrary rate law.
+     *
+     * See https://github.com/jkrivine/KaSim/issues/9
+     *
+     * @param law kinetic law
+     */
+    def !@(law: => Double) = new Rule(this, () => law)
 
     private def findActivation(component: Pattern.Component)
         : ActivationEntry = {

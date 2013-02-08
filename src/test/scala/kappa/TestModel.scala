@@ -36,7 +36,7 @@ class TestModel extends KappaModel("A(s:{p,q}!{1,1})") with FlatSpec
   //withObs("B()", "B")
   withObs("A()", "A")
 
-  val r3 = "A(s!1), A(s!1)" -> "A(s), A(s)" !@ { () => k += 1; "A(s!1), A(s!1)".inMix * 10 }
+  val r3 = "A(s!1), A(s!1)" -> "A(s), A(s)" :@ 10
 
   // Quasi-steady-state approximation
   val vmax = 1
