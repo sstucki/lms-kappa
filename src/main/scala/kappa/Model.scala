@@ -166,3 +166,10 @@ class KappaModel(val contactGraph: String) extends Model
 {
   initSymbols(parseContactGraph(contactGraph))
 }
+
+class KaSpaceModel(val contactGraph: String) extends Model
+  with KaSpaceContext with KaSpaceParser with KaSpaceSymbols with KaSpacePatterns
+{
+  initSymbols(parseContactGraph(contactGraph))
+}
+

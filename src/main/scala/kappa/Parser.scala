@@ -106,14 +106,20 @@ trait KappaParser extends Parser {
   lazy val linkState  : Parser[LinkStateName]  = failure("link states are not accepted in Kappa")
 }
 
-/*
-trait KaSpaceParser extends Parser with KaSpaceContext {
-  lazy val decimal : Parser[Double] = decimalNumber ^^ (_.toDouble)
-  lazy val agentState : Parser[AgentState] = decimal
-  lazy val vec3 = "[" ~> decimal ~ ("," ~> decimal) ~ ("," ~> decimal) <~ "]"
-  lazy val siteState : Parser[SiteState] = vec3 ^^ { case x ~ y ~ z => Position(x, y, z) }
-  lazy val linkState : Parser[LinkState] = "[" ~> vec3 ~ ("," ~>  vec3) ~ ("," ~> vec3) <~ "]" ^^ {
-    case (x1 ~ x2 ~ x3) ~ (y1 ~ y2 ~ y3) ~ (z1 ~ z2 ~ z3) =>
-      Vector(Vector(x1, y1, z1), Vector(x2, y2, z2), Vector(x3, y3, z3)) }
+trait KaSpaceParser extends Parser {
+  this: KaSpaceContext =>
+
+  lazy val agentType : Parser[AgentType] = ident
+  lazy val siteName  : Parser[SiteName]  = ident
+
+  lazy val decimal: Parser[Double] = decimalNumber ^^ (_.toDouble)
+
+  def vector3d[T](p: Parser[T]): Parser[Vector[T]] =
+    "[" ~> p ~ ("," ~> p) ~ ("," ~> p) <~ "]" ^^ {
+      case x ~ y ~ z => Vector(x, y, z) }
+
+  lazy val agentState : Parser[AgentStateName] = decimal
+  lazy val siteState  : Parser[SiteStateName]  = vector3d(decimal)
+  lazy val linkState  : Parser[LinkStateName]  = vector3d(vector3d(decimal))
 }
-*/
+

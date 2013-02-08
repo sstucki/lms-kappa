@@ -1,6 +1,6 @@
 package kappa
 
-import language.implicitConversions
+import scala.language.implicitConversions
 import scala.language.postfixOps
 
 import scala.collection.mutable
@@ -967,12 +967,14 @@ trait Patterns {
     {
       val componentBuilder: ComponentBuilder = new ComponentBuilder()
       var agents: Vector[Agent] = Vector()
-      var pairs: Map[AST.BondLabel, List[Site]] = Map() withDefaultValue List()
+      var pairs: Map[AST.BondLabel, List[(AgentType, SiteName, Site)]] = Map() withDefaultValue List()
+      //var pairs: Map[AST.BondLabel, List[Site]] = Map() withDefaultValue List()
 
       def add(atype: AgentType, astate: Option[AgentStateName], intf: Seq[AST.Site]) {
         val sites = for (AST.Site(sname, sstate, lnk) <- intf)
                     yield {
-                      val site = Site(mkSiteState(atype, sname, sstate), lnk match {
+                      val site = Site(mkSiteState(atype, sname, sstate),
+                                      lnk match {
                         case AST.Stub       => Stub
                         case AST.Undefined  => Undefined
                         case AST.Wildcard   => Wildcard(None, None, None)
@@ -981,14 +983,16 @@ trait Patterns {
 
                       lnk match {
                         case AST.Linked(bondLabel) =>
-                          pairs += ((bondLabel, site :: pairs(bondLabel)))
+                          pairs += ((bondLabel, (atype, sname, site) :: pairs(bondLabel)))
+                        //pairs += ((bondLabel, site :: pairs(bondLabel)))
                         case _ => ()
                       }
 
                       (sname, site)
                     }
 
-        def undefinedSite(sname: SiteName) = Site(mkSiteState(atype, sname, None), Undefined)
+        def undefinedSite(sname: SiteName) =
+          Site(mkSiteState(atype, sname, None), Undefined)
 
         val interface = siteNames(atype) map (sites.toMap withDefault undefinedSite)
 
@@ -1008,11 +1012,18 @@ trait Patterns {
 
       def build: Pattern = {
         pairs foreach {
+          case (bondLabel, List((atype2, sname2, s2), (atype1, sname1, s1))) => {
+            val link = (atype1, sname1, atype2, sname2)
+            val lstate1 = mkLinkState(link, lstateMap(bondLabel))
+            val lstate2 = mkLinkState(link, lstateMap(bondLabel) map invertLinkStateName)
+            connect(s1, lstate1, s2, lstate2)
+          }
+          /*
           case (bondLabel, List(s1, s2)) => {
-            // TODO What do we do about the directed link states issue?
             val lstate = mkLinkState(lstateMap(bondLabel))
             connect(s1, lstate, s2, lstate)
           }
+          */
           case _ => throw new IllegalArgumentException(
             "every bond label must appear exactly twice")
         }
@@ -1027,7 +1038,8 @@ trait Patterns {
       // RHZ: Perhaps I should just use the agents vector in PatternBuilder?
       class ComponentBuilder(var agents: Vector[Agent] = Vector())
       {
-        var ccs: Map[ComponentIndex, Vector[Agent]] = agents.zipWithIndex map { case (a, i) => (i, Vector(a)) } toMap
+        var ccs: Map[ComponentIndex, Vector[Agent]] =
+          agents.zipWithIndex map { case (a, i) => (i, Vector(a)) } toMap
         var ccIds: Map[Agent, ComponentIndex] = agents.zipWithIndex.toMap
 
         def add(a: Agent) {
@@ -1052,7 +1064,7 @@ trait Patterns {
     }
   }
 
-  implicit def stringToPattern(s: String) : Pattern = Pattern(s)
+  implicit def stringToPattern(s: String): Pattern = Pattern(s)
 
   /**
    * The collection of pattern components to track in this model.
@@ -1065,3 +1077,21 @@ trait Patterns {
   val patternComponents = new mutable.ArrayBuffer[Pattern.Component]()
 }
 
+trait KaSpacePatterns extends Patterns {
+  this: KaSpaceContext with KaSpaceParser with Actions with Rules with KaSpaceSymbols
+      with Mixtures with ComponentEmbeddings with Embeddings =>
+
+  implicit def scToPattern(sc: StringContext): ToPattern = new ToPattern(sc)
+
+  class ToPattern(sc: StringContext) {
+    def p(args: Any*): Pattern = {
+      def getString[T](x: T): String = x match {
+        case x: Double => x.toString
+        case xs: Vector[_] => "[" + xs.map(getString).mkString(", ") + "]"
+      }
+
+      val argStrings = for (arg <- args) yield getString(arg)
+      Pattern( sc.s(argStrings :_*) )
+    }
+  }
+}
