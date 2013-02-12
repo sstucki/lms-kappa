@@ -122,7 +122,10 @@ trait Actions {
         false
       } else {
 
-        // FIXME: Checkpoint mixture
+        // If the post-condition is defined, checkpoint the mixture so
+        // we can restore its current state if the post-condition
+        // evaluates to `false`.
+        if (!postCondition.isEmpty) mix.checkpoint
 
         // Clear the marked agents list of mix
         mix.clearMarkedAgents
@@ -137,11 +140,15 @@ trait Actions {
 
         // Check post-conditions
         if (postCondition map { f => f(agents) } getOrElse true) {
-          // Perform negative/positive updates.
+          // Discard pre-application checkpoint and perform
+          // negative/positive updates.
+          mix.discardCheckpoint
           performUpdates(agents, mas)
           true
         } else {
-          // FIXME: Roll back to previous state of mixture.
+          // Roll back to the state of the mixture prior to the action
+          // application.
+          mix.rollback
           false
         }
       }
@@ -372,8 +379,7 @@ trait Actions {
 
       def apply(agents: Agents, mixture: Mixture) {
         val u = agents(a)
-        u.state = state
-        mix.mark(u)  // FIXME: Should do this in a method in Mixture.
+        mix updateAgentState (u, state)
       }
     }
 
@@ -383,8 +389,7 @@ trait Actions {
 
       def apply(agents: Agents, mixture: Mixture) {
         val u = agents(a)
-        u.sites(s).state = state
-        mix.mark(u)  // FIXME: Should do this in a method in Mixture.
+        mix updateSiteState (u, s, state)
       }
     }
 
@@ -517,7 +522,7 @@ trait Actions {
           }
           case (Linked(lu2, lj2, ll), Linked(ru2, rj2, rl)) => {
             if (!((lhsAgentOffset(lu2) == rhsAgentOffset(ru2)) &&
-              (ls == rs) && findStateChange(ll, rl).isEmpty)) {
+              (lj2 == rj2) && findStateChange(ll, rl).isEmpty)) {
               linkDeletion(atoms, lu, j, lu2)
               linkAddition(atoms, ru, j, rl, ru2, rj2)
             }
