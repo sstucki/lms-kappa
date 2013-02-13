@@ -142,7 +142,7 @@ trait Actions {
         if (postCondition map { f => f(agents) } getOrElse true) {
           // Discard pre-application checkpoint and perform
           // negative/positive updates.
-          mix.discardCheckpoint
+          if (!postCondition.isEmpty) mix.discardCheckpoint
           performUpdates(agents, mas)
           true
         } else {
