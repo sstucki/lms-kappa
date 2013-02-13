@@ -12,74 +12,76 @@ trait KappaContext extends LanguageContext {
   type LinkStateName  = Unit
 
   // Composite state types
-  type AgentState = AgentStateImpl
-  type SiteState  = SiteStateImpl
-  type LinkState  = LinkStateImpl
+  type AgentState = KappaAgentState
+  type SiteState  = KappaSiteState
+  type LinkState  = KappaLinkState
 
   // RHZ: We discard states in agents and links because Kappa doesn't have them
   def mkAgentState(agentType: AgentType, state: Option[AgentStateName]) =
-    AgentStateImpl(agentType)
+    KappaAgentState(agentType)
   def mkSiteState(agentType: AgentType, siteName: SiteName, state: Option[SiteStateName]) =
-    SiteStateImpl(agentType, siteName, state)
-  def mkLinkState(link: Link, state: Option[LinkStateName]) = LinkStateImpl()
+    KappaSiteState(agentType, siteName, state)
+  def mkLinkState(link: Link, state: Option[LinkStateName]) =
+    KappaLinkState
 
   // TODO: If we were to use dedicated symbol classes rather than Ints
   // to represent symbols, some of these wrappers would likely not be
   // necessary as we could use the symbols directly to represent the
   // states (in cases where the states are not tuples).
-  final case class AgentStateImpl(atype: AgentType)
-      extends AgentStateIntf[AgentStateImpl]
+  final case class KappaAgentState(atype: AgentType)
+      extends AgentStateIntf[KappaAgentState]
   {
     val atypeSym: AgentTypeSym = agentTypeSyms(atype)
 
-    // -- AgentStateIntf[AgentStateImpl] API --
+    // -- AgentStateIntf[KappaAgentState] API --
 
-    @inline def matchesInLongestCommonPrefix(that: AgentStateImpl) =
+    @inline def matchesInLongestCommonPrefix(that: KappaAgentState) =
       this.atypeSym == that.atypeSym
 
-    // -- Matchable[AgentStateImpl] API --
+    // -- Matchable[KappaAgentState] API --
 
-    @inline def matches(that: AgentStateImpl) = this.atypeSym == that.atypeSym
+    @inline def matches(that: KappaAgentState) = this.atypeSym == that.atypeSym
 
-    @inline override def isEquivTo[U <: AgentStateImpl](that: U): Boolean =
+    @inline override def isEquivTo[U <: KappaAgentState](that: U): Boolean =
       this.atypeSym == that.atypeSym
 
-    @inline def join(that: AgentStateImpl) =
+    @inline def join(that: KappaAgentState) =
       if (this.atypeSym == that.atypeSym) Some(this) else None
 
-    @inline def meet(that: AgentStateImpl) =
+    @inline def meet(that: KappaAgentState) =
       if (this.atypeSym == that.atypeSym) Some(this) else None
 
-    val isComplete = true
+    @inline def isComplete = true
 
     // -- Any API --
+
     @inline override def toString = atype
   }
 
-  final case class SiteStateImpl(atype: AgentType,
+  final case class KappaSiteState(atype: AgentType,
                                  name: SiteName,
                                  state: Option[SiteStateName])
-      extends Matchable[SiteStateImpl]
+      extends Matchable[KappaSiteState]
   {
     val nameSym: SiteNameSym = siteNameSyms(atype)(name)
     val stateSym: Option[SiteStateNameSym] = state map siteStateNameSyms(atype)(name)
 
-    // -- Matchable[SiteStateImpl] API --
+    // -- Matchable[KappaSiteState] API --
 
-    @inline def matches(that: SiteStateImpl) =
+    @inline def matches(that: KappaSiteState) =
       (this.nameSym == that.nameSym) &&
       Matchable.optionMatches(this.stateSym, that.stateSym)(_==_)
 
-    @inline override def isEquivTo[U <: SiteStateImpl](that: U): Boolean =
+    @inline override def isEquivTo[U <: KappaSiteState](that: U): Boolean =
       (this.nameSym == that.nameSym) && (this.stateSym == that.stateSym)
 
-    @inline def join(that: SiteStateImpl) =
+    @inline def join(that: KappaSiteState) =
       if (this.nameSym == that.nameSym) (this.stateSym, that.stateSym) match {
         case (Some(s1), Some(s2)) if s1 == s2 => Some(this)
-        case _ => Some(SiteStateImpl(atype, name, None))
+        case _ => Some(KappaSiteState(atype, name, None))
       } else None
 
-    @inline def meet(that: SiteStateImpl) =
+    @inline def meet(that: KappaSiteState) =
       if (this.nameSym == that.nameSym) (this.stateSym, that.stateSym) match {
         case (None, None) => Some(this)
         case (None, Some(s2)) => Some(that)
@@ -88,29 +90,30 @@ trait KappaContext extends LanguageContext {
       } else None
 
     val noStateInCG = siteStateNameSyms(atype)(name).isEmpty
-    val isComplete = noStateInCG || !state.isEmpty
+    @inline def isComplete = noStateInCG || !state.isEmpty
 
     // -- Any API --
 
-    override def toString = name + (state map (":" + _) getOrElse "")
+    @inline override def toString = name + (state map (":" + _) getOrElse "")
   }
 
-  case class LinkStateImpl()
-    extends Matchable[LinkStateImpl]
+  final case object KappaLinkState
+    extends Matchable[KappaLinkState]
   {
-    // -- Matchable[LinkStateImpl] API --
-    @inline def matches(that: LinkStateImpl) = true
+    // -- Matchable[KappaLinkState] API --
+    @inline def matches(that: KappaLinkState) = true
 
-    @inline override def isEquivTo[U <: LinkStateImpl](that: U): Boolean = true
+    @inline override def isEquivTo[U <: KappaLinkState](that: U): Boolean = true
 
-    @inline def join(that: LinkStateImpl) = Some(LinkStateImpl())
+    @inline def join(that: KappaLinkState) = Some(KappaLinkState())
 
-    @inline def meet(that: LinkStateImpl) = Some(LinkStateImpl())
+    @inline def meet(that: KappaLinkState) = Some(KappaLinkState())
 
-    val isComplete = true
+    @inline def isComplete = true
 
     // -- Any API --
-    override def toString = ""
+
+    @inline override def toString = ""
   }
 }
 

@@ -3,6 +3,7 @@ package kappa
 import scala.language.implicitConversions
 import scala.util.Random
 
+/** A class representing generic models. */
 trait Model extends Patterns
   with Mixtures with Actions with Rules with Perturbations
   with Parser with Symbols with Embeddings with PartialEmbeddings

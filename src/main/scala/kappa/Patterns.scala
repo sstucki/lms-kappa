@@ -74,12 +74,6 @@ trait Patterns {
       if (!siteGraphString.isEmpty) siteGraphString
       else iterator.mkString("", ",", "")
 
-    /**
-     * Construct an action with `this` and `that` as LHS and RHS,
-     * respectively.
-     */
-    def -> (that: Pattern) = Action(this, that)
-
 
     // -- Core Seq[Agent] API --
     @inline def apply(idx: Int): Agent = agents(idx)
@@ -118,6 +112,7 @@ trait Patterns {
   // possible to make Agents inner classes in Mixtures as these are
   // already built in this way.  I added a comment about this in the
   // Mixture class.
+
   /** Companion object of the [[Patterns#Pattern]] class. */
   object Pattern {
 
@@ -315,8 +310,8 @@ trait Patterns {
      */
     final case class Wildcard(
       agentState: Option[AgentState],
-      siteState: Option[SiteState],
-      linkState: Option[LinkState]) extends Link
+       siteState: Option[ SiteState],
+       linkState: Option[ LinkState]) extends Link
 
     /**
      * A class representing sites in [[Pattern.Agent]]s.
@@ -609,7 +604,7 @@ trait Patterns {
 
       override def toString() = state + sites.mkString("(", ",", ")")
 
-      // Register sites.
+      // Register sites
       for ((s, i) <- sites.zipWithIndex) {
         s._agent = this
         s._index = i
@@ -968,7 +963,6 @@ trait Patterns {
       val componentBuilder: ComponentBuilder = new ComponentBuilder()
       var agents: Vector[Agent] = Vector()
       var pairs: Map[AST.BondLabel, List[(AgentType, SiteName, Site)]] = Map() withDefaultValue List()
-      //var pairs: Map[AST.BondLabel, List[Site]] = Map() withDefaultValue List()
 
       def add(atype: AgentType, astate: Option[AgentStateName], intf: Seq[AST.Site]) {
         val sites = for (AST.Site(sname, sstate, lnk) <- intf)
@@ -984,7 +978,6 @@ trait Patterns {
                       lnk match {
                         case AST.Linked(bondLabel) =>
                           pairs += ((bondLabel, (atype, sname, site) :: pairs(bondLabel)))
-                        //pairs += ((bondLabel, site :: pairs(bondLabel)))
                         case _ => ()
                       }
 
@@ -1022,12 +1015,6 @@ trait Patterns {
             val lstate2 = mkLinkState(link2, lsn2)
             connect(s1, lstate1, s2, lstate2)
           }
-          /*
-          case (bondLabel, List(s1, s2)) => {
-            val lstate = mkLinkState(lstateMap(bondLabel))
-            connect(s1, lstate, s2, lstate)
-          }
-          */
           case _ => throw new IllegalArgumentException(
             "every bond label must appear exactly twice")
         }

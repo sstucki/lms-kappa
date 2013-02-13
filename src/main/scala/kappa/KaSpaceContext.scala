@@ -21,17 +21,13 @@ trait KaSpaceContext extends LanguageContext {
   type SiteState  = SiteStateImpl
   type LinkState  = LinkStateImpl
 
-  // RHZ: We discard states in agents and links because Kappa doesn't have them
   def mkAgentState(agentType: AgentType, state: Option[AgentStateName]) =
     AgentStateImpl(agentType, state)
   def mkSiteState(agentType: AgentType, siteName: SiteName, state: Option[SiteStateName]) =
     SiteStateImpl(agentType, siteName, state)
-  def mkLinkState(link: Link, state: Option[LinkStateName]) = LinkStateImpl(link, state)
+  def mkLinkState(link: Link, state: Option[LinkStateName]) =
+    LinkStateImpl(link, state)
 
-  // TODO: If we were to use dedicated symbol classes rather than Ints
-  // to represent symbols, some of these wrappers would likely not be
-  // necessary as we could use the symbols directly to represent the
-  // states (in cases where the states are not tuples).
   final case class AgentStateImpl(atype: AgentType, state: Option[AgentStateName])
       extends AgentStateIntf[AgentStateImpl]
   {

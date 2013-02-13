@@ -1,8 +1,10 @@
 package kappa
 
+import scala.language.postfixOps
+
 import org.scalatest.FlatSpec
 
-class KaSimAbcTest extends KappaModel("A(x!{1},c!{2,3}),B(x!{1}),C(x1:{u,p}!{2},x2:{u,p}!{3})") with FlatSpec {
+class KaSimAbcTest extends KappaModel with FlatSpec {
 
   // ####### TEMPLATE MODEL AS DESCRIBED IN THE KASIM MANUAL #############
 
@@ -11,7 +13,10 @@ class KaSimAbcTest extends KappaModel("A(x!{1},c!{2,3}),B(x!{1}),C(x1:{u,p}!{2},
   // %agent: B(x) # Declaration of B
   // %agent: C(x1~u~p,x2~u~p) # Declaration of C with 2 modifiable sites
 
-  // #### Variables
+  contactGraph = "A(x!{1},c!{2,3}),B(x!{1}),C(x1:{u,p}!{2},x2:{u,p}!{3})"
+
+
+  // #### Rates
 
   // %var: 'on_rate' 1.0E-4 # per molecule per second
   val on_rate = 1.0E-4 // per molecule per second
@@ -44,7 +49,8 @@ class KaSimAbcTest extends KappaModel("A(x!{1},c!{2,3}),B(x!{1}),C(x1:{u,p}!{2},
   val r4 = "A(x,c!1), C(x1:p,x2:u!1)" -> "A(x,c), C(x1:p,x2:p)" :@ mod_rate
 
 
-  // #### Variables (cont)
+  // #### Observables
+
   // %obs: 'AB' A(x!x.B)
   withObs("A(x!_)", "AB")
 
@@ -57,22 +63,32 @@ class KaSimAbcTest extends KappaModel("A(x!{1},c!{2,3}),B(x!{1}),C(x1:{u,p}!{2},
   // %obs: 'Cpp' C(x1~p?,x2~p?)
   withObs("C(x1:p?,x2:p?)", "Cpp")
 
+
+  // #### Variables
+
   // %var: 'n_a' 1000
   val n_a = 100
+
   // %obs: 'n_b' 'n_a'
   val n_b = n_a
+
   // %var: 'n_c' 10000
   val n_c = 10 * n_a
 
 
   // #### Initial conditions
+
   // %init: 'n_a' A()
   withInit(Mixture("A(x, c)") * n_a)
+
   // %init: 'n_b' B()
   withInit(Mixture("B(x)") * n_b)
+
   // %init: 'n_c' C()
   withInit(Mixture("C(x1:u,x2:u)") * n_c)
 
+
+  // #### Simulate!
 
   withMaxEvents(10000)
   withMaxTime(3000)

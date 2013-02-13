@@ -1,8 +1,8 @@
 package kappa
 
-import scala.collection.mutable
-
 import scala.language.implicitConversions
+
+import scala.collection.mutable
 
 trait Mixtures {
   mixtures: LanguageContext with Patterns with Embeddings =>
@@ -129,7 +129,7 @@ trait Mixtures {
       def hasNext = nextAgent != null
     }
 
-    /** The stream used to track marked agents. */
+    /** The collection used to track marked agents. */
     private var _markedAgents: List[Agent] = Nil
 
     /**
@@ -177,6 +177,131 @@ trait Mixtures {
     @inline def clearMarkedAgents {
       for (agent <- _markedAgents) agent._marked = false
       _markedAgents = Nil
+    }
+
+
+    /**
+     * A class representing a single mixture checkpoint.
+     *
+     * FIXME: Should we use [[Mixture]] for this?
+     */
+    final class Checkpoint(
+      val head: Agent, val length: Int, var agents: List[Agent])
+
+    /** The stack of mixture checkpoints. */
+    private var _checkpoints: List[Checkpoint] = Nil
+
+    /**
+     * Make a checkpoint of this mixture.
+     *
+     * After a call to this method, every update to an agent of this
+     * mixture through the any of the [[Mixture]]'s methods will cause
+     * the corresponding agent to be backed up.  The mixture may be
+     * reset to its state prior to the call to this method by calling
+     * [[Mixture.rollback]].
+     *
+     * Mixture checkpoints are stored on a stack, i.e. in FIFO order.
+     * Hence one may chose to call this method multiple times before
+     * calling [[Mixture.rollback]].  Each such call will result in a
+     * new checkpoint.
+     *
+     * NOTE: this method will not copy the agent, site and link state
+     * types (represented by [[LanguageContext#AgentState]],
+     * [[LanguageContext#SiteState]] and
+     * [[LanguageContext#LinkState]]) when creating a checkpoint.
+     * Instead, the checkpoint will just contain references to such
+     * classes.  If these classes contain mutable state, updates to
+     * that state will be reflected in the checkpoint and can not be
+     * reverted through a call to [[Mixture.rollback]].
+     *
+     * NOTE 2: The lift sets of an agents are not checkpointed.
+     *
+     * @return this mixture.
+     */
+    def checkpoint: Mixture = {
+      _checkpoints = (new Checkpoint(_head, _length, Nil)) :: _checkpoints
+      this
+    }
+
+    /**
+     * Restore the state of this mixture to the last checkpoint.
+     *
+     * See [[Mixture.checkpoint]] for details.
+     *
+     * @return this mixture.
+     */
+    def rollback: Mixture = {
+      if (_checkpoints.isEmpty) throw new IllegalStateException(
+        "attempt to roll back mixture with empty checkpoint stack")
+
+      // After the rollback, the marked agents list should contain
+      // exactly those agents that were rolled back.  Start by
+      // resetting it.
+      clearMarkedAgents
+
+      // Roll back all the agents in the checkpoint.
+      val cp = _checkpoints.head
+      for (v <- cp.agents) {
+        val u = v.copy
+
+        // Restore the state of `u` to that of `v`.
+        u.state = v.state
+        for (i <- v.sites.indices) {
+          u.sites(i).state = v.sites(i).state
+          u.sites(i).link  = v.sites(i).link
+        }
+        u.prev = v.prev
+        u.next = v.next
+        u.prev.next = u
+        u.next.prev = u
+        mark(u)
+      }
+
+      // Restore the head and length fields of the mixture.
+      _head = cp.head
+      _length = cp.length
+
+      // Remove the checkpoint from the top of the stack.
+      _checkpoints = _checkpoints.tail
+      this
+    }
+
+    /**
+     * Discard the latest checkpoint of this mixture.
+     *
+     * See [[Mixture.checkpoint]] for details.
+     *
+     * @return this mixture with its last checkpoint discarded.
+     */
+    def discardCheckpoint: Mixture = {
+      _checkpoints = _checkpoints match {
+        case _ :: cps => cps
+        case Nil => throw new IllegalStateException(
+          "attempt to discard checkpoint of mixture with empty " +
+            "checkpoint stack")
+      }
+      this
+    }
+
+    /**
+     * Make a copy of this agent and add it to the current checkpoint.
+     *
+     * If the checkpoint stack is empty or if the agent is marked, no
+     * copy will be created.  If a copy is created, its `copy` field
+     * will point to the original agent `u`.
+     *
+     * FIXME: Currently, the mark/unmark mechanism is used to decide
+     * which agents should be checkpointed.  We should probably have a
+     * separate flag for tracking checkpointed agents.
+     *
+     * @param u the agent to add to the current checkpoint.
+     */
+    @inline private def checkpointAgent(u: Agent) {
+      if (!_checkpoints.isEmpty && !u.marked) {
+        val v = u.checkpointCopy
+        val cp = _checkpoints.head
+        cp.agents = v :: cp.agents
+      }
     }
 
     /**
@@ -264,12 +389,15 @@ trait Mixtures {
     /** Remove a single agent from this mixture. */
     def -=(agent: Agent): Mixture = {
 
+      checkpointAgent(agent)
+
       // Disconnect agent
       for (s <- agent) {
         s.link match {
-          case Linked(a2, i, _) => {
-            a2.sites(i).link = Stub
-            mark(a2)
+          case Linked(u, i, _) => {
+            checkpointAgent(u)
+            u.sites(i).link = Stub
+            mark(u)
           }
           case _ => { }
         }
@@ -334,39 +462,80 @@ trait Mixtures {
     // we might always add it just for fun.
 
     /** Connect two sites in this mixture. */
-    def connect(a1: Agent, s1: SiteIndex, l1: LinkState,
-                a2: Agent, s2: SiteIndex, l2: LinkState): Mixture = {
-      a1.sites(s1).link = Linked(a2, s2, l1)
-      a2.sites(s2).link = Linked(a1, s1, l2)
+    def connect(u1: Agent, s1: SiteIndex, l1: LinkState,
+                u2: Agent, s2: SiteIndex, l2: LinkState): Mixture = {
 
-      mark(a1)
-      mark(a2)
+      checkpointAgent(u1)
+      checkpointAgent(u2)
+
+      u1.sites(s1).link = Linked(u2, s2, l1)
+      u2.sites(s2).link = Linked(u1, s1, l2)
+
+      mark(u1)
+      mark(u2)
 
       this
     }
 
     /** Disconnect a site in this mixture. */
-    def disconnect(a: Agent, s: SiteIndex): Mixture = {
-      val s1 = a.sites(s)
+    def disconnect(u: Agent, s: SiteIndex): Mixture = {
+      val s1 = u.sites(s)
       s1.link match {
-        case Linked(a2, i, _) => {
-          a2.sites(i).link = Stub
-          mark(a2)
+        case Linked(u2, i, _) => {
+          checkpointAgent(u2)
+          u2.sites(i).link = Stub
+          mark(u2)
         }
         case _ => { }
       }
+      checkpointAgent(u)
       s1.link = Stub
-      mark(a)
+      mark(u)
 
       this
     }
 
     /**
-     * Concatenate this mixture and another one.
+     * Update the state of an agent in this mixture.
+     *
+     * @param agent the agent to modify.
+     * @param state the new state of `agent`.
+     * @return this mixture with the state of `agent` changed to
+     *         `state`.
+     */
+    def updateAgentState(agent: Agent, state: AgentState): Mixture = {
+      checkpointAgent(agent)
+      agent.state = state
+      mark(agent)
+      this
+    }
+
+    /**
+     * Update the state of a site of some agent in this mixture.
+     *
+     * @param agent the agent containing the site to modify.
+     * @param siteIdx the index of the site to modify.
+     * @param state the new state of the site to modify.
+     * @return this mixture with the state of the site at `siteIdx`
+     *         changed to `state`.
+     */
+    def updateSiteState(
+      agent: Agent, siteIdx: SiteIndex, state: SiteState): Mixture = {
+      checkpointAgent(agent)
+      agent.sites(siteIdx).state = state
+      mark(agent)
+      this
+    }
+
+    /**
+     * Append another mixture to this one.
      *
      * The doubly-linked list representing the mixture `that` will be
      * appended to this mixture.  After this concatenation `that`
      * becomes invalid and should not be operated on any longer.
+     *
+     * @param that the mixture to append to `this`.
+     * @return this mixture with `that` appended to it.
      */
     def ++=(that: Mixture): Mixture = {
       var a: Agent = that._head
@@ -510,23 +679,13 @@ trait Mixtures {
     /**
      * A class representing sites of [[Mixture.Agent]]s.
      *
+     * FIXME: `state` and `link` should probably be read-only outside
+     * of [[Mixture]].
+     *
      * @param state the state of this site
-     * @param link whether this site is linked to another site.
+     * @param link whether and how this site is linked to another site.
      */
-    final case class Site(
-      var state: SiteState,
-      var link: Link = Stub)
-    {
-      // RHZ: should we reference the parent Agent in Mixtures as well?
-      //
-      // sstucki: no I think this is unnecessary unless we change the
-      // definition of Liked (see comment of Linked above) or want to
-      // have a "nice and intuitive" interface for manipulating
-      // mixtures and their agents, states, etc. but that is not the
-      // goal here, really.
-
-      //var agent: Agent = null
-
+    final case class Site(var state: SiteState, var link: Link = Stub) {
       override def toString = state.toString + link
     }
 
@@ -573,6 +732,28 @@ trait Mixtures {
        * track clashes in actions, updates made by actions, etc.).
        */
       protected[Mixture] var _marked: Boolean = false
+
+      /**
+       * Make a checkpoint copy of a given agent.
+       *
+       * @return a copy of this agent (sharing states and links).
+       */
+      protected[Mixture] def checkpointCopy: Agent = {
+        // First allocate an "empty" agent `v` tracking `this`.
+        val vSites = new Array[Site](this.sites.size)
+        val v = new Agent(this.state, vSites)
+        v.mixture = this.mixture
+        v.prev = this.prev
+        v.next = this.next
+        v.copy = this
+
+        // Now setup the interfaces of `v`
+        for (i <- this.sites.indices) {
+          val s = this.sites(i)
+          v.sites(i) = Site(s.state, s.link)
+        }
+        v
+      }
 
       /**
        * Marker flag for agents to be considered checked (used to
