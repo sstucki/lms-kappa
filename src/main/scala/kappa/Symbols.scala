@@ -56,9 +56,6 @@ trait KappaSymbols extends Symbols {
                                  yield (sname,
                                         mapToIndex(sstates))).toMap)).toMap
 
-    val lstateMap = (for (CGLinkAnnot(lnk, lstates) <- cg)
-                     yield (lnk, lstates)).toMap withDefaultValue List()
-
     val links = for (CGAgent(atype, _, intf) <- cg;
                      CGSite(sname, _, lnks) <- intf;
                      lnk <- lnks)

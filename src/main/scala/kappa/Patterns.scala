@@ -963,7 +963,7 @@ trait Patterns {
      * @param siteGraphString the string representing the pattern to build
      */
     private class PatternBuilder(val siteGraphString: String,
-                                 val lstateMap: AST.BondLabel => Option[LinkStateName])
+                                 val lstateMap: AST.BondLabel => Option[(LinkStateName, LinkStateName)])
     {
       val componentBuilder: ComponentBuilder = new ComponentBuilder()
       var agents: Vector[Agent] = Vector()
@@ -1013,9 +1013,13 @@ trait Patterns {
       def build: Pattern = {
         pairs foreach {
           case (bondLabel, List((atype2, sname2, s2), (atype1, sname1, s1))) => {
-            val link = (atype1, sname1, atype2, sname2)
-            val lstate1 = mkLinkState(link, lstateMap(bondLabel))
-            val lstate2 = mkLinkState(link, lstateMap(bondLabel) map invertLinkStateName)
+            val link1 = (atype1, sname1, atype2, sname2)
+            val link2 = (atype2, sname2, atype1, sname1)
+            // TODO check if there's a more convenient way of doing things
+            val (lsn1, lsn2) = lstateMap(bondLabel) map {
+              case (lsn1, lsn2) => (Some(lsn1), Some(lsn2)) } getOrElse (None, None)
+            val lstate1 = mkLinkState(link1, lsn1)
+            val lstate2 = mkLinkState(link2, lsn2)
             connect(s1, lstate1, s2, lstate2)
           }
           /*
@@ -1077,21 +1081,3 @@ trait Patterns {
   val patternComponents = new mutable.ArrayBuffer[Pattern.Component]()
 }
 
-trait KaSpacePatterns extends Patterns {
-  this: KaSpaceContext with KaSpaceParser with Actions with Rules with KaSpaceSymbols
-      with Mixtures with ComponentEmbeddings with Embeddings =>
-
-  implicit def scToPattern(sc: StringContext): ToPattern = new ToPattern(sc)
-
-  class ToPattern(sc: StringContext) {
-    def p(args: Any*): Pattern = {
-      def getString[T](x: T): String = x match {
-        case x: Double => x.toString
-        case xs: Vector[_] => "[" + xs.map(getString).mkString(", ") + "]"
-      }
-
-      val argStrings = for (arg <- args) yield getString(arg)
-      Pattern( sc.s(argStrings :_*) )
-    }
-  }
-}
