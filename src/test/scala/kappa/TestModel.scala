@@ -2,11 +2,11 @@ package kappa
 
 import org.scalatest.FlatSpec
 
-class TestModel extends KappaModel("A(s:{p,q}!{1,1})") with FlatSpec
+class TestModel extends KappaModel with FlatSpec
 {
   //behavior of "Models"
 
-  println("Contact graph = " + contactGraph)
+  contactGraph = "A(s:{p,q}!{1,1})"
 
   // Manual setup of Symbol table
   //

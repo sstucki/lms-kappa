@@ -2,13 +2,17 @@ package kappa
 
 import org.scalatest.FlatSpec
 
-class TestKaSpaceParser extends KaSpaceModel("A:{1}(s:{[2,0,0]})") with FlatSpec
+import breeze.linalg._
+
+class TestKaSpaceParser extends KaSpaceModel with FlatSpec
 {
   behavior of "KaSpace Parser"
 
+  contactGraph = "A:{1}(s:{[2,0,0]})"
+
   it should "parses states correctly" in {
     val radiusA = 1.0
-    val xUnit = Vector(1.0, 0, 0)
+    val xUnit = DenseVector(1.0, 0, 0)
     val sg1 = p"A : $radiusA (s : ${xUnit map (_ * 2)})"
 
     //assert(sg1 == List(AST.Agent("A", Some(radiusA), List(

@@ -2,9 +2,11 @@ package kappa
 
 import org.scalatest.FlatSpec
 
-class TestPatterns extends KappaModel("A(s!{1}), B(s!{1})") with FlatSpec
+class TestPatterns extends KappaModel with FlatSpec
 {
   behavior of "Patterns"
+
+  contactGraph = "A(s!{1}), B(s!{1})"
 
   it should "connect sites correctly" in {
     val p1 = Pattern("A(s!1), B(s!1)")

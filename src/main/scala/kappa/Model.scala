@@ -27,6 +27,13 @@ trait Model extends Patterns
   def withMaxTime(t: Double) = { maxTime = Some(t); this }
   def withMaxEvents(e: Int) = { maxEvents = Some(e); this }
 
+  var _contactGraph: String = ""
+  def contactGraph: String = _contactGraph
+  def contactGraph_= (cg: String) = {
+    _contactGraph = cg
+    initSymbols(parseContactGraph(cg))
+  }
+
   def runNormal(rand: Random) {
 
     // (Re-)compute all component embeddings.  This is necessary as
@@ -161,15 +168,9 @@ trait Model extends Patterns
   }
 }
 
-class KappaModel(val contactGraph: String) extends Model
+class KappaModel extends Model
   with KappaContext with KappaParser with KappaSymbols
-{
-  initSymbols(parseContactGraph(contactGraph))
-}
 
-class KaSpaceModel(val contactGraph: String) extends Model
-  with KaSpaceContext with KaSpaceParser with KaSpaceSymbols with KaSpacePatterns
-{
-  initSymbols(parseContactGraph(contactGraph))
-}
+class KaSpaceModel extends Model
+  with KaSpaceContext with KaSpaceParser with KaSpaceSymbols
 
