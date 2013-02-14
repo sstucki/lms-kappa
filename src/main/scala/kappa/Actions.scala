@@ -55,10 +55,19 @@ trait Actions {
 
     // -- Rule construction operators --
 
-    // FIXME: Add documentation! see also
-    // https://github.com/jkrivine/KaSim/issues/9
-    def :@ (rate: => Double) = new Rule(this, () => lhs.count * rate)
-    def !@ (law: => Double) = new Rule(this, () => law)
+    /** Constructor of rules that follow mass-action kinetics.
+     *
+     * @param rate stochastic kinetic rate constant
+     */
+    def :@(rate: => Double) = new Rule(this, () => lhs.inMix * rate)
+
+    /** Constructor of rules that follow an arbitrary rate law.
+     *
+     * See https://github.com/jkrivine/KaSim/issues/9
+     *
+     * @param law kinetic law
+     */
+    def !@(law: => Double) = new Rule(this, () => law)
 
     /**
      * Extend the activation map with an entry for a given component.
@@ -279,20 +288,6 @@ trait Actions {
       //println("# updates: " + updates + ", side effects: " + sideEffects)
     }
 
-    /** Constructor of rules that follow mass-action kinetics.
-     *
-     * @param rate stochastic kinetic rate constant
-     */
-    def :@(rate: => Double) = new Rule(this, () => lhs.inMix * rate)
-
-    /** Constructor of rules that follow an arbitrary rate law.
-     *
-     * See https://github.com/jkrivine/KaSim/issues/9
-     *
-     * @param law kinetic law
-     */
-    def !@(law: => Double) = new Rule(this, () => law)
-
     /**
      * Find an activation entry for a given component.
      *
@@ -498,16 +493,16 @@ trait Actions {
       // Find all site state changes (in the common context)
       for {
         (lu, ru) <- pe
-        j <- lu.indices
+        j <- lu.sites.indices
         s <- findStateChange(lu.sites(j).state, ru.sites(j).state)
       } {
         atoms += SiteStateChange(lhsAgentOffset(lu), j, s)
       }
 
       // Find all the link changes (in the common context)
-      for ((lu, ru) <- pe; j <- lu.indices) {
-        val ls = lu(j)
-        val rs = ru(j)
+      for ((lu, ru) <- pe; j <- lu.sites.indices) {
+        val ls = lu.sites(j)
+        val rs = ru.sites(j)
         (ls.link, rs.link) match {
           case (Stub | Wildcard(_, _, _) | Linked(_, _), Undefined) =>
             throw new IllegalArgumentException(
@@ -535,11 +530,11 @@ trait Actions {
           case (Stub, Linked(rs2, rl)) => {
             linkAddition(atoms, ru, j, rl, rs2.agent, rs2.index)
           }
-          case (Linked(lu2, lj2, ll), Linked(ru2, rj2, rl)) => {
-            if (!((lhsAgentOffset(lu2) == rhsAgentOffset(ru2)) &&
-              (lj2 == rj2) && findStateChange(ll, rl).isEmpty)) {
-              linkDeletion(atoms, lu, j, lu2)
-              linkAddition(atoms, ru, j, rl, ru2, rj2)
+          case (Linked(ls2, ll), Linked(rs2, rl)) => {
+            if (!((lhsAgentOffset(ls2.agent) == rhsAgentOffset(rs2.agent)) &&
+              (ls2.index == rs2.index) && findStateChange(ll, rl).isEmpty)) {
+              linkDeletion(atoms, lu, j, ls2.agent)
+              linkAddition(atoms, ru, j, rl, rs2.agent, rs2.index)
             }
           }
           case _ => {}
@@ -549,9 +544,9 @@ trait Actions {
       // Find all remaining link additions (between newly added agents)
       for {
         (ru, ro) <- rhsAdditions
-        j <- ru.indices
+        j <- ru.sites.indices
       } {
-        val rs = ru(j)
+        val rs = ru.sites(j)
         rs.link match {
           case Undefined =>
             throw new IllegalArgumentException(

@@ -1,6 +1,7 @@
 package kappa
 
-trait KappaContext extends LanguageContext {
+trait KappaContext extends KappaLikeContext
+{
   this: KappaSymbols =>
 
   type AgentType = String
@@ -97,23 +98,25 @@ trait KappaContext extends LanguageContext {
     @inline override def toString = name + (state map (":" + _) getOrElse "")
   }
 
-  final case object KappaLinkState
+  sealed case class KappaLinkState()
     extends Matchable[KappaLinkState]
   {
     // -- Matchable[KappaLinkState] API --
-    @inline def matches(that: KappaLinkState) = true
+    @inline final def matches(that: KappaLinkState) = true
 
-    @inline override def isEquivTo[U <: KappaLinkState](that: U): Boolean = true
+    @inline final override def isEquivTo[U <: KappaLinkState](that: U): Boolean = true
 
-    @inline def join(that: KappaLinkState) = Some(KappaLinkState())
+    @inline final def join(that: KappaLinkState) = Some(KappaLinkState)
 
-    @inline def meet(that: KappaLinkState) = Some(KappaLinkState())
+    @inline final def meet(that: KappaLinkState) = Some(KappaLinkState)
 
-    @inline def isComplete = true
+    @inline final def isComplete = true
 
     // -- Any API --
 
-    @inline override def toString = ""
+    @inline final override def toString = ""
   }
+
+  object KappaLinkState extends KappaLinkState
 }
 

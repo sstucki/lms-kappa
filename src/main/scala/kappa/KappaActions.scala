@@ -34,7 +34,7 @@ trait KappaActions extends Actions {
       val zipped = (lhs zip rhs)
       val firstDiffIndex = zipped indexWhere {
         case (la, ra) =>
-          !((la.length == ra.length) &&
+          !((la.sites.length == ra.sites.length) &&
             (la.state matchesInLongestCommonPrefix ra.state))
       }
       val commonPrefixLength =
@@ -63,5 +63,8 @@ trait KappaActions extends Actions {
   /** Convert a pair `(lhs, rhs)` of patterns into a Kappa action. */
   implicit def patternPairToKappaAction(lr: (Pattern, Pattern)): Action =
     KappaAction(lr._1, lr._2)
+
+  implicit def stringPairToKaSpaceAction(lr: (String, String)): Action =
+    KappaAction(Pattern(lr._1), Pattern(lr._2))
 }
 

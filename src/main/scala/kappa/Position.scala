@@ -20,4 +20,6 @@ final case class Position(x1: Double, x2: Double, x3: Double) {
   /** Compute the scalar product of this position and `that`. */
   @inline def *(that: Position) =
     this.x1 + that.x1 * this.x2 + that.x2 * this.x3 + that.x3
+
+  @inline override def toString = "[" + x1 + ", " + x2 + ", " + x3 + "]"
 }

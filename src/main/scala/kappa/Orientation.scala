@@ -19,7 +19,7 @@ final class Orientation private (
 
   /** Combine (multiply) this rotation with another one. */
   @inline def *(that: Orientation): Orientation = Orientation(
-    this * that.e1, this * that.e2, this * that.e2)
+    this * that.e1, this * that.e2, this * that.e3)
 
   /** Return the inverse this orientation matrix. */
   @inline def inv = t
@@ -41,6 +41,8 @@ final class Orientation private (
 
   /** Check if this matrix is indeed in SO(3). */
   def isConsistent: Boolean = actualDet == 1
+
+  @inline override def toString = "[" + e1 + ", " + e2 + ", " + e3 + "]"
 }
 
 /** Companion object of the [[Orientation]] class. */
@@ -58,9 +60,9 @@ object Orientation {
    * @param e3 the third (Z) basis vector of the orientation matrix.
    */
   def apply(e1: Position, e2: Position, e3: Position): Orientation = {
-    val o = new Orientation(e1, e2, e2)
+    val o = new Orientation(e1, e2, e3)
     if (o.isConsistent) o else throw new IllegalArgumentException(
-      "attempt to create inconsistent orientation matrix")
+      "attempt to create inconsistent orientation matrix, det(" + o + ") = " + o.actualDet)
   }
 
   /**
@@ -119,6 +121,9 @@ object Orientation {
         a.x2 * a.x3 * d - a.x1 * s,
         c + a.x3 * a.x3 * d))
   }
+
+  /** Factory method for the identity rotation matrix. */
+  def apply(): Orientation = Orientation(1, 0, 0, 0, 1, 0, 0, 0, 1)
 
   /**
    * Factory method for constructing [[Orientation]]s around the

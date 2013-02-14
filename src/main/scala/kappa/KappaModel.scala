@@ -50,9 +50,9 @@ class KappaModel extends Model
       linkState: Option[LinkState]) extends Link
     final case class Linked(to: Int) extends Link
 
-    val defaultLinkState = new LinkState(Some(0))
-    linkStateNames     = linkStateNames    :+ "."
-    linkStateNameSyms  = linkStateNameSyms + ("." -> 0)
+    val defaultLinkState = KappaLinkState
+    //linkStateNames = linkStateNames :+ "."
+    //linkStateNameSyms = linkStateNameSyms + ("." -> 0)
   }
 
   /** A class to build Kappa agents. */
@@ -87,7 +87,7 @@ class KappaModel extends Model
         (AgentIndex, SiteIndex, AgentIndex, SiteIndex)]()
 
       // Create agents
-      var p = Pattern()
+      var p = Pattern("")
       for ((u, i) <- agentBuilders.zipWithIndex) {
         val sites = for ((sb, j) <- u.siteBuilders.zipWithIndex) yield {
           sb.link match {
@@ -108,15 +108,17 @@ class KappaModel extends Model
           }
           sb.toSite
         }
-        p = p :+ Pattern.Agent(u.state, sites.toArray)
+        //p = p :+ Pattern.Agent(u.state, sites.toVector)
       }
 
       // Connect links
+      /*
       for ((i1, j1, i2, j2) <- links) {
         p = p connect (
           i1, j1, KappaSiteBuilder.defaultLinkState,
           i2, j2, KappaSiteBuilder.defaultLinkState)
       }
+      */
       p
     }
   }
@@ -131,7 +133,7 @@ class KappaModel extends Model
       case Pattern.Undefined         => KappaSiteBuilder.Undefined
       case Pattern.Stub              => KappaSiteBuilder.Stub
       case Pattern.Wildcard(a, s, l) => KappaSiteBuilder.Wildcard(a, s, l)
-      case Pattern.Linked(_, _, _)   => throw new IllegalArgumentException(
+      case Pattern.Linked(_, _)      => throw new IllegalArgumentException(
         "attempt to build pre-connected site")
     }
     new KappaSiteBuilder(s.state, link)

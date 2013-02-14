@@ -34,7 +34,7 @@ trait KaSpaceActions extends Actions {
       val zipped = (lhs zip rhs)
       val firstDiffIndex = zipped indexWhere {
         case (la, ra) =>
-          !((la.length == ra.length) &&
+          !((la.sites.length == ra.sites.length) &&
             (la.state matchesInLongestCommonPrefix ra.state))
       }
       val commonPrefixLength =
@@ -63,6 +63,9 @@ trait KaSpaceActions extends Actions {
   /** Convert a pair `(lhs, rhs)` of patterns into a KaSpace action. */
   implicit def patternPairToKaSpaceAction(lr: (Pattern, Pattern)): Action =
     KaSpaceAction(lr._1, lr._2)
+
+  implicit def stringPairToKaSpaceAction(lr: (String, String)): Action =
+    KaSpaceAction(Pattern(lr._1), Pattern(lr._2))
 
   def geometricConsistencyCheck(mix: Action.Agents): Boolean = true
 }
