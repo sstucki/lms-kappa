@@ -37,8 +37,8 @@ trait Actions {
     val lhs: Pattern, val rhs: Pattern,
     val pe: PartialEmbedding,
     val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
-    val preCondition: Option[Action.Agents => Boolean] = None,
-    val postCondition: Option[Action.Agents => Boolean] = None)
+    val preCondition: Option[(Action, Action.Agents) => Boolean] = None,
+    val postCondition: Option[(Action, Action.Agents) => Boolean] = None)
       extends Function2[Embedding, Mixture, Boolean] {
 
     import Action._
@@ -126,7 +126,7 @@ trait Actions {
       } else if (clash) {
         println("# clash!")
         false
-      } else if (!(preCondition map { f => f(agents) } getOrElse true)) {
+      } else if (!(preCondition map { f => f(this, agents) } getOrElse true)) {
         println("# precondition = false.")
         false
       } else {
@@ -148,7 +148,7 @@ trait Actions {
         val mas = mix.markedAgents
 
         // Check post-conditions
-        if (postCondition map { f => f(agents) } getOrElse true) {
+        if (postCondition map { f => f(this, agents) } getOrElse true) {
           // Discard pre-application checkpoint and perform
           // negative/positive updates.
           if (!postCondition.isEmpty) mix.discardCheckpoint

@@ -323,7 +323,7 @@ trait Mixtures {
       while(u != null) {
         val sites = new Array[Site](u.sites.size)
         val v = new Agent(u.state, sites)
-        v.mixture = that
+        v._mixture = that
         v.prev = p
         if (p == null) { that._head = v } else { p.next = v }
         u.copy = v
@@ -358,7 +358,7 @@ trait Mixtures {
 
     /** Add a single agent to this mixture. */
     def +=(agent: Agent): Mixture = {
-      agent.mixture = this
+      agent._mixture = this
       agent.prev = null
       agent.next = _head
       if (_head != null) _head.prev = agent
@@ -541,7 +541,7 @@ trait Mixtures {
       var a: Agent = that._head
       var last: Agent = null
       while (a != null) {
-        a.mixture = this
+        a._mixture = this
         unmark(a)
         mark(a)
         last = a
@@ -720,7 +720,7 @@ trait Mixtures {
         new mutable.HashSet())
         extends Seq[Site] {
 
-      protected[Mixture] var mixture: Mixture = null
+      protected[Mixture] var _mixture: Mixture = null
       protected[Mixture] var next: Agent = null
       protected[Mixture] var prev: Agent = null
 
@@ -733,6 +733,12 @@ trait Mixtures {
        */
       protected[Mixture] var _marked: Boolean = false
 
+      /** The mixture this agent belongs to. */
+      @inline def mixture =
+        if (_mixture == null) throw new NullPointerException(
+          "attempt to access parent mixture of orphan agent")
+        else _mixture
+
       /**
        * Make a checkpoint copy of a given agent.
        *
@@ -742,7 +748,7 @@ trait Mixtures {
         // First allocate an "empty" agent `v` tracking `this`.
         val vSites = new Array[Site](this.sites.size)
         val v = new Agent(this.state, vSites)
-        v.mixture = this.mixture
+        v._mixture = this._mixture
         v.prev = this.prev
         v.next = this.next
         v.copy = this
@@ -915,6 +921,9 @@ trait Mixtures {
 
     /** Converts a pattern into a mixture. */
     implicit def patternToMixture(pattern: Pattern) = apply(pattern)
+
+    /** Converts a pattern string into a mixture. */
+    implicit def stringToMixture(pattern: String) = apply(Pattern(pattern))
   }
 
   /** Default Mixture of the enclosing model. */

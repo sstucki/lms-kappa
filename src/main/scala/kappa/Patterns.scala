@@ -630,7 +630,7 @@ trait Patterns {
       protected[Pattern] var _pattern: Pattern = null
 
       /** The pattern this component belongs to. */
-      def pattern =
+      @inline def pattern =
         if (_pattern == null) throw new NullPointerException(
           "attempt to access parent pattern of orphan component")
         else _pattern
@@ -639,7 +639,7 @@ trait Patterns {
       protected[Pattern] var _index: ComponentIndex = -1
 
       /** The index of the component within the pattern. */
-      def index =
+      @inline def index =
         if (_index < 0) throw new NullPointerException(
           "attempt to retrieve in-pattern index of orphan component")
         else _index
@@ -648,7 +648,7 @@ trait Patterns {
       protected[Pattern] var _modelIndex: ComponentIndex = -1
 
       /** The index of the component within the model. */
-      def modelIndex: ComponentIndex =
+      @inline def modelIndex: ComponentIndex =
         if (_modelIndex > 0) _modelIndex else register
 
       /**

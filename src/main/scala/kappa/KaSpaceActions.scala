@@ -1,5 +1,7 @@
 package kappa
 
+import scala.collection.mutable
+
 import scala.language.implicitConversions
 
 trait KaSpaceActions extends Actions {
@@ -55,8 +57,104 @@ trait KaSpaceActions extends Actions {
       val rhsAgentOffsets =
         (rhsPrefixAgentOffsets ++ rhsSuffixAgentOffsets).toMap
 
+      def checkGeometricSoundnessPostCondition(
+        action: Action, agents: Action.Agents): Boolean =
+        if (agents.isEmpty) true
+        else {
+
+          // Get target mixture
+          val mix = agents.head.mixture
+
+          // Find all agents that have been updated _and_ that are
+          // part of the RHS of the rule (other agents can not
+          // possibly affect soundness).
+          val toCheck = for {
+            i <- action.rhsAgentOffsets.values
+            if agents(i).marked    // all marked agents have been updated
+          } yield agents(i)
+
+          checkGeometricSoundness(toCheck)
+        }
+
       // Build the action
-      new Action(lhs, rhs, pe, rhsAgentOffsets, None, Some(geometricConsistencyCheck))
+      new Action(lhs, rhs, pe, rhsAgentOffsets, None,
+        Some(checkGeometricSoundnessPostCondition))
+    }
+
+    /**
+     * Check the geometric soundness of the smallest set of components
+     * of the mixture containing all the agents in `toCheck`.
+     */
+    def checkGeometricSoundness(toCheck: Iterable[Mixture.Agent]): Boolean = {
+
+      import Mixture._
+
+      // Check the soundness of a connected component recursively
+      // through a depth-first traversal starting at a given agent.
+      def checkGeometry(u: Agent, as: mutable.Buffer[Agent]): Boolean = {
+        mix.mark(u)
+        as += u
+        val up = u.state.position
+        val uo = u.state.orientation
+        u.sites forall { s =>
+          (s.state.position, s.link) match {
+            case (Some(sp), Linked(v, j, KaSpaceLinkState(_, Some(lo)))) => {
+              val t = v.sites(j)
+              t.state.position match {
+                case Some(tp) => {
+                  val vo = lo * uo
+                  val vp = up + uo * sp - vo * tp
+                  if (v.marked) {
+                    // Check previously computed position and orientation
+                    (v.state.position == vp) && (v.state.orientation == vo)
+                  } else {
+                    // Assign new position and orientation
+                    v.state.position         = vp
+                    v.state.orientation = vo
+                    checkGeometry(v, as)
+                  }
+                }
+                case None => true
+              }
+            }
+            case _ => true
+          }
+        }
+      }
+
+      // Check the agents in `as` for collisions. FIXME: Naive quadratic
+      // algo...
+      def checkCollisions(as: Array[Agent]): Boolean = {
+        as.indices forall { i =>
+          (i + 1) until as.size forall { j =>
+            val u = as(i)
+            val v = as(j)
+              (u.state.radius, v.state.radius) match {
+              case (Some(ru), Some(rv)) => {
+                val d = u.state.position - v.state.position
+                ru + rv <= d.norm
+              }
+              case _ => true
+            }
+          }
+        }
+      }
+
+      // Clear the marked agents so we can use the mark/unmark
+      // mechanism to keep track of agents that have already been
+      // updated.
+      mix.clearMarkedAgents
+
+      // Iterate over all connected components by iterating over all
+      // the agents whose position/orientation has not been updated
+      // yet and using them as root agents for a depth-first
+      // traversal.
+      toCheck forall { u =>
+        u.marked || {
+          val as = new mutable.ArrayBuffer[Agent]
+          checkGeometry(u, as) && checkCollisions(as.toArray)
+        }
+      }
     }
   }
 
@@ -64,9 +162,11 @@ trait KaSpaceActions extends Actions {
   implicit def patternPairToKaSpaceAction(lr: (Pattern, Pattern)): Action =
     KaSpaceAction(lr._1, lr._2)
 
+  /**
+   * Convert a pair `(lhs, rhs)` of pattern strings into a KaSpace
+   * action.
+   */
   implicit def stringPairToKaSpaceAction(lr: (String, String)): Action =
     KaSpaceAction(Pattern(lr._1), Pattern(lr._2))
-
-  def geometricConsistencyCheck(mix: Action.Agents): Boolean = true
 }
 

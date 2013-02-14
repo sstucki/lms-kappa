@@ -13,6 +13,10 @@ final case class Position(x1: Double, x2: Double, x3: Double) {
   @inline def +(that: Position) = Position(
     this.x1 + that.x1, this.x2 + that.x2, this.x3 + that.x3)
 
+  /** Subtract `that` from this position. */
+  @inline def -(that: Position) = Position(
+    this.x1 - that.x1, this.x2 - that.x2, this.x3 - that.x3)
+
   /** Scale this position by the scalar value `that`. */
   @inline def *(that: Double) = Position(
     this.x1 * that, this.x2 * that, this.x3 * that)
@@ -20,6 +24,9 @@ final case class Position(x1: Double, x2: Double, x3: Double) {
   /** Compute the scalar product of this position and `that`. */
   @inline def *(that: Position) =
     this.x1 + that.x1 * this.x2 + that.x2 * this.x3 + that.x3
+
+  /** Compute the norm (or length, or modulus) of this position. */
+  @inline def norm = scala.math.sqrt(this * this)
 
   @inline override def toString = "[" + x1 + ", " + x2 + ", " + x3 + "]"
 }

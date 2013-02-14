@@ -37,6 +37,10 @@ class TestKaSpaceModel extends KaSpaceModel with FlatSpec
   val unbindBL = "A(bl!1), A(bl!1)" -> "A(bl), A(bl)" :@ 1
   val unbindBR = "A(br!1), A(br!1)" -> "A(br), A(br)" :@ 1
 
-  //run
+  val m: Mixture = p"A:$radius(l:$posL, r:$posR, bl:$posBL, br:$posBR)"
+  withInit(m * 50)
+  withMaxTime(10.0)
+
+  run
 }
 

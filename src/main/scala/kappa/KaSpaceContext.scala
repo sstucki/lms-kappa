@@ -71,7 +71,7 @@ trait KaSpaceContext extends KappaLikeContext
 
   final case class KaSpaceSiteState(atype: AgentType,
                                  name: SiteName,
-                                 pos: Option[SiteStateName])
+                                 position: Option[SiteStateName])
       extends Matchable[KaSpaceSiteState]
   {
     val nameSym: SiteNameSym = siteNameSyms(atype)(name)
@@ -80,30 +80,32 @@ trait KaSpaceContext extends KappaLikeContext
 
     @inline def matches(that: KaSpaceSiteState) =
       (this.nameSym == that.nameSym) &&
-      Matchable.optionMatches(this.pos, that.pos)(_==_)
+      Matchable.optionMatches(this.position, that.position)(_==_)
 
     @inline override def isEquivTo[U <: KaSpaceSiteState](that: U): Boolean =
-      (this.nameSym == that.nameSym) && (this.pos == that.pos)
+      (this.nameSym == that.nameSym) && (this.position == that.position)
 
     @inline def join(that: KaSpaceSiteState) =
-      if (this.nameSym == that.nameSym) (this.pos, that.pos) match {
+      if (this.nameSym == that.nameSym) (this.position, that.position) match {
         case (Some(s1), Some(s2)) if s1 == s2 => Some(this)
         case _ => Some(KaSpaceSiteState(atype, name, None))
       } else None
 
     @inline def meet(that: KaSpaceSiteState) =
-      if (this.nameSym == that.nameSym) (this.pos, that.pos) match {
+      if (this.nameSym == that.nameSym) (this.position, that.position) match {
         case (None, None) => Some(this)
         case (None, Some(s2)) => Some(that)
         case (Some(s2), None) => Some(this)
         case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
       } else None
 
-    @inline def isComplete = !hasSiteStateNames(atype)(name) || !pos.isEmpty
+    @inline def isComplete =
+      !hasSiteStateNames(atype)(name) || !position.isEmpty
 
     // -- Any API --
 
-    @inline override def toString = name + (pos map (":" + _) getOrElse "")
+    @inline override def toString =
+      name + (position map (":" + _) getOrElse "")
   }
 
   case class KaSpaceLinkState(link: Link, orientation: Option[LinkStateName])
