@@ -4,11 +4,10 @@ import scala.collection.mutable
 
 import scala.language.implicitConversions
 
-
 /** A class representing Kappa models. */
-class KappaModel(val contactGraph: String) extends Model with KappaContext
-    with KappaActions with KappaParser with KappaSymbols {
-
+class KappaModel extends Model
+  with KappaContext with KappaActions with KappaParser with KappaSymbols
+{
   // -- Sugar for pattern construction. --
 
   /** A class to build Kappa sites. */
@@ -154,12 +153,5 @@ class KappaModel(val contactGraph: String) extends Model with KappaContext
   implicit def builderPairToAction(
     lr: (KappaPatternBuilder, KappaPatternBuilder)): Action =
     KappaAction(lr._1.toPattern, lr._1.toPattern)
-
-  /*
-  initSymbols(parseContactGraph(contactGraph) match {
-    case Success(cg, _) => cg
-    case msg => throw new IllegalArgumentException(
-      "given contact graph is invalid: " + msg)
-  })
-  */
 }
+

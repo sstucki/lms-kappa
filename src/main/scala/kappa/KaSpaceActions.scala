@@ -2,15 +2,15 @@ package kappa
 
 import scala.language.implicitConversions
 
-trait KappaActions extends Actions {
-  this: KappaContext with Patterns with Mixtures with Embeddings
+trait KaSpaceActions extends Actions {
+  this: KaSpaceContext with Patterns with Mixtures with Embeddings
       with PartialEmbeddings with Rules =>
 
-  /** Factory object for building Kappa actions.  */
-  object KappaAction {
+  /** Factory object for building KaSpace actions.  */
+  object KaSpaceAction {
 
     /**
-     * Construct a Kappa action from a LHS and RHS pattern using the
+     * Construct a KaSpace action from a LHS and RHS pattern using the
      * longest-common-prefix rule.
      *
      * @param lhs the left-hand side of this action.
@@ -56,12 +56,14 @@ trait KappaActions extends Actions {
         (rhsPrefixAgentOffsets ++ rhsSuffixAgentOffsets).toMap
 
       // Build the action
-      new Action(lhs, rhs, pe, rhsAgentOffsets, None, None)
+      new Action(lhs, rhs, pe, rhsAgentOffsets, None, Some(geometricConsistencyCheck))
     }
   }
 
-  /** Convert a pair `(lhs, rhs)` of patterns into a Kappa action. */
-  implicit def patternPairToKappaAction(lr: (Pattern, Pattern)): Action =
-    KappaAction(lr._1, lr._2)
+  /** Convert a pair `(lhs, rhs)` of patterns into a KaSpace action. */
+  implicit def patternPairToKaSpaceAction(lr: (Pattern, Pattern)): Action =
+    KaSpaceAction(lr._1, lr._2)
+
+  def geometricConsistencyCheck(mix: Action.Agents): Boolean = true
 }
 
