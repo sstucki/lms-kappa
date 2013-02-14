@@ -30,9 +30,9 @@ class TestKaSpaceModel extends KaSpaceModel with FlatSpec
                      3:{$wBR.$wBR}"""
 
   // Rules
-  val bindLR = "A(r) , A(l) " -> "A(r!1) , A(l!1) " :@ 1
-  val bindBL = "A(bl), A(bl)" -> "A(bl!1), A(bl!1)" :@ 1
-  val bindBR = "A(br), A(br)" -> "A(br!1), A(br!1)" :@ 1
+  val bindLR = "A(r) , A(l) " -> s"A(r!1) , A(l!1),  1:$wLR.$wRL" :@ 1
+  val bindBL = "A(bl), A(bl)" -> s"A(bl!1), A(bl!1), 2:$wBL.$wBL" :@ 1
+  val bindBR = "A(br), A(br)" -> s"A(br!1), A(br!1), 3:$wBR.$wBR" :@ 1
   val unbindLR = "A(r!1) , A(l!1) " -> "A(r) , A(l) " :@ 1
   val unbindBL = "A(bl!1), A(bl!1)" -> "A(bl), A(bl)" :@ 1
   val unbindBR = "A(br!1), A(br!1)" -> "A(br), A(br)" :@ 1

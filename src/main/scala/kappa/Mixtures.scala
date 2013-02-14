@@ -252,8 +252,8 @@ trait Mixtures {
         }
         u.prev = v.prev
         u.next = v.next
-        u.prev.next = u
-        u.next.prev = u
+        if (u.prev != null) u.prev.next = u
+        if (u.next != null) u.next.prev = u
         mark(u)
       }
 

@@ -127,7 +127,7 @@ trait Actions {
         println("# clash!")
         false
       } else if (!(preCondition map { f => f(this, agents) } getOrElse true)) {
-        println("# precondition = false.")
+        println("# pre-condition = false.")
         false
       } else {
 
@@ -157,6 +157,7 @@ trait Actions {
         } else {
           // Roll back to the state of the mixture prior to the action
           // application.
+          println("# post-condition = false.")
           mix.rollback
           false
         }

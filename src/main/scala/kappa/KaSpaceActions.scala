@@ -106,7 +106,7 @@ trait KaSpaceActions extends Actions {
                   val vp = up + uo * sp - vo * tp
                   if (v.marked) {
                     // Check previously computed position and orientation
-                    (v.state.position == vp) && (v.state.orientation == vo)
+                    (v.state.position ~= vp) && (v.state.orientation ~= vo)
                   } else {
                     // Assign new position and orientation
                     v.state.position         = vp
