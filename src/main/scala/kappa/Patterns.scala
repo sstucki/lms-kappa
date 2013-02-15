@@ -850,7 +850,8 @@ trait Patterns {
             for (r <- rules) {
               r.action.addActivation(this)
             }
-          }
+          } else println("# Found ISO: " + this + " ~= " +
+            patternComponents(_modelIndex) + " (CC #" + _modelIndex + ")")
 
           _modelIndex
         }
@@ -1042,12 +1043,14 @@ trait Patterns {
         def merge(a1: Agent, a2: Agent) {
           val id1 = ccIds(a1)
           val id2 = ccIds(a2)
-          val (minId, maxId) = if (id1 < id2) (id1, id2) else (id2, id1)
+          if (id1 != id2) {
+            val (minId, maxId) = if (id1 < id2) (id1, id2) else (id2, id1)
 
-          for (agent <- ccs(maxId))
-            ccIds = ccIds updated (agent, minId)
+            for (agent <- ccs(maxId))
+              ccIds = ccIds updated (agent, minId)
 
-          ccs = ccs.updated(minId, ccs(minId) ++ ccs(maxId)) - maxId
+            ccs = ccs.updated(minId, ccs(minId) ++ ccs(maxId)) - maxId
+          }
         }
 
         def build: Vector[Component] = ccs.values map (new Component(_)) toVector
