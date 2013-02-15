@@ -18,15 +18,20 @@ trait Model extends Patterns
   var obs       : Vector[Pattern]      = Vector()
   var obsNames  : Vector[String]       = Vector()
 
-  def withInit(mix: Mixture) = { this.mix ++= mix; this }
+  def withInit(mix: Mixture): Model             = { this.mix ++= mix; this }
+  def withInit(mix: Mixture, count: Int): Model = withInit(mix * count)
+  def withInit(mix: Pattern): Model             = withInit(Mixture(mix))
+  def withInit(mix: Pattern, count: Int): Model = withInit(Mixture(mix) * count)
+
   def withObs(obs: Pattern, description: String = "") = {
     val name = if (description == "") obs.toString else description
     this.obs = this.obs :+ obs
     this.obsNames = this.obsNames :+ name
     this
   }
+
   def withMaxTime(t: Double) = { maxTime = Some(t); this }
-  def withMaxEvents(e: Int) = { maxEvents = Some(e); this }
+  def withMaxEvents(e: Int)  = { maxEvents = Some(e); this }
 
   var _contactGraph: String = ""
   def contactGraph: String = _contactGraph
