@@ -1025,7 +1025,7 @@ trait Patterns {
       // When you create it every agent is in a different component
       // You can merge two components using `merge`
       // Finally you get the vector of components calling `components`
-      // 
+      //
       // RHZ: Perhaps I should just use the agents vector in PatternBuilder?
       class ComponentBuilder(var agents: Vector[Agent] = Vector())
       {

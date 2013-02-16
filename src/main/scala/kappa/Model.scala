@@ -11,10 +11,10 @@ trait Model extends Patterns
   self: LanguageContext =>
 
   var time      : Double               = 0
-  var events    : Int                  = 0
-  var nullEvents : Int                 = 0
+  var events    : Long                 = 0
+  var nullEvents : Long                = 0
   var maxTime   : Option[Double]       = None
-  var maxEvents : Option[Int]          = None
+  var maxEvents : Option[Long]         = None
   var obs       : Vector[Pattern]      = Vector()
   var obsNames  : Vector[String]       = Vector()
 
@@ -31,7 +31,7 @@ trait Model extends Patterns
   }
 
   def withMaxTime(t: Double) = { maxTime = Some(t); this }
-  def withMaxEvents(e: Int)  = { maxEvents = Some(e); this }
+  def withMaxEvents(e: Long) = { maxEvents = Some(e); this }
 
   var _contactGraph: String = ""
   def contactGraph: String = _contactGraph
@@ -164,9 +164,11 @@ trait Model extends Patterns
     println("# === End of simulation ===")
     println
 
+    val totalEvents: Double = events + nullEvents
     println("# == Statistics:")
     println("#    Productive events : " + events)
     println("#    Null events       : " + nullEvents)
+    println("#    Efficiency        : " + events / totalEvents)
     println("#    Total time        : " + time)
     println
 
