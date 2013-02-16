@@ -111,15 +111,16 @@ trait PartialEmbeddings {
         : Iterable[PartialEmbedding] = {
 
       val conflicts =
-        new Array[mutable.HashSet[Agent]](c1.length)
+        new Array[mutable.BitSet](c1.length)
       for (i <- 0 until conflicts.size) {
-        conflicts(i) = new mutable.HashSet()
+        conflicts(i) = new mutable.BitSet
       }
 
       (for (u <- c1; v <- c2) yield {
         val inj = new Array[Agent](c1.length)
+        val codomain = new mutable.BitSet
         val meets = new Array[Agent](c1.length)
-        if (extendPartialInjection(u, v, inj, conflicts, meets)) {
+        if (extendPartialInjection(u, v, inj, codomain, conflicts, meets)) {
           val pairs =
             for (i <- (0 until c1.length) if inj(i) != null)
             yield (c1(i), inj(i))
@@ -146,6 +147,8 @@ trait PartialEmbeddings {
      *        in the traversal.
      * @param v the next agent in the image of the map to inspect in
      *        the traversal.
+     * @param codomain a bit set representing indices of the agents in
+     *        the codomain of the partial injection.
      * @param inj the partial injection to extend.
      * @param conflicts a conflict map used to avoid the construction
      *        of redundant maps by recording pairs encountered during
@@ -156,23 +159,25 @@ trait PartialEmbeddings {
      */
     private def extendPartialInjection(
       u: Agent, v: Agent, inj: Array[Agent],
-      conflicts: Array[mutable.HashSet[Agent]],
+      codomain: mutable.BitSet, conflicts: Array[mutable.BitSet],
       meets: Array[Agent]): Boolean = {
 
       val i = u.index
       if (inj(i) != null) true
-      else if (conflicts(i) contains v) false
+      else if (codomain contains v.index) false
+      else if (conflicts(i) contains v.index) false
       else {
         val m = u meet v
         if (m.isEmpty) true
         else {
           meets(i) = m.get
           inj(i) = v
-          conflicts(i) += v
+          codomain += v.index
+          conflicts(i) += v.index
           (0 until u.sites.size) forall { j =>
             (u.neighbour(j), v.neighbour(j)) match {
               case (Some((w1, _)), Some((w2, _))) =>
-                extendPartialInjection(w1, w2, inj, conflicts, meets)
+                extendPartialInjection(w1, w2, inj, codomain, conflicts, meets)
               case _ => true
             }
           }
