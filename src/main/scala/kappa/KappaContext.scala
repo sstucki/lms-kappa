@@ -59,11 +59,9 @@ trait KappaContext extends KappaLikeContext
     @inline override def toString = atype
   }
 
-  final case class KappaSiteState(atype: AgentType,
-                                 name: SiteName,
-                                 state: Option[SiteStateName])
-      extends Matchable[KappaSiteState]
-  {
+  final case class KappaSiteState(
+    atype: AgentType, name: SiteName, state: Option[SiteStateName])
+      extends Matchable[KappaSiteState] {
     val nameSym: SiteNameSym = siteNameSyms(atype)(name)
     val stateSym: Option[SiteStateNameSym] = state map siteStateNameSyms(atype)(name)
 
@@ -84,9 +82,8 @@ trait KappaContext extends KappaLikeContext
 
     @inline def meet(that: KappaSiteState) =
       if (this.nameSym == that.nameSym) (this.stateSym, that.stateSym) match {
-        case (None, None) => Some(this)
-        case (None, Some(s2)) => Some(that)
-        case (Some(s2), None) => Some(this)
+        case (None, _) => Some(that)
+        case (_, None) => Some(this)
         case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
       } else None
 
@@ -98,9 +95,7 @@ trait KappaContext extends KappaLikeContext
     @inline override def toString = name + (state map (":" + _) getOrElse "")
   }
 
-  sealed case class KappaLinkState()
-    extends Matchable[KappaLinkState]
-  {
+  sealed case class KappaLinkState() extends Matchable[KappaLinkState] {
     // -- Matchable[KappaLinkState] API --
     @inline final def matches(that: KappaLinkState) = true
 
