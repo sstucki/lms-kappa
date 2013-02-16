@@ -3,7 +3,7 @@ package kappa
 import org.scalatest.FlatSpec
 import scala.math._
 
-class TestKaSpaceModel extends KaSpaceModel with FlatSpec
+class ProteasomeModel extends KaSpaceModel with FlatSpec
 {
   // Agent radius
   val radius: Double = 1
@@ -21,26 +21,27 @@ class TestKaSpaceModel extends KaSpaceModel with FlatSpec
   val wBR = Orientation.z( Pi / 7) * Orientation.y(Pi)
 
   // Contact graph
-  contactGraph = s"""A:{$radius}(l:{$posL}!{1},
-                                 r:{$posR}!{1},
+  contactGraph = s"""A:{$radius}(r:{$posR}!{1},
+                                 l:{$posL}!{1},
                                  bl:{$posBL}!{2,2},
                                  br:{$posBR}!{3,3}),
-                     1:{$wLR.$wRL},
+                     1:{$wRL.$wLR},
                      2:{$wBL.$wBL},
                      3:{$wBR.$wBR}"""
 
   // Rules
-  val bindLR = "A(r) , A(l) " -> s"A(r!1) , A(l!1),  1:$wLR.$wRL" :@ 1
+  val bindLR = "A(r) , A(l) " -> s"A(r!1) , A(l!1),  1:$wRL.$wLR" :@ 1
   val bindBL = "A(bl), A(bl)" -> s"A(bl!1), A(bl!1), 2:$wBL.$wBL" :@ 1
   val bindBR = "A(br), A(br)" -> s"A(br!1), A(br!1), 3:$wBR.$wBR" :@ 1
   val unbindLR = "A(r!1) , A(l!1) " -> "A(r) , A(l) " :@ 1
   val unbindBL = "A(bl!1), A(bl!1)" -> "A(bl), A(bl)" :@ 1
   val unbindBR = "A(br!1), A(br!1)" -> "A(br), A(br)" :@ 1
 
-  val m: Mixture = p"A:$radius(l:$posL, r:$posR, bl:$posBL, br:$posBR)"
-  withInit(m * 50)
-  withMaxTime(10.0)
+  // Mixture
+  withInit(m"A:$radius(l:$posL, r:$posR, bl:$posBL, br:$posBR)" * 50)
 
+  // Simulate!
+  withMaxTime(10.0)
   run
 }
 

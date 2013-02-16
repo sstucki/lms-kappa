@@ -44,3 +44,21 @@ final case class Position(x1: Double, x2: Double, x3: Double) {
 
   @inline override def toString = "[" + x1 + ", " + x2 + ", " + x3 + "]"
 }
+
+object Position {
+  /** Get a position vector from spherical coordinates.
+   *
+   * @param theta the zenith angle, ie the angle in the x-y plane.
+   * @param phi the azimuth angle, ie the angle in the plane created
+   *            by the z axis and orthogonal projection of the zenith.
+   * @param radius the euclidean distance between the tip of the vector
+   *               and the origin.
+   */
+  def fromSpherical(radius: Double, theta: Double, phi: Double) = {
+    import scala.math._
+    Position(radius * sin(theta) * cos(phi),
+             radius * sin(theta) * sin(phi),
+             radius * cos(theta))
+  }
+}
+

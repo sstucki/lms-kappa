@@ -17,12 +17,5 @@ trait KaSpaceParser extends Parser {
   lazy val agentState: Parser[AgentStateName] = float
   lazy val siteState : Parser[ SiteStateName] = vector3d(float) ^^ (xs => Position(xs(0), xs(1), xs(2)))
   lazy val linkState : Parser[ LinkStateName] = vector3d(vector3d(float)) ^^ (xs => Orientation(xs.flatten))
-
-  implicit def scToKaSpace(sc: StringContext): ToKaSpace = new ToKaSpace(sc)
-
-  class ToKaSpace(sc: StringContext) {
-    def p(args: Any*): Pattern =
-      Pattern( sc.s(args :_*) )
-  }
 }
 

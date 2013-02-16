@@ -977,7 +977,7 @@ trait Patterns {
 
                       lnk match {
                         case AST.Linked(bondLabel) =>
-                          pairs += ((bondLabel, (atype, sname, site) :: pairs(bondLabel)))
+                          pairs = pairs updated (bondLabel, (atype, sname, site) :: pairs(bondLabel))
                         case _ => ()
                       }
 
@@ -1008,9 +1008,8 @@ trait Patterns {
           case (bondLabel, List((atype2, sname2, s2), (atype1, sname1, s1))) => {
             val link1 = (atype1, sname1, atype2, sname2)
             val link2 = (atype2, sname2, atype1, sname1)
-            // TODO check if there's a more convenient way of doing things
-            val (lsn1, lsn2) = lstateMap(bondLabel) map {
-              case (lsn1, lsn2) => (Some(lsn1), Some(lsn2)) } getOrElse (None, None)
+            val lsn1 = lstateMap(bondLabel) map (_._1)
+            val lsn2 = lstateMap(bondLabel) map (_._2)
             val lstate1 = mkLinkState(link1, lsn1)
             val lstate2 = mkLinkState(link2, lsn2)
             connect(s1, lstate1, s2, lstate2)
@@ -1055,7 +1054,15 @@ trait Patterns {
     }
   }
 
+  // TODO these implicit conversions should be defined somewhere else probably
   implicit def stringToPattern(s: String): Pattern = Pattern(s)
+
+  implicit def scToKaSpace(sc: StringContext): Interpolator = new Interpolator(sc)
+
+  class Interpolator(sc: StringContext) {
+    def p(args: Any*): Pattern = Pattern( sc.s(args :_*) )
+    def m(args: Any*): Mixture = Mixture( sc.s(args :_*) )
+  }
 
   /**
    * The collection of pattern components to track in this model.
