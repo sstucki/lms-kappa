@@ -35,12 +35,17 @@ class RingModel extends KaSpaceModel with FlatSpec
   val unbindAB = "A(b!1), B(a!1)" -> "A(b), B(a)" :@ off_rate
   val unbindAC = "A(c!1), C(a!1)" -> "A(c), C(a)" :@ off_rate
   val unbindBC = "B(c!1), C(b!1)" -> "B(c), C(b)" :@ off_rate
-  val closeAB = "A(b, c!1), B(a, c!2), C(a!1, b!2)" ->
-    s"A(b!3, c!1), B(a!3, c!2), C(a!1, b!2), 1:$wLR.$wRL" :@ close_rate
-  val closeAC = "A(c, b!1), B(a!1, c!2), C(a, b!2)" ->
-    s"A(c!3, b!1), B(a!1, c!2), C(a!3, b!2), 1:$wRL.$wLR" :@ close_rate
-  val closeBC = "A(b!1, c!2), B(a!1, c), C(a!2, b)" ->
-    s"A(b!1, c!2), B(a!1, c!3), C(a!2, b!3), 1:$wLR.$wRL" :@ close_rate
+  val closeAB = "B(a, c!1), C(b!1, a!2), A(c!2, b)" ->
+    s"B(a!3, c!1), C(b!1, a!2), A(c!2, b!3), 3:$wRL.$wLR" :@ close_rate
+  val closeAC = "A(c, b!1), B(a!1, c!2), C(b!2, a)" ->
+    s"A(c!3, b!1), B(a!1, c!2), C(b!2, a!3), 3:$wRL.$wLR" :@ close_rate
+  val closeBC = "C(b, a!1), A(c!1, b!2), B(a!2, c)" ->
+    s"C(b!3, a!1), A(c!1, b!2), B(a!2, c!3), 3:$wRL.$wLR" :@ close_rate
+
+  // Mixture
+  withInit(m"A:$radius (b:$posL, c:$posR)" * 200)
+  withInit(m"B:$radius (a:$posR, c:$posL)" * 200)
+  withInit(m"C:$radius (a:$posL, b:$posR)" * 200)
 
   // -- Expected observables --
 
@@ -54,13 +59,13 @@ class RingModel extends KaSpaceModel with FlatSpec
   withObs("A(c!1, b), C(a!1, b)", "AC")
   withObs("B(c!1, a), C(b!1, a)", "BC")
 
-  // Triangle
-  withObs("A(c!3, b!1), B(a!1, c!2), C(b!2, a!3)", "triangle")
-
   // Trimers
   withObs("A(b!1), B(a!1, c!2), C(b!2)", "ABC")
   withObs("B(c!2), C(b!2, a!1), A(c!1)", "BCA")
   withObs("C(a!1), A(c!1, b!2), B(a!2)", "CAB")
+
+  // Triangle
+  withObs("A(c!3, b!1), B(a!1, c!2), C(b!2, a!3)", "triangle")
 
   
   // -- Unexpected observables --
@@ -75,13 +80,8 @@ class RingModel extends KaSpaceModel with FlatSpec
   withObs("C(a!3), A(c!3, b!1), B(a!1, c!2), C(b!2)", "CABC")
 
 
-  // -- Mixture --
-  withInit(m"A:$radius (b:$posL, c:$posR)" * 200)
-  withInit(m"B:$radius (a:$posR, c:$posL)" * 200)
-  withInit(m"C:$radius (a:$posL, b:$posR)" * 200)
-
   // Simulate!
-  //withMaxEvents(10000)
+  withMaxEvents(100000)
   run
 }
 
