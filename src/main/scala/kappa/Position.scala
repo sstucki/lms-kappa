@@ -56,9 +56,9 @@ object Position {
    */
   def fromSpherical(radius: Double, theta: Double, phi: Double) = {
     import scala.math._
-    Position(radius * sin(theta) * cos(phi),
-             radius * sin(theta) * sin(phi),
-             radius * cos(theta))
+    Position(radius * cos(phi) * cos(theta),
+             radius * cos(phi) * sin(theta),
+             radius * sin(phi))
   }
 }
 

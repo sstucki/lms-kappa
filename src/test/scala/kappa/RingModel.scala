@@ -13,8 +13,8 @@ class RingModel extends KaSpaceModel with FlatSpec
   val posR = Position.fromSpherical(2, Pi / 3, 0)
 
   // Link orientations
-  val wLR = Orientation.y(-Pi * 2 / 3)
-  val wRL = Orientation.y( Pi * 2 / 3)
+  val wLR = Orientation.z(-Pi * 2 / 3)
+  val wRL = Orientation.z( Pi * 2 / 3)
 
   contactGraph = s"""A:{$radius} (b:{$posL}!{1}, c:{$posR}!{2}),
                      B:{$radius} (a:{$posR}!{1}, c:{$posL}!{3}),
@@ -42,22 +42,29 @@ class RingModel extends KaSpaceModel with FlatSpec
   val closeBC = "A(b!1, c!2), B(a!1, c), C(a!2, b)" ->
     s"A(b!1, c!2), B(a!1, c!3), C(a!2, b!3), 1:$wLR.$wRL" :@ close_rate
 
-  // Expected observables
-  withObs("A(c!3, b!1), B(a!1, c!2), C(b!2, a!3)", "triangle")
-  withObs("A(b!1), B(a!1)", "A-B")
-  withObs("A(c!1), C(a!1)", "A-C")
-  withObs("B(c!1), C(b!1)", "B-C")
-  withObs("A(b!1), B(a!1, c!2), C(b!2)", "A-B-C")
-
-  // Unexpected observables
-  withObs("A(b!1), B(a!1, c!2), C(b!2, a!3), A(c!3)", "A-B-C-A")
-  withObs("A(c!6, b!1), B(a!1, c!2), C(b!2, a!3), A(c!3, b!4), "
-    + "B(a!4, c!5), C(b!5, a!6)", "hexagon")
-
   // Mixture
   withInit(m"A:$radius (b:$posL, c:$posR)" * 200)
   withInit(m"B:$radius (a:$posR, c:$posL)" * 200)
   withInit(m"C:$radius (a:$posL, b:$posR)" * 200)
+
+  // Expected observables
+  withObs("A(c!3, b!1), B(a!1, c!2), C(b!2, a!3)", "triangle")
+  // Dimers
+  withObs("A(b!1), B(a!1)", "AB")
+  withObs("B(c!1), C(b!1)", "BC")
+  withObs("C(a!1), A(c!1)", "CA")
+  // Trimers
+  withObs("A(b!1), B(a!1, c!2), C(b!2)", "ABC")
+  withObs("B(c!2), C(b!2, a!1), A(c!1)", "BCA")
+  withObs("C(a!1), A(c!1, b!2), B(a!1)", "CAB")
+
+  // Unexpected observables
+  withObs("A(c!6, b!1), B(a!1, c!2), C(b!2, a!3), " +
+          "A(c!3, b!4), B(a!4, c!5), C(b!5, a!6)", "hexagon")
+  // Tetramers
+  withObs("A(b!1), B(a!1, c!2), C(b!2, a!3), A(c!3)", "ABCA")
+  withObs("B(c!2), C(b!2, a!3), A(c!3, b!1), B(a!1)", "BCAB")
+  withObs("C(a!3), A(c!3, b!1), B(a!1, c!2), C(b!2)", "CABC")
 
   // Simulate!
   withMaxEvents(10000)
