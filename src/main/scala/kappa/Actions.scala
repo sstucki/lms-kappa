@@ -468,8 +468,15 @@ trait Actions {
         u2: Agent, s2: SiteIndex, l2: LinkState) {
         val o1 = rhsAgentOffset(u1)
         val o2 = rhsAgentOffset(u2)
+        val l1 = linkState(u2, s2)
         if (o2 <= o1)
-          atoms += LinkAddition(o1, s1, linkState(u2, s2), o2, s2, l2)
+          atoms += LinkAddition(o1, s1, l1, o2, s2, l2)
+      }
+
+      @inline def checkLinkComplete(l: LinkState) {
+        if (!l.isComplete) throw new IllegalArgumentException(
+          "attempt to introduce new link with incomplete link state \"" + l +
+            "\" in rule: " + lhs + " -> " + rhs)
       }
 
       val atoms = new mutable.ArrayBuffer[Atom]()
@@ -534,9 +541,11 @@ trait Actions {
                   " of agent " + lu + " in rule: " + lhs + " -> " + rhs)
           case (Undefined | Wildcard(_, _, _), Linked(rs2, rl)) => {
             atoms += LinkDeletion(lhsAgentOffset(lu), j)
+            checkLinkComplete(rl)
             linkAddition(atoms, ru, j, rs2.agent, rs2.index, rl)
           }
           case (Stub, Linked(rs2, rl)) => {
+            checkLinkComplete(rl)
             linkAddition(atoms, ru, j, rs2.agent, rs2.index, rl)
           }
           case (Linked(ls2, ll), Linked(rs2, rl)) => {
@@ -566,6 +575,7 @@ trait Actions {
               "attempt to add agent " + ru + " with wildcard link at site " +
                 j + " in rule: " + lhs + " -> " + rhs)
           case Linked(rs2, l) => {
+            checkLinkComplete(l)
             linkAddition(atoms, ru, j, rs2.agent, rs2.index, l)
           }
           case _ => { }
