@@ -26,7 +26,7 @@ class RingModel extends KaSpaceModel with FlatSpec
   // Rate constants
   val on_rate = 1
   val off_rate = 1
-  val close_rate = 10
+  val close_rate = 100
 
   // Rules
   val bindAB = "A(b), B(a)" -> s"A(b!1), B(a!1), 1:$wLR.$wRL" :@ on_rate
@@ -42,32 +42,46 @@ class RingModel extends KaSpaceModel with FlatSpec
   val closeBC = "A(b!1, c!2), B(a!1, c), C(a!2, b)" ->
     s"A(b!1, c!2), B(a!1, c!3), C(a!2, b!3), 1:$wLR.$wRL" :@ close_rate
 
-  // Mixture
-  withInit(m"A:$radius (b:$posL, c:$posR)" * 200)
-  withInit(m"B:$radius (a:$posR, c:$posL)" * 200)
-  withInit(m"C:$radius (a:$posL, b:$posR)" * 200)
+  // -- Expected observables --
 
-  // Expected observables
-  withObs("A(c!3, b!1), B(a!1, c!2), C(b!2, a!3)", "triangle")
+  // Monomers
+  withObs("A(b, c)", "A")
+  withObs("B(a, c)", "B")
+  withObs("C(a, b)", "C")
+
   // Dimers
-  withObs("A(b!1), B(a!1)", "AB")
-  withObs("B(c!1), C(b!1)", "BC")
-  withObs("C(a!1), A(c!1)", "CA")
+  withObs("A(b!1, c), B(a!1, c)", "AB")
+  withObs("A(c!1, b), C(a!1, b)", "AC")
+  withObs("B(c!1, a), C(b!1, a)", "BC")
+
+  // Triangle
+  withObs("A(c!3, b!1), B(a!1, c!2), C(b!2, a!3)", "triangle")
+
   // Trimers
   withObs("A(b!1), B(a!1, c!2), C(b!2)", "ABC")
   withObs("B(c!2), C(b!2, a!1), A(c!1)", "BCA")
-  withObs("C(a!1), A(c!1, b!2), B(a!1)", "CAB")
+  withObs("C(a!1), A(c!1, b!2), B(a!2)", "CAB")
 
-  // Unexpected observables
+  
+  // -- Unexpected observables --
+
+  // Hexagon
   withObs("A(c!6, b!1), B(a!1, c!2), C(b!2, a!3), " +
           "A(c!3, b!4), B(a!4, c!5), C(b!5, a!6)", "hexagon")
+
   // Tetramers
   withObs("A(b!1), B(a!1, c!2), C(b!2, a!3), A(c!3)", "ABCA")
   withObs("B(c!2), C(b!2, a!3), A(c!3, b!1), B(a!1)", "BCAB")
   withObs("C(a!3), A(c!3, b!1), B(a!1, c!2), C(b!2)", "CABC")
 
+
+  // -- Mixture --
+  withInit(m"A:$radius (b:$posL, c:$posR)" * 200)
+  withInit(m"B:$radius (a:$posR, c:$posL)" * 200)
+  withInit(m"C:$radius (a:$posL, b:$posR)" * 200)
+
   // Simulate!
-  withMaxEvents(10000)
+  //withMaxEvents(10000)
   run
 }
 
