@@ -1,8 +1,8 @@
 package kappa
 
-import scala.collection.mutable
-
 import scala.language.implicitConversions
+
+import scala.collection.mutable
 
 trait KaSpaceActions extends Actions {
   this: KaSpaceContext with Patterns with Mixtures with Embeddings
@@ -73,7 +73,7 @@ trait KaSpaceActions extends Actions {
           // possibly affect soundness).
           val toCheck = for {
             i <- action.rhsAgentOffsets.values
-            if agents(i).marked    // all marked agents have been updated
+            if (agents(i) hasMark Updated) // all marked agents have been updated
           } yield agents(i)
 
           checkGeometricSoundness(toCheck)
@@ -95,7 +95,7 @@ trait KaSpaceActions extends Actions {
       // Check the soundness of a connected component recursively
       // through a depth-first traversal starting at a given agent.
       def checkGeometry(u: Agent, as: mutable.Buffer[Agent]): Boolean = {
-        mix.mark(u)
+        mix.mark(u, Visited)
         as += u
         val up = u.state.position
         val uo = u.state.orientation
@@ -107,10 +107,7 @@ trait KaSpaceActions extends Actions {
                 case Some(tp) => {
                   val vo = lo * uo
                   val vp = up + uo * sp - vo * tp
-                  //println("lo: " + lo)
-                  //println("uo: " + uo)
-                  //println("vo: " + vo)
-                  if (v.marked) {
+                  if (v hasMark Visited) {
                     // Check previously computed position and orientation
                     (v.state.position ~= vp) && (v.state.orientation ~= vo)
                   } else {
@@ -150,14 +147,14 @@ trait KaSpaceActions extends Actions {
       // Clear the marked agents so we can use the mark/unmark
       // mechanism to keep track of agents that have already been
       // updated.
-      mix.clearMarkedAgents
+      mix.clearMarkedAgents(Visited)
 
       // Iterate over all connected components by iterating over all
       // the agents whose position/orientation has not been updated
       // yet and using them as root agents for a depth-first
       // traversal.
       toCheck forall { u =>
-        u.marked || {
+        (u hasMark Visited) || {
           val as = new mutable.ArrayBuffer[Agent]
           // val cg = checkGeometry(u, as)
           // val cc = checkCollisions(as.toArray)
