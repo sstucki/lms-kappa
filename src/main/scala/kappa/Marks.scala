@@ -4,44 +4,56 @@ import scala.language.implicitConversions
 
 import scala.collection.mutable
 
+
+// RHZ: This trait should be inside Marks to have val _marked protected[Marks]
+// The problem then is that we would need to make Agent an inner class of Mixture
+// Are we prepared for that?
+trait Markable
+{
+  /**
+   * Marker flag for agents to be considered checked (used to
+   * track clashes in actions, updates made by actions, etc.).
+   */
+  /*protected[Marks]*/ val _marked: mutable.BitSet = mutable.BitSet()
+
+  /**
+   * Marker flag for agents to be considered checked (used to
+   * track clashes in actions, updates made by actions, etc.).
+   */
+  @inline def hasMark(mt: MarkType): Boolean = _marked contains mt.toInt
+  // The implicit conversion is not in scope so we have to call .toInt
+}
+
+
+// Mark types
+abstract class MarkType {
+  def toInt: Int
+}
+final object Updated extends MarkType {
+  @inline def toInt = 1
+}
+final object SideEffect extends MarkType {
+  @inline def toInt = 2
+}
+final object Visited extends MarkType {
+  @inline def toInt = 3
+}
+// etc...
+
+
 trait Marks
 {
   type T <: Markable
 
-  abstract class MarkType {
-    def toInt: Int
-  }
-  final case object Modified extends MarkType {
-    @inline def toInt = 1
-  }
-  final case object SideEffect extends MarkType {
-    @inline def toInt = 2
-  }
-  final case object Visited extends MarkType {
-    @inline def toInt = 3
-  }
-  // etc...
-
   implicit def markTypeToInt(mt: MarkType): Int = mt.toInt
 
-  trait Markable extends Enumeration
-  {
-    /**
-     * Marker flag for agents to be considered checked (used to
-     * track clashes in actions, updates made by actions, etc.).
-     */
-    protected[Marks] val _marked: mutable.BitSet = mutable.BitSet()
-
-    /**
-     * Marker flag for agents to be considered checked (used to
-     * track clashes in actions, updates made by actions, etc.).
-     */
-    @inline def marked: mutable.BitSet = _marked
-
-  }
+  /** Number of different mark types we can initially have for agents.
+   *  NOTE: We use 64 because BitSet is initialised to 64 bits.
+   */
+  private var _markedAgentsLength: Int = 64
 
   /** The collection used to track marked agents. */
-  private val _markedAgents: mutable.HashMap[MarkType, List[T]] = mutable.HashMap()
+  private var _markedAgents: Array[List[T]] = Array.fill(_markedAgentsLength)(List())
 
   /**
    * The collection used to track marked agents.
@@ -61,7 +73,7 @@ trait Marks
    * @return the collection used to track marked agents.
    */
   def markedAgents(mt: MarkType) = {
-    _markedAgents(mt) = _markedAgents(mt) filter (_.marked contains mt)
+    _markedAgents(mt) = _markedAgents(mt) filter (_ hasMark mt)
     _markedAgents(mt)
   }
 
@@ -70,7 +82,11 @@ trait Marks
    * it was already marked).
    */
   @inline def mark(x: T, mt: MarkType) {
-    if (! (x.marked contains mt)) {
+    if (mt > _markedAgentsLength) {
+      _markedAgents ++= Array.fill(_markedAgentsLength)(List())
+      _markedAgentsLength *= 2
+    }
+    if (! (x hasMark mt)) {
       x._marked += mt
       _markedAgents(mt) = x :: _markedAgents(mt)
     }
@@ -81,14 +97,18 @@ trait Marks
     x._marked -= mt
   }
 
+  @inline def unmark(x: T) {
+    x._marked.clear
+  }
+
   /**
    * Unmark all the agents in the marked agents list and clear the
    * list.
    */
-  @inline def clearMarkedAgents {
-    for (agent <- _markedAgents.values.flatten)
-      agent._marked.clear()
-    _markedAgents.clear()
+  @inline def clearMarkedAgents(mt: MarkType) {
+    for (agent <- _markedAgents(mt))
+      agent._marked.clear
+    _markedAgents(mt) = List()
   }
 }
 
