@@ -1,8 +1,8 @@
 package kappa
 
-import scala.language.implicitConversions
-
 import scala.collection.mutable
+
+import scala.language.implicitConversions
 
 trait Mixtures {
   mixtures: LanguageContext with Patterns with Embeddings =>
@@ -900,7 +900,7 @@ trait Mixtures {
           var i = 0
           for (s <- u.sites) {
             val l = s.link match {
-              case Pattern.Linked(s, l) => Linked(as(s.agent.index), s.index, l)
+              case Pattern.Linked(u, j, l) => Linked(as(u.index), j, l)
               case Pattern.Stub => Stub
               case _ => throw new IllegalArgumentException(
                 "attempt to create mixture with an undefined or wildcard link")

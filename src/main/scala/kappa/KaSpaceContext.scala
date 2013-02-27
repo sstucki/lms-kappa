@@ -1,7 +1,5 @@
 package kappa
 
-import breeze.linalg._
-
 // RHZ: There is a lot of copy-paste and repetition here!
 // There are things that we need to abstract out
 trait KaSpaceContext extends LanguageContext {

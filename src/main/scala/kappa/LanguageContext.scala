@@ -2,7 +2,7 @@ package kappa
 
 /** Generic language context trait. */
 trait LanguageContext {
-  this: Patterns with Actions =>
+  //this: Patterns with Actions =>
 
   type AgentType
   type SiteName

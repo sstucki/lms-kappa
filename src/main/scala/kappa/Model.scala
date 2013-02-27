@@ -169,9 +169,6 @@ trait Model extends Patterns
   }
 }
 
-class KappaModel extends Model
-  with KappaContext with KappaParser with KappaSymbols
-
 class KaSpaceModel extends Model
   with KaSpaceContext with KaSpaceParser with KaSpaceSymbols
 
