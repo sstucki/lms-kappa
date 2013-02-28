@@ -88,14 +88,14 @@ class RingModel extends KaSpaceModel with FlatSpec
   withObs("B(c!1, a), C(b!1, a)", "BC")
 
   // Trimers
-  withObs("A(b!1), B(a!1, c!2), C(b!2)", "ABC")
-  withObs("B(c!2), C(b!2, a!1), A(c!1)", "BCA")
-  withObs("C(a!1), A(c!1, b!2), B(a!2)", "CAB")
+  withObs("A(b!1, c), B(a!1, c!2), C(a, b!2)", "ABC")
+  withObs("B(c!2, a), C(b!2, a!1), A(b, c!1)", "BCA")
+  withObs("C(a!1, b), A(c!1, b!2), B(a!2, c)", "CAB")
 
   // Triangle
   withObs("A(c!3, b!1), B(a!1, c!2), C(b!2, a!3)", "triangle")
 
-  
+
   // -- Unexpected observables --
 
   // Hexagon
