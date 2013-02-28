@@ -16,17 +16,42 @@ class RingModel extends KaSpaceModel with FlatSpec
   val wLR = Orientation.z(-Pi * 2 / 3)
   val wRL = Orientation.z( Pi * 2 / 3)
 
-  contactGraph = s"""A:{$radius} (b:{$posL}!{1}, c:{$posR}!{2}),
-                     B:{$radius} (a:{$posR}!{1}, c:{$posL}!{3}),
-                     C:{$radius} (a:{$posL}!{2}, b:{$posR}!{3}),
+  contactGraph = s"""A:{$radius} (c:{$posR}!{3}, b:{$posL}!{1}),
+                     B:{$radius} (a:{$posR}!{1}, c:{$posL}!{2}),
+                     C:{$radius} (b:{$posR}!{2}, a:{$posL}!{3}),
                      1:{$wLR.$wRL},
-                     2:{$wRL.$wLR},
-                     3:{$wLR.$wRL}"""
+                     2:{$wLR.$wRL},
+                     3:{$wRL.$wLR}"""
 
-  // Rate constants
-  val on_rate = 1
-  val off_rate = 1
-  val close_rate = 100
+  // Equilibrium constants
+  val kD = 1E-12 // = beta / alpha1
+  val kg = 1E-17 // = beta / (alpha1 + alpha2)
+
+  // Deterministic rate constants
+  val beta = 1E-6 // unbinding of any two monomers
+  val alpha1 = beta / kD // binding of any two monomers
+  val alpha2 = beta / kg - alpha1 // binding that leads to the formation of a cycle
+
+  // TODO Compute the rates using alpha1 = 2.53E6 M^-1 s^-1
+  // which is what they use in the paper.
+
+  // Volume
+  val totalNumMol = nA + nB + nC
+  val totalConc = 400E-9 // = 400 nM
+  val avogadro = 6.022E23 // molecules / mol
+  // RHZ: volume should be divided by the avogadro number but since we are going
+  // to multiply volume by that number in the next step we just don't do it.
+  val volume = totalNumMol / totalConc // molecules L / moles
+
+  // Stochastic rate constants
+  val on_rate = alpha1 / volume // = 4.444E-5
+  val off_rate = beta // = 1E-6
+  val close_rate = alpha2 // = 1E11
+
+  println("on_rate = " + on_rate)
+  println("off_rate = " + off_rate)
+  println("close_rate = " + close_rate)
+
 
   // Rules
   val bindAB = "A(b), B(a)" -> s"A(b!1), B(a!1), 1:$wLR.$wRL" :@ on_rate
@@ -43,9 +68,12 @@ class RingModel extends KaSpaceModel with FlatSpec
     s"C(b!3, a!1), A(c!1, b!2), B(a!2, c!3), 3:$wRL.$wLR" :@ close_rate
 
   // Mixture
-  withInit(m"A:$radius (b:$posL, c:$posR)" * 200)
-  withInit(m"B:$radius (a:$posR, c:$posL)" * 200)
-  withInit(m"C:$radius (a:$posL, b:$posR)" * 200)
+  val nA = 3000
+  val nB = 3000
+  val nC = 3000
+  withInit(m"A:$radius (b:$posL, c:$posR)" * nA)
+  withInit(m"B:$radius (a:$posR, c:$posL)" * nB)
+  withInit(m"C:$radius (a:$posL, b:$posR)" * nC)
 
   // -- Expected observables --
 
@@ -81,7 +109,7 @@ class RingModel extends KaSpaceModel with FlatSpec
 
 
   // Simulate!
-  withMaxEvents(100000)
+  withMaxTime(1E8)
   run
 }
 
