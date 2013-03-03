@@ -1,13 +1,14 @@
 package kappa
 
-trait KappaParser extends Parser {
+trait KappaParser extends KappaLikeParser {
   this: KappaContext =>
 
-  lazy val agentType : Parser[AgentType] = ident
-  lazy val siteName  : Parser[SiteName]  = ident
+  type AgentLabel = Unit
+  type  SiteLabel = String
+  type  LinkLabel = Unit
 
-  lazy val agentState : Parser[AgentStateName] = failure("agent states are not allowed in Kappa")
-  lazy val siteState  : Parser[SiteStateName]  = """\w+""".r
-  lazy val linkState  : Parser[LinkStateName]  = failure("link states are not allowed in Kappa")
+  lazy val agentLabel: Parser[AgentLabel] = failure("agent states are not allowed in Kappa")
+  lazy val  siteLabel: Parser[ SiteLabel] = """\w+""".r
+  lazy val  linkLabel: Parser[ LinkLabel] = failure("link states are not allowed in Kappa")
 }
 

@@ -6,7 +6,7 @@ import scala.language.postfixOps
 import scala.collection.mutable
 
 trait Patterns {
-  this: LanguageContext with Parser with Actions with Rules with Symbols
+  this: LanguageContext with Parser with Actions with Rules with ContactGraph
       with Mixtures with ComponentEmbeddings with Embeddings =>
 
   /**
@@ -117,8 +117,8 @@ trait Patterns {
   object Pattern {
 
     /** A class representing links between [[Pattern.Site]]s. */
-    sealed abstract class Link extends Matchable[Link]{
-
+    sealed abstract class Link extends Matchable[Link]
+    {
       // -- Matchable[Link] API --
 
       /**
@@ -294,7 +294,7 @@ trait Patterns {
      *        this link.
      * @param state the state of the link from source to target.
      */
-    final case class Linked(site: Site, state: LinkState)
+    final case class Linked(target: Site, state: LinkState)
         extends Link
 
     /**
@@ -309,9 +309,9 @@ trait Patterns {
      * @param linkState the state a matching link should have.
      */
     final case class Wildcard(
-      agentState: Option[AgentState],
-       siteState: Option[ SiteState],
-       linkState: Option[ LinkState]) extends Link
+      val agentState: Option[AgentState],
+      val  siteState: Option[ SiteState],
+      val  linkState: Option[ LinkState]) extends Link
 
     /**
      * A class representing sites in [[Pattern.Agent]]s.
@@ -942,117 +942,140 @@ trait Patterns {
      */
     def apply(expr: String): Pattern = {
       val ast = parseSiteGraph(expr)
-      val lstates = for (AST.LinkAnnot(bondLabel, lstate) <- ast)
-                    yield (bondLabel, lstate)
-      val pm = new PatternBuilder(expr, lstates.toMap.lift)
+      val pb = new PatternBuilder
+      pb.siteGraphString = expr
 
-      for (AST.Agent(atype, astate, intf) <- ast)
-        pm.add(atype, astate, intf)
+      for (agent <- ast)
+        pb += agent
 
-      pm.build
+      pb.result
     }
 
     /**
      * Builder for patterns. Not as elegant yet but maybe better than having
-     * everything in the Pattern.apply method
+     * everything in the Pattern.apply method.
      *
-     * @param siteGraphString the string representing the pattern to build
+     * @param siteGraphString the string representing the pattern to build.
      */
-    private class PatternBuilder(val siteGraphString: String,
-                                 val lstateMap: AST.BondLabel => Option[(LinkStateName, LinkStateName)])
+    private class PatternBuilder() // extends Builder[...]
     {
-      val componentBuilder: ComponentBuilder = new ComponentBuilder()
+      var siteGraphString: String = ""
+      val componentBuilder: ComponentBuilder = new ComponentBuilder
       var agents: Vector[Agent] = Vector()
-      var pairs: Map[AST.BondLabel, List[(AgentType, SiteName, Site)]] = Map() withDefaultValue List()
+      var pairs: Map[LinkId, List[(Site, LinkStateName)]] =
+        Map() withDefaultValue List()
 
-      def add(atype: AgentType, astate: Option[AgentStateName], intf: Seq[AST.Site]) {
-        val sites = for (AST.Site(sname, sstate, lnk) <- intf)
-                    yield {
-                      val site = Site(mkSiteState(atype, sname, sstate),
-                                      lnk match {
-                        case AST.Stub       => Stub
-                        case AST.Undefined  => Undefined
-                        case AST.Wildcard   => Wildcard(None, None, None)
-                        case AST.Linked(_)  => Undefined
-                      })
-
-                      lnk match {
-                        case AST.Linked(bondLabel) =>
-                          pairs = pairs updated (bondLabel, (atype, sname, site) :: pairs(bondLabel))
-                        case _ => ()
-                      }
-
-                      (sname, site)
+      def += (agent: AST.Agent) = agent match {
+        case AST.Agent(astate, intf) => {
+          val agentState = mkAgentState(astate)
+          val linkMap = {
+            for (AST.Site(sstate, link) <- intf)
+            yield (mkSiteState(agentState.agentStateSet, sstate), link)
+          }.toMap.withDefaultValue(AST.Undefined)
+          val siteStates =
+            agentState.agentStateSet.fillInterface(linkMap.keys)
+          val interface: Seq[Site] =
+            for (siteState <- siteStates) yield {
+              val link = linkMap(siteState)
+              val site =
+                Site(siteState, link match {
+                  case AST.Stub => Stub
+                  case AST.Undefined => Undefined
+                  case AST.Linked(_) => Undefined
+                  case AST.Wildcard(astate, sstate, lstate) => {
+                    val targetAgentState = astate map (mkAgentState(_))
+                    val targetSiteState = (targetAgentState, sstate) match {
+                      case (Some(a), Some(s)) =>
+                        Some(mkSiteState(a.agentStateSet, s))
+                      case _ => None
                     }
+                    val targetLinkState =
+                      lstate map { linkState =>
+                        mkLinkState(siteState.siteStateSet,
+                                    targetSiteState map (_.siteStateSet),
+                                    linkState)
+                      }
+                    Wildcard(targetAgentState, targetSiteState, targetLinkState)
+                  }
+                })
 
-        def undefinedSite(sname: SiteName) =
-          Site(mkSiteState(atype, sname, None), Undefined)
+              // RHZ: Why this doesn't work?
+              //for (AST.Linked(lstate) <- link)
+              //  pairs += (lstate.id -> (site, lstate) :: pairs(lstate.id))
+              link match {
+                case AST.Linked(lstate) =>
+                  pairs += (lstate.id -> ((site, lstate) :: pairs(lstate.id)))
+                case _ => ()
+              }
 
-        val interface = siteNames(atype) map (sites.toMap withDefault undefinedSite)
+              site
+            }
 
-        val agent = new Agent(mkAgentState(atype, astate), interface)
-
-        componentBuilder add agent
-        agents = agents :+ agent
+          val agent = new Agent(agentState, interface.toVector)
+          componentBuilder += agent
+          agents = agents :+ agent
+        }
       }
 
       def connect(s1: Site, lstate1: LinkState,
                   s2: Site, lstate2: LinkState) {
-        // TODO check if link is allowed by contact graph
+        // TODO Check if link is allowed by contact graph
         s1.link = Linked(s2, lstate1)
         s2.link = Linked(s1, lstate2)
         componentBuilder.merge(s1.agent, s2.agent)
       }
 
-      def build: Pattern = {
+      def result: Pattern = {
         pairs foreach {
-          case (bondLabel, List((atype2, sname2, s2), (atype1, sname1, s1))) => {
-            val link1 = (atype1, sname1, atype2, sname2)
-            val link2 = (atype2, sname2, atype1, sname1)
-            val lsn1 = lstateMap(bondLabel) map (_._1)
-            val lsn2 = lstateMap(bondLabel) map (_._2)
-            val lstate1 = mkLinkState(link1, lsn1)
-            val lstate2 = mkLinkState(link2, lsn2)
+          case (_, List((s2, l2), (s1, l1))) => {
+            val lstate1 = mkLinkState(s1.state.siteStateSet,
+                                      Some(s2.state.siteStateSet), l1)
+            val lstate2 = mkLinkState(s2.state.siteStateSet,
+                                      Some(s1.state.siteStateSet), l2)
             connect(s1, lstate1, s2, lstate2)
           }
           case _ => throw new IllegalArgumentException(
-            "every bond label must appear exactly twice")
+            "every bond label must appear exactly twice in site graph")
         }
         new Pattern(componentBuilder.build, agents, siteGraphString)
       }
 
-      // RHZ: This class is for creating connected components
-      // When you create it every agent is in a different component
-      // You can merge two components using `merge`
-      // Finally you get the vector of components calling `components`
-      //
-      // RHZ: Perhaps I should just use the agents vector in PatternBuilder?
-      class ComponentBuilder(var agents: Vector[Agent] = Vector())
+      /** A builder of connected components. */
+      class ComponentBuilder()
       {
-        var ccs: Map[ComponentIndex, Vector[Agent]] =
-          agents.zipWithIndex map { case (a, i) => (i, Vector(a)) } toMap
-        var ccIds: Map[Agent, ComponentIndex] = agents.zipWithIndex.toMap
+        // RHZ: Should I use MapBuilders instead?
+        var ccs: Map[ComponentIndex, Vector[Agent]] = Map()
+        var ccIds: Map[Agent, ComponentIndex] = Map()
 
-        def add(a: Agent) {
-          agents = agents :+ a
+        /**
+         * Register an agent in the component builder.
+         * 
+         * NOTE: This works only because we are adding the agent to
+         * the outer class agents vector after calling this method.
+         */
+        def += (a: Agent) {
           ccs += ((agents.length, Vector(a)))
           ccIds += ((a, agents.length))
         }
 
+        /** Merge two connected components by giving an agent each of them contain. */
         def merge(a1: Agent, a2: Agent) {
           val id1 = ccIds(a1)
           val id2 = ccIds(a2)
           if (id1 != id2) {
-            val (minId, maxId) = if (id1 < id2) (id1, id2) else (id2, id1)
+            val (minId, maxId) = if (id1 < id2) (id1, id2)
+                                 else (id2, id1)
 
             for (agent <- ccs(maxId))
               ccIds = ccIds updated (agent, minId)
 
-            ccs = ccs.updated(minId, ccs(minId) ++ ccs(maxId)) - maxId
+            ccs += ((minId, ccs(minId) ++ ccs(maxId)))
+            ccs -= maxId
           }
         }
 
-        def build: Vector[Component] = ccs.values map (new Component(_)) toVector
+        def build: Vector[Component] =
+          ccs.values map (new Component(_)) toVector
       }
     }
   }

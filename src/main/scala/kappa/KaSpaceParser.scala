@@ -2,11 +2,12 @@ package kappa
 
 import scala.language.implicitConversions
 
-trait KaSpaceParser extends Parser {
-  this: KaSpaceContext with Patterns =>
+trait KaSpaceParser extends KappaLikeParser {
+  this: KaSpaceContext =>
 
-  lazy val agentType: Parser[AgentType] = ident
-  lazy val siteName : Parser[SiteName]  = ident
+  type AgentLabel = Double
+  type  SiteLabel = Position
+  type  LinkLabel = Orientation
 
   lazy val float: Parser[Double] = floatingPointNumber ^^ (_.toDouble)
 
@@ -14,8 +15,10 @@ trait KaSpaceParser extends Parser {
     "[" ~> p ~ ("," ~> p) ~ ("," ~> p) <~ "]" ^^ {
       case x ~ y ~ z => Vector(x, y, z) }
 
-  lazy val agentState: Parser[AgentStateName] = float
-  lazy val siteState : Parser[ SiteStateName] = vector3d(float) ^^ (xs => Position(xs(0), xs(1), xs(2)))
-  lazy val linkState : Parser[ LinkStateName] = vector3d(vector3d(float)) ^^ (xs => Orientation(xs.flatten))
+  lazy val agentLabel: Parser[AgentLabel] = float
+  lazy val  siteLabel: Parser[ SiteLabel] = vector3d(float) ^^ {
+    xs => Position(xs(0), xs(1), xs(2)) }
+  lazy val  linkLabel: Parser[ LinkLabel] = vector3d(vector3d(float)) ^^ {
+    xs => Orientation(xs.flatten) }
 }
 

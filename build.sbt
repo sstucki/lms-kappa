@@ -23,7 +23,7 @@ libraryDependencies ++= Seq(
 // General compiler options
 scalacOptions ++= Seq(
   "-deprecation", "-unchecked", "-Xexperimental", "-P:continuations:enable",
-  "-Yvirtualize", "-feature", "-language:higherKinds")
+  "-Yvirtualize", "-feature", "-language:higherKinds") //"-Xlog-implicits")
 
 // Documentation (scaladoc) options
 scalacOptions in doc += "-external-urls:scala=http://www.scala-lang.org/"

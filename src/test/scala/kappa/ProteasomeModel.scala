@@ -21,18 +21,15 @@ class ProteasomeModel extends KaSpaceModel with FlatSpec
   val wBR = Orientation.z( Pi / 7) * Orientation.y(Pi)
 
   // Contact graph
-  contactGraph = s"""A:{$radius}(r:{$posR}!{1},
-                                 l:{$posL}!{1},
-                                 bl:{$posBL}!{2,2},
-                                 br:{$posBR}!{3,3}),
-                     1:{$wRL.$wLR},
-                     2:{$wBL.$wBL},
-                     3:{$wBR.$wBR}"""
+  contactGraph = s"""A:{$radius}(r:{$posR}!{1:{$wRL}},
+                                 l:{$posL}!{1:{$wLR}},
+                                 bl:{$posBL}!{2:{$wBL},2:{$wBL}},
+                                 br:{$posBR}!{3:{$wBR},3:{$wBR}})"""
 
   // Rules
-  val bindLR = "A(r) , A(l) " -> s"A(r!1) , A(l!1),  1:$wRL.$wLR" :@ 1
-  val bindBL = "A(bl), A(bl)" -> s"A(bl!1), A(bl!1), 1:$wBL.$wBL" :@ 1
-  val bindBR = "A(br), A(br)" -> s"A(br!1), A(br!1), 1:$wBR.$wBR" :@ 1
+  val bindLR = "A(r) , A(l) " -> s"A( r!1:$wRL), A( l!1:$wLR)" :@ 1
+  val bindBL = "A(bl), A(bl)" -> s"A(bl!1:$wBL), A(bl!1:$wBL)" :@ 1
+  val bindBR = "A(br), A(br)" -> s"A(br!1:$wBR), A(br!1:$wBR)" :@ 1
   val unbindLR = "A(r!1) , A(l!1) " -> "A(r) , A(l) " :@ 1
   val unbindBL = "A(bl!1), A(bl!1)" -> "A(bl), A(bl)" :@ 1
   val unbindBR = "A(br!1), A(br!1)" -> "A(br), A(br)" :@ 1

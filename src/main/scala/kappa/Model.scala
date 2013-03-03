@@ -5,8 +5,8 @@ import scala.util.Random
 
 /** A class representing generic models. */
 trait Model extends Patterns
-  with Mixtures with Actions with Rules with Perturbations
-  with Parser with Symbols with Embeddings with PartialEmbeddings
+  with Mixtures with Actions with Rules with Perturbations with Parser
+  with ContactGraph with Embeddings with PartialEmbeddings
 {
   self: LanguageContext =>
 
@@ -33,12 +33,14 @@ trait Model extends Patterns
   def withMaxTime(t: Double) = { maxTime = Some(t); this }
   def withMaxEvents(e: Long) = { maxEvents = Some(e); this }
 
+  /*
   var _contactGraph: String = ""
   def contactGraph: String = _contactGraph
   def contactGraph_= (cg: String) = {
     _contactGraph = cg
     initSymbols(parseContactGraph(cg))
   }
+  */
 
   def runNormal(rand: Random) {
 

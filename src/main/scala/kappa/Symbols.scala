@@ -1,134 +1,58 @@
 package kappa
 
-import language.postfixOps
+/*
+import scala.collection.{mutable => m}
 
 trait Symbols {
   this: LanguageContext with Parser =>
 
-  // RHZ: We need this map to guarantee that sites have the same
-  // order in every agent of a certain agent type (the code that
-  // relies on this is in Patterns.Pattern.Agent.matches)
-  // When we create the interface of an agent we have to put the
-  // sites in a certain order: the one given by the vector in
-  // this map
-  var siteNames: Map[AgentType, Vector[SiteName]] = Map()
+  /**
+   * This method allows us to order sites in a consistent way
+   * throughout the interface of all agents of the same type.
+   *
+   * FIXME This method is not enough!!
+   *
+   * NOTE: The code that relies on the assumption that sites
+   * need to be ordered is in Patterns.Pattern.Agent.matches.
+   */
+  //def siteIndex(agentState: AgentStateName, siteState: SiteStateName): SiteIndex
 
+  //def undefinedInterface
+
+  /** This method writes the symbol table from a given contact graph. */
   def initSymbols(cg: AST.ContactGraph): Unit
 }
 
-trait KappaSymbols extends Symbols {
-  this: KappaContext with KappaParser =>
+trait KappaLikeSymbols {
+  this: KappaLikeContext with KappaLikeParser =>
 
   type AgentTypeSym = Int
   type SiteNameSym = Int
 
-  type AgentStateNameSym = Unit
-  type SiteStateNameSym = Int
-  type LinkStateNameSym = Unit
+  var agentTypeSyms: Map[AgentType, AgentTypeSym] = Map()
+  var siteNameSyms: Map[SiteName, SiteNameSym] = Map()
 
-  var agentTypeSyms      : Map[AgentType, AgentTypeSym] = Map()
-  var siteNameSyms       : Map[AgentType, Map[SiteName, SiteNameSym]] = Map()
-  var agentStateNameSyms : Map[AgentType, Map[AgentStateName, AgentStateNameSym]] = Map()
-  var siteStateNameSyms  : Map[AgentType, Map[SiteName, Map[SiteStateName, SiteStateNameSym]]] = Map()
-  var linkStateNameSyms  : Map[Link, Map[LinkStateName, LinkStateNameSym]] = Map()
+  @inline final protected def mapToIndex[A](xs: Seq[A]): Map[A, Int] =
+    xs.zipWithIndex.toMap
 
   def initSymbols(cg: AST.ContactGraph) {
-    import AST.{CGAgent,CGSite,CGLinkAnnot}
+    import AST.{CGAgent,CGSite}
 
-    def mapToIndex  [A](xs: Seq[A]): Map[A, Int] = xs.zipWithIndex.toMap
-    def mapFromIndex[A](xs: Seq[A]): Map[Int, A] = xs.zipWithIndex map (_.swap) toMap
+    val atypes: m.ListBuffer[AgentType] = new m.ListBuffer()
 
-    agentTypeSyms = mapToIndex(for (CGAgent(atype, _, _) <- cg) yield atype)
-    agentStateNameSyms = Map() withDefaultValue (Map() withDefaultValue ())
+    for (CGAgent(astate, intf) <- cg) {
+      atypes += astate.atype
 
-    siteNames = (for (CGAgent(atype, _, intf) <- cg)
-                 yield (atype, (for (CGSite(sname, _, _) <- intf)
-                                yield sname).toVector)).toMap
+      val snames: m.ListBuffer[SiteName] = new m.ListBuffer()
 
-    siteNameSyms = (for (CGAgent(atype, _, intf) <- cg)
-                    yield (atype,
-                           mapToIndex(for (CGSite(sname, _, _) <- intf)
-                                      yield sname))).toMap
+      for (CGSite(sstate, links) <- intf)
+        snames += sstate.sname
 
-    siteStateNameSyms = (for (CGAgent(atype, _, intf) <- cg)
-                         yield (atype,
-                                (for (CGSite(sname, sstates, _) <- intf)
-                                 yield (sname,
-                                        mapToIndex(sstates))).toMap)).toMap
-
-    val links = for (CGAgent(atype, _, intf) <- cg;
-                     CGSite(sname, _, lnks) <- intf;
-                     lnk <- lnks)
-                yield (lnk, atype, sname)
-
-    linkStateNameSyms = links groupBy (_._1) map {
-      case (lnk, List((_, atype1, sname1), (_, atype2, sname2))) =>
-        ((atype1, sname1, atype2, sname2), Map(() -> ()))
-      case _ => throw new IllegalArgumentException(
-        "every bond label must appear exactly twice")
+      // TODO Should I make this a builder too?
+      siteNameSyms += ((astate.atype, mapToIndex(snames.result)))
     }
 
-    linkStateNameSyms ++= linkStateNameSyms map {
-      case ((a1, s1, a2, s2), lstates) => ((a2, s2, a1, s1), lstates)
-    }
+    agentTypeSyms = mapToIndex(atypes.result)
   }
 }
-
-trait KaSpaceSymbols extends Symbols {
-  this: KaSpaceContext with KaSpaceParser =>
-
-  type AgentTypeSym = Int
-  type SiteNameSym = Int
-
-  var agentTypeSyms      : Map[AgentType, AgentTypeSym] = Map()
-  var siteNameSyms       : Map[AgentType, Map[SiteName, SiteNameSym]] = Map()
-  // RHZ: For proper site graph type-checking I need more than this
-  var hasAgentStateNames : Map[AgentType, Boolean] = Map()
-  var hasSiteStateNames  : Map[AgentType, Map[SiteName, Boolean]] = Map()
-  var hasLinkStateNames  : Map[Link, Boolean] = Map()
-
-  def initSymbols(cg: AST.ContactGraph) {
-    import AST.{CGAgent,CGSite,CGLinkAnnot}
-
-    def mapToIndex  [A](xs: Seq[A]): Map[A, Int] = xs.zipWithIndex.toMap
-    def mapFromIndex[A](xs: Seq[A]): Map[Int, A] = xs.zipWithIndex map (_.swap) toMap
-
-    agentTypeSyms = mapToIndex(for (CGAgent(atype, _, _) <- cg) yield atype)
-
-    siteNames = (for (CGAgent(atype, _, intf) <- cg)
-                 yield (atype, (for (CGSite(sname, _, _) <- intf)
-                                yield sname).toVector)).toMap
-
-    siteNameSyms = (for (CGAgent(atype, _, intf) <- cg)
-                    yield (atype,
-                           mapToIndex(for (CGSite(sname, _, _) <- intf)
-                                      yield sname))).toMap
-
-    hasAgentStateNames = (for (CGAgent(atype, astates, _) <- cg)
-                          yield (atype, astates.isEmpty)).toMap
-
-    hasSiteStateNames = (for (CGAgent(atype, _, intf) <- cg)
-                         yield (atype, (for (CGSite(sname, sstates, _) <- intf)
-                                        yield (sname, sstates.isEmpty)).toMap)).toMap
-
-    val lstateMap = (for (CGLinkAnnot(lnk, _) <- cg)
-                     yield (lnk, true)).toMap withDefaultValue false
-
-    val links = for (CGAgent(atype, _, intf) <- cg;
-                     CGSite(sname, _, lnks) <- intf;
-                     lnk <- lnks)
-                yield (lnk, atype, sname)
-
-    hasLinkStateNames = links groupBy (_._1) map {
-      case (lnk, List((_, atype1, sname1), (_, atype2, sname2))) =>
-        ((atype1, sname1, atype2, sname2), lstateMap(lnk))
-      case _ => throw new IllegalArgumentException(
-        "every bond label must appear exactly twice")
-    }
-
-    hasLinkStateNames ++= hasLinkStateNames map {
-      case ((a1, s1, a2, s2), x) => ((a2, s2, a1, s1), x)
-    }
-  }
-}
-
+*/

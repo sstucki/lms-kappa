@@ -6,19 +6,27 @@ class TestPatterns extends KappaModel with FlatSpec
 {
   behavior of "Patterns"
 
-  contactGraph = "A(s!{1}), B(s!{1})"
+  contactGraph = "A(c!{1}, b!{2}), B(a!{2}, c!{3}), C(b!{3}, a!{1})"
 
   it should "connect sites correctly" in {
-    val p1 = Pattern("A(s!1), B(s!1)")
-    assert(p1(0).sites(0).neighbour.get.agent.state == p1(1).state)
-    assert(p1(1).sites(0).neighbour.get.agent.state == p1(0).state)
-    assert(p1(0).sites(0).neighbour.get.state == p1(1).sites(0).state)
-    assert(p1(1).sites(0).neighbour.get.state == p1(0).sites(0).state)
+    val p = Pattern("A(b!1), B(a!1)")
+    assert(p(0).sites(1).neighbour.get.agent.state == p(1).state)
+    assert(p(1).sites(0).neighbour.get.agent.state == p(0).state)
+    assert(p(0).sites(1).neighbour.get.state == p(1).sites(0).state)
+    assert(p(1).sites(0).neighbour.get.state == p(0).sites(1).state)
   }
 
   it should "get components right" in {
-    val p1 = Pattern("A(x!1, y!2), B(x!2, y!3), C(x!3, y!1)")
-    assert(p1.components.length == 1)
+    val p = Pattern("A(c!1, b!2), B(a!2, c!3), C(b!3, a!1)")
+    assert(p.components.length == 1)
+  }
+
+  it should "get wildcards right" in {
+    val p1 = Pattern("A(b!_)")
+    assert(p1(0).sites(1).link == Pattern.Wildcard(None, None, None))
+    val p2 = Pattern("A(b!A.b._)")
+    assert(p2(0).sites(1).link ==
+      Pattern.Wildcard(Some(p1(0).state), Some(p1(0).sites(1).state), None))
   }
 }
 
