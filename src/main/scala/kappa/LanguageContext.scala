@@ -2,7 +2,6 @@ package kappa
 
 /** Generic language context trait. */
 trait LanguageContext {
-  //this: Patterns with Actions =>
 
   type AgentType
   type SiteName
@@ -20,14 +19,13 @@ trait LanguageContext {
   type LinkState  <: Matchable[LinkState]
 
   def mkAgentState(agentType: AgentType, state: Option[AgentStateName]): AgentState
-  def mkSiteState(agentType: AgentType, siteName: SiteName, state: Option[SiteStateName]): SiteState
+  def mkSiteState (agentType: AgentType, siteName: SiteName, state: Option[SiteStateName]): SiteState
   def mkLinkState(link: Link, state: Option[LinkStateName]): LinkState
 }
 
 /** Language context for Kappa-like languages. */
-trait KappaLikeContext extends LanguageContext {
-  this: Patterns with Actions =>
-
+trait KappaLikeContext extends LanguageContext
+{
   /** A trait for agent states. */
   trait AgentStateIntf[T] extends Matchable[T] {
     this: T =>

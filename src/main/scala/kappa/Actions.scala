@@ -37,8 +37,8 @@ trait Actions {
     val lhs: Pattern, val rhs: Pattern,
     val pe: PartialEmbedding,
     val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
-    val preCondition: Option[Action.Agents => Boolean] = None,
-    val postCondition: Option[Action.Agents => Boolean] = None)
+    val preCondition: Option[(Action, Action.Agents) => Boolean] = None,
+    val postCondition: Option[(Action, Action.Agents) => Boolean] = None)
       extends Function2[Embedding, Mixture, Boolean] {
 
     import Action._
@@ -51,6 +51,25 @@ trait Actions {
     /** Activation map. */
     val activationMap =
       mutable.HashMap[ComponentIndex, ActivationEntry]()
+
+
+    // -- Rule construction operators --
+
+    /**
+     * Constructor for rules that follow mass-action kinetics.
+     *
+     * @param rate stochastic kinetic rate constant
+     */
+    def :@(rate: => Double) = new Rule(this, () => lhs.inMix * rate)
+
+    /**
+     * Constructor for rules that follow an arbitrary rate law.
+     *
+     * See https://github.com/jkrivine/KaSim/issues/9
+     *
+     * @param law kinetic law
+     */
+    def !@(law: => Double) = new Rule(this, () => law)
 
 
     /**
@@ -110,8 +129,8 @@ trait Actions {
       } else if (clash) {
         println("# clash!")
         false
-      } else if (!(preCondition map { f => f(agents) } getOrElse true)) {
-        println("# precondition = false.")
+      } else if (!(preCondition map { f => f(this, agents) } getOrElse true)) {
+        println("# pre-condition = false.")
         false
       } else {
 
@@ -132,7 +151,7 @@ trait Actions {
         val mas = mix.markedAgents
 
         // Check post-conditions
-        if (postCondition map { f => f(agents) } getOrElse true) {
+        if (postCondition map { f => f(this, agents) } getOrElse true) {
           // Discard pre-application checkpoint and perform
           // negative/positive updates.
           if (!postCondition.isEmpty) mix.discardCheckpoint
@@ -141,6 +160,7 @@ trait Actions {
         } else {
           // Roll back to the state of the mixture prior to the action
           // application.
+          println("# post-condition = false.")
           mix.rollback
           false
         }
@@ -271,22 +291,6 @@ trait Actions {
       }
       //println("# updates: " + updates + ", side effects: " + sideEffects)
     }
-
-    /**
-     * Constructor for rules that follow mass-action kinetics.
-     *
-     * @param rate stochastic kinetic rate constant
-     */
-    def :@(rate: => Double) = new Rule(this, () => lhs.inMix * rate)
-
-    /**
-     * Constructor for rules that follow an arbitrary rate law.
-     *
-     * See https://github.com/jkrivine/KaSim/issues/9
-     *
-     * @param law kinetic law
-     */
-    def !@(law: => Double) = new Rule(this, () => law)
 
     /**
      * Find an activation entry for a given component.

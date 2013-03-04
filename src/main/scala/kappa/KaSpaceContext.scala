@@ -2,7 +2,8 @@ package kappa
 
 // RHZ: There is a lot of copy-paste and repetition here!
 // There are things that we need to abstract out
-trait KaSpaceContext extends LanguageContext {
+trait KaSpaceContext extends KappaLikeContext
+{
   this: KaSpaceSymbols =>
 
   type AgentType = String
@@ -11,125 +12,129 @@ trait KaSpaceContext extends LanguageContext {
   // State types... The Name ending don't really
   // do justice here to what these types are
   type AgentStateName = Double
-  type SiteStateName  = DenseVector[Double]
-  type LinkStateName  = DenseMatrix[Double]
+  type  SiteStateName = Position
+  type  LinkStateName = Orientation
 
   // Composite state types
-  type AgentState = AgentStateImpl
-  type SiteState  = SiteStateImpl
-  type LinkState  = LinkStateImpl
+  type AgentState = KaSpaceAgentState
+  type  SiteState = KaSpaceSiteState
+  type  LinkState = KaSpaceLinkState
 
   def mkAgentState(agentType: AgentType, state: Option[AgentStateName]) =
-    AgentStateImpl(agentType, state)
+    KaSpaceAgentState(agentType, state)
   def mkSiteState(agentType: AgentType, siteName: SiteName, state: Option[SiteStateName]) =
-    SiteStateImpl(agentType, siteName, state)
+    KaSpaceSiteState(agentType, siteName, state)
   def mkLinkState(link: Link, state: Option[LinkStateName]) =
-    LinkStateImpl(link, state)
+    KaSpaceLinkState(link, state)
 
-  final case class AgentStateImpl(atype: AgentType, state: Option[AgentStateName])
-      extends AgentStateIntf[AgentStateImpl]
+  final case class KaSpaceAgentState(atype: AgentType, radius: Option[AgentStateName])
+      extends AgentStateIntf[KaSpaceAgentState]
   {
     val atypeSym: AgentTypeSym = agentTypeSyms(atype)
+    var orientation: Orientation = Orientation()
+    var position: Position = Position(0, 0, 0)
 
-    // -- AgentStateIntf[AgentStateImpl] API --
+    // -- AgentStateIntf[KaSpaceAgentState] API --
 
-    @inline def matchesInLongestCommonPrefix(that: AgentStateImpl) =
+    @inline def matchesInLongestCommonPrefix(that: KaSpaceAgentState) =
       this.atypeSym == that.atypeSym
 
-    // -- Matchable[AgentStateImpl] API --
+    // -- Matchable[KaSpaceAgentState] API --
 
-    @inline def matches(that: AgentStateImpl) =
+    @inline def matches(that: KaSpaceAgentState) =
       (this.atypeSym == that.atypeSym) &&
-      Matchable.optionMatches(this.state, that.state)(_==_)
+      Matchable.optionMatches(this.radius, that.radius)(_==_)
 
-    @inline override def isEquivTo[U <: AgentStateImpl](that: U): Boolean =
-      (this.atypeSym == that.atypeSym) && (this.state == that.state)
+    @inline override def isEquivTo[U <: KaSpaceAgentState](that: U): Boolean =
+      (this.atypeSym == that.atypeSym) && (this.radius == that.radius)
 
-    @inline def join(that: AgentStateImpl) =
-      if (this.atypeSym == that.atypeSym) (this.state, that.state) match {
+    @inline def join(that: KaSpaceAgentState) =
+      if (this.atypeSym == that.atypeSym) (this.radius, that.radius) match {
         case (Some(s1), Some(s2)) if s1 == s2 => Some(this)
-        case _ => Some(AgentStateImpl(atype, None))
+        case _ => Some(KaSpaceAgentState(atype, None))
       } else None
 
-    @inline def meet(that: AgentStateImpl) =
-      if (this.atypeSym == that.atypeSym) (this.state, that.state) match {
+    @inline def meet(that: KaSpaceAgentState) =
+      if (this.atypeSym == that.atypeSym) (this.radius, that.radius) match {
         case (None, None) => Some(this)
         case (None, Some(s2)) => Some(that)
         case (Some(s2), None) => Some(this)
         case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
       } else None
 
-    val isComplete = !hasAgentStateNames(atype) || !state.isEmpty
+    @inline def isComplete = !hasAgentStateNames(atype) || !radius.isEmpty
 
     // -- Any API --
 
-    @inline override def toString = atype + (state map (":" + _) getOrElse "")
+    @inline override def toString = atype + (radius map (":" + _) getOrElse "")
   }
 
-  final case class SiteStateImpl(atype: AgentType,
+  final case class KaSpaceSiteState(atype: AgentType,
                                  name: SiteName,
-                                 state: Option[SiteStateName])
-      extends Matchable[SiteStateImpl]
+                                 position: Option[SiteStateName])
+      extends Matchable[KaSpaceSiteState]
   {
     val nameSym: SiteNameSym = siteNameSyms(atype)(name)
 
-    // -- Matchable[SiteStateImpl] API --
+    // -- Matchable[KaSpaceSiteState] API --
 
-    @inline def matches(that: SiteStateImpl) =
+    @inline def matches(that: KaSpaceSiteState) =
       (this.nameSym == that.nameSym) &&
-      Matchable.optionMatches(this.state, that.state)(_==_)
+      Matchable.optionMatches(this.position, that.position)(_==_)
 
-    @inline override def isEquivTo[U <: SiteStateImpl](that: U): Boolean =
-      (this.nameSym == that.nameSym) && (this.state == that.state)
+    @inline override def isEquivTo[U <: KaSpaceSiteState](that: U): Boolean =
+      (this.nameSym == that.nameSym) && (this.position == that.position)
 
-    @inline def join(that: SiteStateImpl) =
-      if (this.nameSym == that.nameSym) (this.state, that.state) match {
+    @inline def join(that: KaSpaceSiteState) =
+      if (this.nameSym == that.nameSym) (this.position, that.position) match {
         case (Some(s1), Some(s2)) if s1 == s2 => Some(this)
-        case _ => Some(SiteStateImpl(atype, name, None))
+        case _ => Some(KaSpaceSiteState(atype, name, None))
       } else None
 
-    @inline def meet(that: SiteStateImpl) =
-      if (this.nameSym == that.nameSym) (this.state, that.state) match {
+    @inline def meet(that: KaSpaceSiteState) =
+      if (this.nameSym == that.nameSym) (this.position, that.position) match {
         case (None, None) => Some(this)
         case (None, Some(s2)) => Some(that)
         case (Some(s2), None) => Some(this)
         case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
       } else None
 
-    val isComplete = !hasSiteStateNames(atype)(name) || !state.isEmpty
+    @inline def isComplete =
+      !hasSiteStateNames(atype)(name) || !position.isEmpty
 
     // -- Any API --
 
-    override def toString = name + (state map (":" + _) getOrElse "")
+    @inline override def toString =
+      name + (position map (":" + _) getOrElse "")
   }
 
-  case class LinkStateImpl(link: Link, state: Option[LinkStateName])
-    extends Matchable[LinkStateImpl]
+  case class KaSpaceLinkState(link: Link, orientation: Option[LinkStateName])
+    extends Matchable[KaSpaceLinkState]
   {
-    // -- Matchable[LinkStateImpl] API --
-    @inline def matches(that: LinkStateImpl) = this.state == that.state
+    // -- Matchable[KaSpaceLinkState] API --
+    @inline def matches(that: KaSpaceLinkState) = this.orientation == that.orientation
 
-    @inline override def isEquivTo[U <: LinkStateImpl](that: U): Boolean =
-      this.state == that.state
+    @inline override def isEquivTo[U <: KaSpaceLinkState](that: U): Boolean =
+      this.orientation == that.orientation
 
-    @inline def join(that: LinkStateImpl) =
-      (this.state, that.state) match {
+    @inline def join(that: KaSpaceLinkState) =
+      (this.orientation, that.orientation) match {
         case (Some(s1), Some(s2)) if s1 == s2 => Some(this)
-        case _ => Some(LinkStateImpl(link, None))
+        case _ => Some(KaSpaceLinkState(link, None))
       }
 
-    @inline def meet(that: LinkStateImpl) =
-      (this.state, that.state) match {
+    @inline def meet(that: KaSpaceLinkState) =
+      (this.orientation, that.orientation) match {
         case (None, None) => Some(this)
         case (None, Some(s2)) => Some(that)
         case (Some(s2), None) => Some(this)
         case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
       }
 
-    val isComplete = !hasLinkStateNames(link) || !state.isEmpty
+    @inline def isComplete = !hasLinkStateNames(link) || !orientation.isEmpty
 
     // -- Any API --
-    override def toString = state map (_.toString) getOrElse ""
+    @inline override def toString = orientation map (_.toString) getOrElse ""
   }
 }
 

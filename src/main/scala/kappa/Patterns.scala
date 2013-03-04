@@ -80,13 +80,6 @@ trait Patterns {
 
     @inline def apply(ci: ComponentIndex, ai: AgentIndex): Agent =
       components(ci).agents(ai)
-
-
-    /* Update the pattern pointers in the components. */
-    for ((c, i) <- components.zipWithIndex) {
-      c._pattern = this
-      c._index = i
-    }
   }
 
 
@@ -600,14 +593,14 @@ trait Patterns {
      *
      * @param agents the agents in this component
      */
-    case class Component(val agents: Array[Agent])
+    case class Component private[Pattern] (val agents: Array[Agent])
         extends Seq[Agent] with Matchable[Component]
     {
       /** The pattern this component belongs to. */
       protected[Pattern] var _pattern: Pattern = null
 
       /** The pattern this component belongs to. */
-      def pattern =
+      @inline def pattern =
         if (_pattern == null) throw new NullPointerException(
           "attempt to access parent pattern of orphan component")
         else _pattern
@@ -616,7 +609,7 @@ trait Patterns {
       protected[Pattern] var _index: ComponentIndex = -1
 
       /** The index of the component within the pattern. */
-      def index =
+      @inline def index =
         if (_index < 0) throw new NullPointerException(
           "attempt to retrieve in-pattern index of orphan component")
         else _index
@@ -625,7 +618,7 @@ trait Patterns {
       protected[Pattern] var _modelIndex: ComponentIndex = -1
 
       /** The index of the component within the model. */
-      def modelIndex: ComponentIndex =
+      @inline def modelIndex: ComponentIndex =
         if (_modelIndex > 0) _modelIndex else register
 
       /**
@@ -827,7 +820,8 @@ trait Patterns {
             for (r <- rules) {
               r.action.addActivation(this)
             }
-          }
+          } else println("# Found ISO: " + this + " ~= " +
+            patternComponents(_modelIndex) + " (CC #" + _modelIndex + ")")
 
           _modelIndex
         }
@@ -907,12 +901,6 @@ trait Patterns {
       // -- Extra Seq[Agent] API --
       @inline override def foreach[U](f: Agent => U): Unit =
         agents foreach f
-
-      // Update the component pointers in the agents.
-      for ((a, i) <- agents.zipWithIndex) {
-        a._component = this
-        a._index = i
-      }
     }
 
 
@@ -923,9 +911,6 @@ trait Patterns {
      * @param lstateMap map from bond labels to forward and reverse link states.
      */
     class Builder(val siteGraphString: String) {
-
-      final case class Linked(to: Agent#Site, state: LinkState)
-          extends Builder.Defined
 
       final class Agent private[Builder] (
         val index: AgentIndex, val state: AgentState) {
@@ -948,13 +933,13 @@ trait Patterns {
           }
 
           def connect(to: Agent#Site, fromState: LinkState, toState: LinkState) = {
-            this define Linked(to, fromState)
-            to   define Linked(this, toState)
+            this define Builder.Linked(to, fromState)
+            to   define Builder.Linked(this, toState)
             this
           }
         }
 
-        val sites: mutable.ArrayBuffer[Site]
+        val sites = new mutable.ArrayBuffer[Site]()
 
         def +=(state: SiteState) = {
           val s = new Site(sites.length, state)
@@ -989,7 +974,8 @@ trait Patterns {
             componentMap(i) = j
             val u = agents(i)
             for (s <- u.sites) s.link match {
-              case Linked(to, _) => traverseComponent(to.agent.index, j)
+              case Builder.Linked(to, _) =>
+                traverseComponent(to.agent.index, j)
               case _ => {}
             }
           }
@@ -1057,7 +1043,7 @@ trait Patterns {
               case Builder.Undefined         => Pattern.Undefined
               case Builder.Stub              => Pattern.Stub
               case Builder.Wildcard(a, s, l) => Pattern.Wildcard(a, s, l)
-              case Linked(to, state)         =>
+              case Builder.Linked(to, state) =>
                 Pattern.Linked(as(to.agent.index), to.index, state)
             }
           }
@@ -1078,6 +1064,13 @@ trait Patterns {
         agentState: Option[AgentState],
         siteState: Option[SiteState],
         linkState: Option[LinkState]) extends Defined
+      // FIXME: It would be nice if Linked were an inner class of
+      // Builder with the `to` field having type Agent#Site.  But due
+      // to SI-4400 (https://issues.scala-lang.org/browse/SI-4400) we
+      // then either a) get a warning when pattern matching Linked or
+      // b) we need to make Linked non-final.
+      final case class Linked(to: Builder#Agent#Site, state: LinkState)
+          extends Defined
     }
   }
 

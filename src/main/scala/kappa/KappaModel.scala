@@ -4,12 +4,13 @@ import scala.collection.mutable
 
 import scala.language.implicitConversions
 
-
 /** A class representing Kappa models. */
-class KappaModel extends Model with KappaContext
-    with KappaActions with KappaParser with KappaSymbols {
+class KappaModel extends Model with KappaContext with KappaActions
+    with KappaParser with KappaSymbols {
 
   // -- Sugar for pattern construction. --
+
+  // FIXME: This should probably go into a KappaPattern trait...
 
   /** A class to build Kappa sites. */
   final class KappaSiteBuilder(
@@ -91,7 +92,7 @@ class KappaModel extends Model with KappaContext
       import KappaSiteBuilder._
 
       val linkMap = new mutable.HashMap[
-        BondLabel, List[(AgentIndex, SiteIndex)]]() withDefault Nil
+        BondLabel, List[(AgentIndex, SiteIndex)]]() withDefaultValue Nil
 
       // Create agents
       val pb = new Pattern.Builder("")
@@ -170,6 +171,7 @@ class KappaModel extends Model with KappaContext
    * It then walks the [[Parser.AST]] and builds a
    * [[Patterns.Pattern]] from the expression.
    *
+   * @param expr the string to build the pattern from.
    * @return a pattern corresponding to the expression `expr`.
    */
   implicit def stringToPattern(expr: String): Pattern = {
@@ -194,6 +196,21 @@ class KappaModel extends Model with KappaContext
     pb.toPattern
   }
 
+  /**
+   * Build a Kappa mixture from a string.
+   *
+   * This method first builds a [[Patterns#Pattern]] from a string and
+   * subsequently converts it into a [[Mixtures#Mixture]].
+   *
+   * @param expr the string to build the mixture from.
+   * @return a mixture corresponding to the expression `expr`.
+   */
+  implicit def stringToMixture(expr: String) = Mixture(stringToPattern(expr))
+
+  /** Convert a pair `(lhs, rhs)` of pattern strings into a Kappa action. */
+  implicit def stringPairToKappaAction(lr: (String, String)): Action =
+    KappaAction(stringToPattern(lr._1), stringToPattern(lr._2))
+
   /*
   initSymbols(parseContactGraph(contactGraph) match {
     case Success(cg, _) => cg
@@ -202,3 +219,4 @@ class KappaModel extends Model with KappaContext
   })
   */
 }
+

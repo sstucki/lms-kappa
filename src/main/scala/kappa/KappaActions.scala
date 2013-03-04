@@ -22,7 +22,7 @@ trait KappaActions extends Actions {
 
       // Compute the offsets of the first agents of each component of
       // the LHS in the agents array passed to an action application.
-      val ceOffsets: Vector[Int] =
+      val ceOffsets: Array[Int] =
         lhs.components.scanLeft(0) { (i, ce) => i + ce.length }
 
       @inline def lhsAgentOffset(a: Agent) =
@@ -34,7 +34,7 @@ trait KappaActions extends Actions {
       val zipped = (lhs zip rhs)
       val firstDiffIndex = zipped indexWhere {
         case (la, ra) =>
-          !((la.length == ra.length) &&
+          !((la.sites.length == ra.sites.length) &&
             (la.state matchesInLongestCommonPrefix ra.state))
       }
       val commonPrefixLength =
@@ -64,3 +64,4 @@ trait KappaActions extends Actions {
   implicit def patternPairToKappaAction(lr: (Pattern, Pattern)): Action =
     KappaAction(lr._1, lr._2)
 }
+
