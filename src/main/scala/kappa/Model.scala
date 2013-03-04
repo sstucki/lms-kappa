@@ -64,7 +64,7 @@ trait Model extends Patterns
       val tree = RandomTree(weights, rand)
       val totalActivity = tree.totalWeight
 
-      if (totalActivity == 0) {
+      if ((totalActivity == 0) || (totalActivity.isNaN)) {
         println("# No more events. Terminating.")
         maxEvents = Some(0)
       } else {

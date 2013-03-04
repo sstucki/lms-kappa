@@ -161,7 +161,7 @@ trait ComponentEmbeddings {
     def apply(u: Pattern.Agent, v: Mixture.Agent): Option[ComponentEmbedding] = {
       val component = u.component
       val inj = new Array[Mixture.Agent](component.length)
-      v.mixture.clearMarkedAgents
+      v.mixture.clearMarkedAgents(Visited)
       if (extendInjection(u, v, inj, null))
         Some(new ComponentEmbedding(inj, u.component))
       else None
@@ -195,7 +195,7 @@ trait ComponentEmbeddings {
 
         (for ((u, v) <- ps) yield {
           val inj = new Array[Mixture.Agent](component.length)
-          v.mixture.clearMarkedAgents
+          v.mixture.clearMarkedAgents(Visited)
           if (extendInjection(u, v, inj, conflicts))
             Some(new ComponentEmbedding(inj, u.component))
           else None
@@ -287,12 +287,12 @@ trait ComponentEmbeddings {
       conflicts: Array[mutable.HashSet[Mixture.Agent]]): Boolean = {
       val i = u.index
       if (inj(i) != null) inj(i) == v
-      else if (v.marked) false
+      else if (v hasMark Visited) false
       else if (conflicts != null && (conflicts(i) contains v)) false
       else {
         if (u matches v) {
           inj(i) = v
-          v.mixture.mark(v)
+          v.mixture.mark(v, Visited)
           if (conflicts != null) conflicts(i) += v
           (0 until u.sites.size) forall { j =>
             (u.neighbour(j), v.neighbour(j)) match {

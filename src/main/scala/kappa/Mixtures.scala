@@ -76,7 +76,7 @@ trait Mixtures {
    *
    * @constructor create an empty Mixture.
    */
-  final class Mixture extends Seq[Mixture.Agent] {
+  final class Mixture extends Seq[Mixture.Agent] with Marks {
     // Finally, there are two more advantages of this design over
     // using a standard class from the collections library:
     //
@@ -103,7 +103,10 @@ trait Mixtures {
     //     want to target other target languages in an LMS-based
     //     implementation.
 
+
     import Mixture._
+
+    type T = Agent
 
     /** First agent in the doubly-linked list representing the mixture. */
     private var _head: Agent = null
@@ -128,57 +131,6 @@ trait Mixtures {
 
       def hasNext = nextAgent != null
     }
-
-    /** The collection used to track marked agents. */
-    private var _markedAgents: List[Agent] = Nil
-
-    /**
-     * The collection used to track marked agents.
-     *
-     * NOTE: A call to this method will prune the marked agents list
-     * before returning it, which may take O(n) time.  However, if the
-     * list is subsequently iterated over, the total amortized access
-     * time of the call to this method is just O(1) as the pruning
-     * time is proportional to previous calls to [[Mixture.unmark]]
-     * plus the number of subsequent iteration steps over the pruned
-     * list.
-     *
-     * FIXME: We could do better.  We could prune the list lazily,
-     * thereby fixing the amortized cost to O(1) even for cases where
-     * the list is not iterated over completely.
-     *
-     * @return the collection used to track marked agents.
-     */
-    def markedAgents = {
-      _markedAgents = _markedAgents filter (_._marked == true)
-      _markedAgents
-    }
-
-    /**
-     * Mark a given agent and add it to the marked agents list (unless
-     * it was already marked).
-     */
-    @inline def mark(agent: Agent) {
-      if (!agent._marked) {
-        agent._marked = true
-        _markedAgents = agent :: _markedAgents
-      }
-    }
-
-    /** Unmark a given agent and add it to the marked agents list. */
-    @inline def unmark(agent: Agent) {
-      agent._marked = false
-    }
-
-    /**
-     * Unmark all the agents in the marked agents list and clear the
-     * list.
-     */
-    @inline def clearMarkedAgents {
-      for (agent <- _markedAgents) agent._marked = false
-      _markedAgents = Nil
-    }
-
 
     /**
      * A class representing a single mixture checkpoint.
@@ -234,11 +186,6 @@ trait Mixtures {
       if (_checkpoints.isEmpty) throw new IllegalStateException(
         "attempt to roll back mixture with empty checkpoint stack")
 
-      // After the rollback, the marked agents list should contain
-      // exactly those agents that were rolled back.  Start by
-      // resetting it.
-      clearMarkedAgents
-
       // Roll back all the agents in the checkpoint.
       val cp = _checkpoints.head
       for (v <- cp.agents) {
@@ -254,7 +201,7 @@ trait Mixtures {
         u.next = v.next
         if (u.prev != null) u.prev.next = u
         if (u.next != null) u.next.prev = u
-        mark(u)
+        //mark(u, Updated)
       }
 
       // Restore the head and length fields of the mixture.
@@ -290,14 +237,10 @@ trait Mixtures {
      * copy will be created.  If a copy is created, its `copy` field
      * will point to the original agent `u`.
      *
-     * FIXME: Currently, the mark/unmark mechanism is used to decide
-     * which agents should be checkpointed.  We should probably have a
-     * separate flag for tracking checkpointed agents.
-     *
      * @param u the agent to add to the current checkpoint.
      */
     @inline private def checkpointAgent(u: Agent) {
-      if (!_checkpoints.isEmpty && !u.marked) {
+      if (!_checkpoints.isEmpty && !(u hasMark Updated)) {
         val v = u.checkpointCopy
         val cp = _checkpoints.head
         cp.agents = v :: cp.agents
@@ -365,8 +308,11 @@ trait Mixtures {
       _head = agent
       _length += 1
 
+      // Clear all marks from agent because it comes from
+      // another mixture where it can have been marked
       unmark(agent)
-      mark(agent)
+      // TODO Why not add the mark in AddAgent action?
+      mark(agent, Updated)
 
       this
     }
@@ -392,12 +338,15 @@ trait Mixtures {
       checkpointAgent(agent)
 
       // Disconnect agent
-      for (s <- agent) {
+      for (s <- agent.sites) {
+        // RHZ: Why not use disconnect here?
         s.link match {
           case Linked(u, i, _) => {
             checkpointAgent(u)
             u.sites(i).link = Stub
-            mark(u)
+            mark(u, SideEffect) // FIXME for perfomance
+            // We should manage this in the action, since we know there
+            // what is actually side-effected and what's not
           }
           case _ => { }
         }
@@ -471,8 +420,9 @@ trait Mixtures {
       u1.sites(s1).link = Linked(u2, s2, l1)
       u2.sites(s2).link = Linked(u1, s1, l2)
 
-      mark(u1)
-      mark(u2)
+      // TODO Shouldn't these marks be set by the action?
+      mark(u1, Updated)
+      mark(u2, Updated)
 
       this
     }
@@ -484,13 +434,14 @@ trait Mixtures {
         case Linked(u2, i, _) => {
           checkpointAgent(u2)
           u2.sites(i).link = Stub
-          mark(u2)
+          mark(u2, Updated)
+          mark(u2, SideEffect) // FIXME for perfomance, see above.
         }
         case _ => { }
       }
       checkpointAgent(u)
       s1.link = Stub
-      mark(u)
+      mark(u, Updated)
 
       this
     }
@@ -506,7 +457,7 @@ trait Mixtures {
     def updateAgentState(agent: Agent, state: AgentState): Mixture = {
       checkpointAgent(agent)
       agent.state = state
-      mark(agent)
+      mark(agent, Updated)
       this
     }
 
@@ -523,7 +474,7 @@ trait Mixtures {
       agent: Agent, siteIdx: SiteIndex, state: SiteState): Mixture = {
       checkpointAgent(agent)
       agent.sites(siteIdx).state = state
-      mark(agent)
+      mark(agent, Updated)
       this
     }
 
@@ -543,7 +494,7 @@ trait Mixtures {
       while (a != null) {
         a._mixture = this
         unmark(a)
-        mark(a)
+        mark(a, Updated)
         last = a
         a = a.next
       }
@@ -607,7 +558,6 @@ trait Mixtures {
   }
 
   object Mixture {
-
     /** A class representing potential links between [[Mixture.Site]]s. */
     // FIXME: This can be simplified by representing stubs as loops (self-links).
     //
@@ -624,7 +574,6 @@ trait Mixtures {
     // so using self-links would be more efficient and might even lead
     // to less complex code.
     sealed abstract class Link {
-      // FIXME!
       override def toString = this match {
         case Stub => ""
         case Linked(a, s, l) =>
@@ -718,7 +667,7 @@ trait Mixtures {
       val sites: Array[Site],
       val liftSet: mutable.HashSet[(Pattern.Agent, ComponentEmbedding)] =
         new mutable.HashSet())
-        extends Seq[Site] {
+        extends Seq[Site] with Markable {
 
       protected[Mixture] var _mixture: Mixture = null
       protected[Mixture] var next: Agent = null
@@ -726,12 +675,6 @@ trait Mixtures {
 
       /** A reference to a copy of this agent (used by [[Mixture]]`.copy`). */
       protected[Mixture] var copy: Agent = null
-
-      /**
-       * Marker flag for agents to be considered checked (used to
-       * track clashes in actions, updates made by actions, etc.).
-       */
-      protected[Mixture] var _marked: Boolean = false
 
       /** The mixture this agent belongs to. */
       @inline def mixture =
@@ -760,12 +703,6 @@ trait Mixtures {
         }
         v
       }
-
-      /**
-       * Marker flag for agents to be considered checked (used to
-       * track clashes in actions, updates made by actions, etc.).
-       */
-      @inline def marked: Boolean = _marked
 
       /**
        * Returns the neighbor of a site if it is connected.

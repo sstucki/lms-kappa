@@ -16,7 +16,7 @@ import scala.math.{sin,cos,abs}
  * @param e3 the third (Z) basis vector of the rotation matrix.
  */
 final class Orientation private (
-  val e1: Position, val e2: Position, val e3: Position) {
+  val e1: Position, val e2: Position, val e3: Position) extends Equals {
 
   import DoubleApprox._
 
@@ -67,6 +67,26 @@ final class Orientation private (
 
   /** Check if this matrix is indeed in SO(3). */
   @inline def isConsistent: Boolean = actualDet ~= 1.0
+
+
+  // -- Equals API --
+
+  @inline def canEqual(that: Any) = that.isInstanceOf[Orientation]
+
+
+  // -- Any API --
+
+  @inline override def equals(that: Any): Boolean = that match {
+    case that: Orientation => if (this eq that) true else {
+      (that canEqual this) &&
+      (this.e1 == that.e1) &&
+      (this.e2 == that.e2) &&
+      (this.e3 == that.e3)
+    }
+    case _ => false
+  }
+
+  @inline override def hashCode: Int = e1.## * 41 * e2.## + 1681 * e3.##
 
   @inline override def toString = "[" + e1 + ", " + e2 + ", " + e3 + "]"
 }
@@ -227,5 +247,5 @@ object DoubleApprox {
   @inline final def epsilon = 1E-8
 
   /** A view from `Double` to [[DoubleApprox]]. */
-  implicit def doubleToApprox(x: Double) = new DoubleApprox(x)
+  implicit def doubleToApprox(x: Double): DoubleApprox = new DoubleApprox(x)
 }

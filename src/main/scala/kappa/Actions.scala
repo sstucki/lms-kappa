@@ -34,13 +34,14 @@ trait Actions {
    *        prior to the action application will be restored.
    */
   final class Action(
-    val lhs: Pattern, val rhs: Pattern,
+    val lhs: Pattern,
+    val rhs: Pattern,
     val pe: PartialEmbedding,
     val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
-    val preCondition: Option[(Action, Action.Agents) => Boolean] = None,
+    val preCondition:  Option[(Action, Action.Agents) => Boolean] = None,
     val postCondition: Option[(Action, Action.Agents) => Boolean] = None)
-      extends Function2[Embedding, Mixture, Boolean] {
-
+      extends Function2[Embedding, Mixture, Boolean]
+  {
     import Action._
 
     type ActivationEntry = Iterable[Iterable[(Pattern.Agent, AgentIndex)]]
@@ -121,11 +122,9 @@ trait Actions {
       val agents = new Array[Mixture.Agent](totalAgents)
       val (clash, garbage) = checkConsistency(embedding, agents)
       if (garbage > 0) {
-        //println(
         throw new IllegalStateException(
           "# found and collected " + garbage +
           " garbage component embeddings.")
-        //false
       } else if (clash) {
         println("# clash!")
         false
@@ -140,15 +139,13 @@ trait Actions {
         if (!postCondition.isEmpty) mix.checkpoint
 
         // Clear the marked agents list of mix
-        mix.clearMarkedAgents
+        mix.clearMarkedAgents(Updated)
+        mix.clearMarkedAgents(SideEffect)
 
         // Apply all atomic actions
         for (a <- atoms) a(agents, mixture)
 
-        // The list of currently marked agents contains exactly those
-        // agents that have been modified by the action.  Make a copy
-        // for the negative/positive updates.
-        val mas = mix.markedAgents
+        val mas = mix.markedAgents(Updated)
 
         // Check post-conditions
         if (postCondition map { f => f(this, agents) } getOrElse true) {
@@ -192,7 +189,7 @@ trait Actions {
     protected[Action] def checkConsistency(
       embedding: Embedding, agents: Agents): (Boolean, Int) = {
 
-      mix.clearMarkedAgents
+      mix.clearMarkedAgents(Visited)
       var clash: Boolean = false
       var garbage: Int = 0
       var i: Int = 0
@@ -206,10 +203,10 @@ trait Actions {
           agents(i) = v; i += 1
 
           // Check for clashes
-          if (v.marked) {
+          if (v hasMark Visited) {
             clash = true // Agent already in image => clash!
           } else {
-            mix.mark(v)
+            mix.mark(v, Visited)
           }
 
           // Check agent consistency
@@ -258,30 +255,17 @@ trait Actions {
 
       // -- Positive update --
       //var updates = 0
-      val codomains = new mutable.ArrayBuffer[Mixture.Agent]
-      for (v <- modifiedAgents) mix.mark(v)
       for ((ci, ae) <- activationMap; ps <- ae) {
         val c = patternComponents(ci)
         val ps2 = ps map { case (u, v) => (u, agents(v)) }
         val ces = ComponentEmbedding(ps2)
         for (ce <- ces) {
           c.addEmbedding(ce)
-          for (v <- ce) codomains += v
           //updates += 1
         }
       }
 
-      // To find agents that experienced side effects, we find all the
-      // modified agents that are not in the codomain of one of the
-      // embeddings we just created.
-      //
-      // FIXME: This approach does _not_ work!!! There might be agents
-      // that experienced side-effects in the codomains of the new
-      // embeddings!  This needs to be handled differently!!!
-      mix.clearMarkedAgents
-      for (v <- modifiedAgents) mix.mark(v)
-      for (v <- codomains) mix.unmark(v)
-      val sideAffected = mix.markedAgents
+      val sideAffected = mix.markedAgents(SideEffect)
 
       // We now need to check them against all
       // remaining registered components to make sure we have found
@@ -289,6 +273,7 @@ trait Actions {
       //
       // TODO: Is there a more efficient way to handle side effects?
       //var sideEffects = 0
+      val mas2 = mix.markedAgents(SideEffect)
       for (c <- patternComponents) {
         val ps = for (u <- c; v <- sideAffected) yield (u, v)
         val ces = ComponentEmbedding(ps)
