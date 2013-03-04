@@ -258,7 +258,7 @@ trait Actions {
 
       // -- Positive update --
       //var updates = 0
-      mix.clearMarkedAgents
+      val codomains = new mutable.ArrayBuffer[Mixture.Agent]
       for (v <- modifiedAgents) mix.mark(v)
       for ((ci, ae) <- activationMap; ps <- ae) {
         val c = patternComponents(ci)
@@ -266,23 +266,31 @@ trait Actions {
         val ces = ComponentEmbedding(ps2)
         for (ce <- ces) {
           c.addEmbedding(ce)
-          for (v <- ce) mix.unmark(v)
+          for (v <- ce) codomains += v
           //updates += 1
         }
       }
 
-      // All the agents in the codomains of the embeddings we just
-      // created using the activation map are now unmarked.  Hence,
-      // the only agents left marked are those that were modified by
-      // side effects.  We now need to check them against all
+      // To find agents that experienced side effects, we find all the
+      // modified agents that are not in the codomain of one of the
+      // embeddings we just created.
+      //
+      // FIXME: This approach does _not_ work!!! There might be agents
+      // that experienced side-effects in the codomains of the new
+      // embeddings!  This needs to be handled differently!!!
+      mix.clearMarkedAgents
+      for (v <- modifiedAgents) mix.mark(v)
+      for (v <- codomains) mix.unmark(v)
+      val sideAffected = mix.markedAgents
+
+      // We now need to check them against all
       // remaining registered components to make sure we have found
       // every embedding.
       //
       // TODO: Is there a more efficient way to handle side effects?
       //var sideEffects = 0
-      val mas2 = mix.markedAgents
       for (c <- patternComponents) {
-        val ps = for (u <- c; v <- mas2) yield (u, v)
+        val ps = for (u <- c; v <- sideAffected) yield (u, v)
         val ces = ComponentEmbedding(ps)
         for (ce <- ces) {
           c.addEmbedding(ce)
@@ -459,12 +467,19 @@ trait Actions {
 
       @inline def linkAddition(
         atoms: mutable.Buffer[Atom],
-        u1: Agent, s1: SiteIndex, l1: LinkState,
-        u2: Agent, s2: SiteIndex) {
+        u1: Agent, s1: SiteIndex,
+        u2: Agent, s2: SiteIndex, l2: LinkState) {
         val o1 = rhsAgentOffset(u1)
         val o2 = rhsAgentOffset(u2)
+        val l1 = linkState(u2, s2)
         if (o2 <= o1)
-          atoms += LinkAddition(o1, s1, l1, o2, s2, linkState(u2, s2))
+          atoms += LinkAddition(o1, s1, l1, o2, s2, l2)
+      }
+
+      @inline def checkLinkComplete(l: LinkState) {
+        if (!l.isComplete) throw new IllegalArgumentException(
+          "attempt to introduce new link with incomplete link state \"" + l +
+            "\" in rule: " + lhs + " -> " + rhs)
       }
 
       val atoms = new mutable.ArrayBuffer[Atom]()
@@ -529,16 +544,18 @@ trait Actions {
                   " of agent " + lu + " in rule: " + lhs + " -> " + rhs)
           case (Undefined | Wildcard(_, _, _), Linked(ru2, rj2, rl)) => {
             atoms += LinkDeletion(lhsAgentOffset(lu), j)
-            linkAddition(atoms, ru, j, rl, ru2, rj2)
+            checkLinkComplete(rl)
+            linkAddition(atoms, ru, j, ru2, rj2, rl)
           }
           case (Stub, Linked(ru2, rj2, rl)) => {
-            linkAddition(atoms, ru, j, rl, ru2, rj2)
+            checkLinkComplete(rl)
+            linkAddition(atoms, ru, j, ru2, rj2, rl)
           }
           case (Linked(lu2, lj2, ll), Linked(ru2, rj2, rl)) => {
             if (!((lhsAgentOffset(lu2) == rhsAgentOffset(ru2)) &&
               (lj2 == rj2) && findStateChange(ll, rl).isEmpty)) {
               linkDeletion(atoms, lu, j, lu2)
-              linkAddition(atoms, ru, j, rl, ru2, rj2)
+              linkAddition(atoms, ru, j, ru2, rj2, rl)
             }
           }
           case _ => {}
@@ -561,7 +578,8 @@ trait Actions {
               "attempt to add agent " + ru + " with wildcard link at site " +
                 j + " in rule: " + lhs + " -> " + rhs)
           case Linked(ru2, j2, l) => {
-            linkAddition(atoms, ru, j, l, ru2, j2)
+            checkLinkComplete(l)
+            linkAddition(atoms, ru, j, ru2, j2, l)
           }
           case _ => { }
         }

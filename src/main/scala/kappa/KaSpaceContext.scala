@@ -27,12 +27,13 @@ trait KaSpaceContext extends KappaLikeContext
   def mkLinkState(link: Link, state: Option[LinkStateName]) =
     KaSpaceLinkState(link, state)
 
-  final case class KaSpaceAgentState(atype: AgentType, radius: Option[AgentStateName])
-      extends AgentStateIntf[KaSpaceAgentState]
-  {
+  final case class KaSpaceAgentState(
+    atype: AgentType, radius: Option[AgentStateName],
+    orientation: Orientation = Orientation(),
+    position: Position = Position(0, 0, 0))
+      extends AgentStateIntf[KaSpaceAgentState] {
+
     val atypeSym: AgentTypeSym = agentTypeSyms(atype)
-    var orientation: Orientation = Orientation()
-    var position: Position = Position(0, 0, 0)
 
     // -- AgentStateIntf[KaSpaceAgentState] API --
 
@@ -56,9 +57,8 @@ trait KaSpaceContext extends KappaLikeContext
 
     @inline def meet(that: KaSpaceAgentState) =
       if (this.atypeSym == that.atypeSym) (this.radius, that.radius) match {
-        case (None, None) => Some(this)
-        case (None, Some(s2)) => Some(that)
-        case (Some(s2), None) => Some(this)
+        case (None, _) => Some(that)
+        case (_, None) => Some(this)
         case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
       } else None
 
@@ -93,9 +93,8 @@ trait KaSpaceContext extends KappaLikeContext
 
     @inline def meet(that: KaSpaceSiteState) =
       if (this.nameSym == that.nameSym) (this.position, that.position) match {
-        case (None, None) => Some(this)
-        case (None, Some(s2)) => Some(that)
-        case (Some(s2), None) => Some(this)
+        case (None, _) => Some(that)
+        case (_, None) => Some(this)
         case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
       } else None
 
@@ -112,7 +111,8 @@ trait KaSpaceContext extends KappaLikeContext
     extends Matchable[KaSpaceLinkState]
   {
     // -- Matchable[KaSpaceLinkState] API --
-    @inline def matches(that: KaSpaceLinkState) = this.orientation == that.orientation
+    @inline def matches(that: KaSpaceLinkState) =
+      Matchable.optionMatches(this.orientation, that.orientation)(_==_)
 
     @inline override def isEquivTo[U <: KaSpaceLinkState](that: U): Boolean =
       this.orientation == that.orientation
@@ -125,9 +125,8 @@ trait KaSpaceContext extends KappaLikeContext
 
     @inline def meet(that: KaSpaceLinkState) =
       (this.orientation, that.orientation) match {
-        case (None, None) => Some(this)
-        case (None, Some(s2)) => Some(that)
-        case (Some(s2), None) => Some(this)
+        case (None, _) => Some(that)
+        case (_, None) => Some(this)
         case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
       }
 

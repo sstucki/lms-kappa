@@ -244,22 +244,18 @@ class KaSpaceModel extends Model
    */
   implicit def stringToMixture(expr: String) = Mixture(stringToPattern(expr))
 
-  /** Convert a pair `(lhs, rhs)` of pattern strings into a KaSpace action. */
-  implicit def stringPairToKappaAction(lr: (String, String)): Action =
-    KaSpaceAction(stringToPattern(lr._1), stringToPattern(lr._2))
-
-  implicit def scToKaSpace(sc: StringContext): ToKaSpace = new ToKaSpace(sc)
-
-  class ToKaSpace(sc: StringContext) {
-    def p(args: Any*): Pattern =
-      stringToPattern( sc.s(args :_*) )
-  }
-
   /**
    * Convert a pair `(lhs, rhs)` of KaSpace pattern strings into a
    * KaSpace action.
    */
-  //implicit def stringPairToKaSpaceAction(lr: (String, String)): Action =
-  //  KaSpaceAction(Pattern(lr._1), Pattern(lr._2))
+  implicit def stringPairToKappaAction(lr: (String, String)): Action =
+    KaSpaceAction(stringToPattern(lr._1), stringToPattern(lr._2))
+
+  implicit def scToKaSpace(sc: StringContext): Interpolator = new Interpolator(sc)
+
+  class Interpolator(sc: StringContext) {
+    def p(args: Any*): Pattern = stringToPattern( sc.s(args :_*) )
+    def m(args: Any*): Mixture = stringToMixture( sc.s(args :_*) )
+  }
 }
 

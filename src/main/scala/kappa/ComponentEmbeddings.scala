@@ -161,6 +161,7 @@ trait ComponentEmbeddings {
     def apply(u: Pattern.Agent, v: Mixture.Agent): Option[ComponentEmbedding] = {
       val component = u.component
       val inj = new Array[Mixture.Agent](component.length)
+      v.mixture.clearMarkedAgents
       if (extendInjection(u, v, inj, null))
         Some(new ComponentEmbedding(inj, u.component))
       else None
@@ -194,6 +195,7 @@ trait ComponentEmbeddings {
 
         (for ((u, v) <- ps) yield {
           val inj = new Array[Mixture.Agent](component.length)
+          v.mixture.clearMarkedAgents
           if (extendInjection(u, v, inj, conflicts))
             Some(new ComponentEmbedding(inj, u.component))
           else None
@@ -215,7 +217,8 @@ trait ComponentEmbeddings {
 
       val component = u.component
       val inj = new Array[Pattern.Agent](component.length)
-      if (extendInjection(u, v, inj, null)) Some(inj)
+      val codomain = new mutable.BitSet
+      if (extendInjection(u, v, inj, codomain)) Some(inj)
       else None
     }
 
@@ -229,27 +232,25 @@ trait ComponentEmbeddings {
      * @param v the next agent in the image of the injection to
      *        inspect in the traversal.
      * @param inj the partial injection to extend.
-     * @param conflicts a conflict map used to avoid the construction
-     *        of redundant injections by recording injection pairs
-     *        encountered during previous traversals (only used
-     *        during multiple traversals).
+     * @param codomain a bit set representing indices of the agents in
+     *        the codomain of the partial injection.
      * @returns `true` if the injection in `inj` is total.
      */
     private def extendInjection(
       u: Pattern.Agent, v: Pattern.Agent, inj: Array[Pattern.Agent],
-      conflicts: Array[mutable.HashSet[Pattern.Agent]]): Boolean = {
+      codomain: mutable.BitSet): Boolean = {
       val i = u.index
       if (inj(i) != null) inj(i) == v
-      else if (conflicts != null && (conflicts(i) contains v)) false
+      else if (codomain contains v.index) false
       else {
         if (u matches v) {
           inj(i) = v
-          if (conflicts != null) conflicts(i) += v
+          codomain += v.index
           (0 until u.sites.size) forall { j =>
             (u.neighbour(j), v.neighbour(j)) match {
               case (None, _) => true
               case (Some((w1, _)), Some((w2, _))) => {
-                extendInjection(w1, w2, inj, conflicts)
+                extendInjection(w1, w2, inj, codomain)
               }
               case _ => false
             }
@@ -275,18 +276,23 @@ trait ComponentEmbeddings {
      * @returns `true` if the injection in `inj` is total after
      *          expansion.
      */
-    // FIXME: Code duplication.  We could really profit from a
+    // FIXME1: Code duplication.  We could really profit from a
     // common interface for Mixture.{Agent,Site,Link} and
     // Site.{Agent,Site,Link}.
+    //
+    // FIXME2: There are lift sets in mixtures.  We can use those to
+    // test for conflicts and remove the `conflicts` array.
     private def extendInjection(
       u: Pattern.Agent, v: Mixture.Agent, inj: Array[Mixture.Agent],
       conflicts: Array[mutable.HashSet[Mixture.Agent]]): Boolean = {
       val i = u.index
       if (inj(i) != null) inj(i) == v
+      else if (v.marked) false
       else if (conflicts != null && (conflicts(i) contains v)) false
       else {
         if (u matches v) {
           inj(i) = v
+          v.mixture.mark(v)
           if (conflicts != null) conflicts(i) += v
           (0 until u.sites.size) forall { j =>
             (u.neighbour(j), v.neighbour(j)) match {

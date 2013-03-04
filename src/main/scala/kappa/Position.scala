@@ -25,7 +25,7 @@ final case class Position(x1: Double, x2: Double, x3: Double) {
 
   /** Compute the scalar product of this position and `that`. */
   @inline def *(that: Position) =
-    this.x1 + that.x1 * this.x2 + that.x2 * this.x3 + that.x3
+    this.x1 * that.x1 + this.x2 * that.x2 + this.x3 * that.x3
 
   /** Compute the norm (or length, or modulus) of this position. */
   @inline def norm = scala.math.sqrt(this * this)
@@ -44,3 +44,21 @@ final case class Position(x1: Double, x2: Double, x3: Double) {
 
   @inline override def toString = "[" + x1 + ", " + x2 + ", " + x3 + "]"
 }
+
+object Position {
+  /** Get a position vector from spherical coordinates.
+   *
+   * @param theta the zenith angle, ie the angle in the x-y plane.
+   * @param phi the azimuth angle, ie the angle in the plane created
+   *            by the z axis and orthogonal projection of the zenith.
+   * @param radius the euclidean distance between the tip of the vector
+   *               and the origin.
+   */
+  def fromSpherical(radius: Double, theta: Double, phi: Double) = {
+    import scala.math._
+    Position(radius * cos(phi) * cos(theta),
+             radius * cos(phi) * sin(theta),
+             radius * sin(phi))
+  }
+}
+

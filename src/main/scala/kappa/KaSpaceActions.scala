@@ -62,6 +62,9 @@ trait KaSpaceActions extends Actions {
         if (agents.isEmpty) true
         else {
 
+          // println("# post-condition after action = " + action.lhs +
+          //   " -> " + action.rhs + " (" + action + ")")
+
           // Get target mixture
           val mix = agents.head.mixture
 
@@ -104,13 +107,15 @@ trait KaSpaceActions extends Actions {
                 case Some(tp) => {
                   val vo = lo * uo
                   val vp = up + uo * sp - vo * tp
+                  //println("lo: " + lo)
+                  //println("uo: " + uo)
+                  //println("vo: " + vo)
                   if (v.marked) {
                     // Check previously computed position and orientation
                     (v.state.position ~= vp) && (v.state.orientation ~= vo)
                   } else {
                     // Assign new position and orientation
-                    v.state.position         = vp
-                    v.state.orientation = vo
+                    v.state = v.state.copy(position = vp, orientation = vo)
                     checkGeometry(v, as)
                   }
                 }
@@ -123,7 +128,7 @@ trait KaSpaceActions extends Actions {
       }
 
       // Check the agents in `as` for collisions. FIXME: Naive quadratic
-      // algo...
+      // collision detection algorithm...
       def checkCollisions(as: Array[Agent]): Boolean = {
         as.indices forall { i =>
           (i + 1) until as.size forall { j =>
@@ -131,8 +136,10 @@ trait KaSpaceActions extends Actions {
             val v = as(j)
               (u.state.radius, v.state.radius) match {
               case (Some(ru), Some(rv)) => {
-                val d = u.state.position - v.state.position
-                ru + rv <= d.norm
+                val d1 = ru + rv
+                val d2 = u.state.position - v.state.position
+                //println("d1^2: " + (d1 * d1) + ", d2^2: " + (d2 * d2))
+                d1 * d1 <= d2 * d2
               }
               case _ => true
             }
@@ -152,6 +159,11 @@ trait KaSpaceActions extends Actions {
       toCheck forall { u =>
         u.marked || {
           val as = new mutable.ArrayBuffer[Agent]
+          // val cg = checkGeometry(u, as)
+          // val cc = checkCollisions(as.toArray)
+          // println("# geom soundness = " + cg)
+          // println("# coll soundness = " + cc)
+          // cg && cc
           checkGeometry(u, as) && checkCollisions(as.toArray)
         }
       }

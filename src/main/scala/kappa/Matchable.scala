@@ -191,8 +191,8 @@ object Matchable {
    * This method defines a new join operation `J(ox, oy)` (w.r.t. the
    * join operation `f` on `T`s):
    *
-   *  - `J(None, oy) = Some(None)`, for any `oy`,
    *  - `J(ox, None) = Some(None)`, for any `ox`,
+   *  - `J(None, oy) = Some(None)`, for any `oy`,
    *  - `J(Some(x), Some(y)) = Some(f(x, y))`.
    *
    * @tparam T the underlying type of the `Option[T]` values.
@@ -215,8 +215,8 @@ object Matchable {
    * This method defines a new meet operation `M(ox, oy)` (w.r.t. the
    * join operation `f` on `T`s):
    *
-   *  - `M(None, oy) = Some(oy)`, for any `oy`,
    *  - `M(ox, None) = Some(ox)`, for any `ox`,
+   *  - `M(None, oy) = Some(oy)`, for any `oy`,
    *  - `M(Some(x), Some(y)) = Some(f(x, y))`, if `f(x, y)` exists,
    *    and `None` otherwise.
    *
