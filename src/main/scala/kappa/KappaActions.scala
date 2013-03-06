@@ -3,8 +3,8 @@ package kappa
 import scala.language.implicitConversions
 
 trait KappaActions extends Actions {
-  this: KappaContext with Patterns with Mixtures with Embeddings
-      with PartialEmbeddings with Rules =>
+  this: KappaContext with Agents with Patterns with Mixtures
+      with Embeddings with PartialEmbeddings with Rules =>
 
   /** Factory object for building Kappa actions.  */
   object KappaAction {
@@ -18,14 +18,12 @@ trait KappaActions extends Actions {
      */
     def apply(lhs: Pattern, rhs: Pattern): Action = {
 
-      import Pattern._
-
       // Compute the offsets of the first agents of each component of
       // the LHS in the agents array passed to an action application.
       val ceOffsets: Array[Int] =
         lhs.components.scanLeft(0) { (i, ce) => i + ce.length }
 
-      @inline def lhsAgentOffset(a: Agent) =
+      @inline def lhsAgentOffset(a: Pattern.Agent) =
         ceOffsets(a.component.index) + a.index
 
       // Find the longest common prefix, i.e. longest prefix in the

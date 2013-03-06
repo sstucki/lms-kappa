@@ -3,31 +3,31 @@ package kappa
 import scala.collection.mutable
 
 trait ComponentEmbeddings {
-  this: Mixtures with Patterns =>
+  this: Agents with Mixtures with Patterns =>
 
   /**
    * A class representing an embedding from a single connected
    * component of a site graph into a mixture.
    *
    * ''WARNING'': For convenience, this class provides the interface
-   * of a `Seq[Mixture.Agent]`.  However, using some methods from the
+   * of a `Seq[Agents#Agent]`.  However, using some methods from the
    * `Seq` API might not result in the expected behavior.  E.g. `++`
-   * will return a `Seq[Mixture.Agent]` rather than the expected
+   * will return a `Seq[Agents#Agent]` rather than the expected
    * `ComponentEmbedding`.
    *
-   * @param inj an array of [[Mixtures#Mixture.Agent]]s representing
+   * @param T the target agent type.
+   * @param inj an array of [[Agents#.Agent]]s representing
    *        the injection from pattern agent indices to mixture
    *        agents.
    * @param component the connected [[Patterns#Pattern.Component]]
    *        (of `pattern`) that conconstitutes the domain of this
    *        embedding.
    */
-  final case class ComponentEmbedding private (
-    val inj: Array[Mixture.Agent], val component: Pattern.Component)
-      extends Seq[Mixture.Agent]
-  {
+  final case class ComponentEmbedding[T <: Agent] private (
+    val inj: Array[T], val component: Pattern.Component) extends Seq[T] {
+
     type Source = AgentIndex
-    type Target = Mixture.Agent
+    type Target = T
 
     // TODO: Not used. Remove.
     // /**
@@ -39,10 +39,10 @@ trait ComponentEmbeddings {
 
     /**
      * Returns this [[ComponentEmbedding]] as a map from agent indices
-     * to [[Mixtures#Mixture.Agent]]s.
+     * to agents.
      *
      * @return this [[ComponentEmbedding]] as a map from agent indices
-     * to [[Mixtures#Mixture.Agent]]s.
+     * to agents.
      */
     def toMap: Map[Source, Target] = mapIterator.toMap
 
@@ -61,9 +61,6 @@ trait ComponentEmbeddings {
     @inline def mapIterator: Iterator[(Source, Target)] =
       inj.iterator.zipWithIndex map (_.swap)
 
-    // TODO: Potentially confusing?
-    @inline def +(p: (Source, Target)) = this updated (p._1, p._2)
-
 
     // -- Core Seq[Target] API --
 
@@ -76,17 +73,14 @@ trait ComponentEmbeddings {
 
     // -- Extra Seq[Target] API --
 
-    @inline def :+(elem: Target) = this.copy(inj = this.inj :+ elem)
-
     @inline override def foreach[U](f: Target => U): Unit =
       inj foreach f
 
-    @inline def updated(index: Source, elem: Target) =
-      this.copy(inj = this.inj updated (index, elem))
 
     // -- Equals API --
 
-    override def canEqual(that: Any) = that.isInstanceOf[ComponentEmbedding]
+    override def canEqual(that: Any) =
+      that.isInstanceOf[ComponentEmbedding[_]]
 
 
     // -- Any API --
@@ -106,7 +100,7 @@ trait ComponentEmbeddings {
      *         agent; `false` otherwise.
      */
     override def equals(that: Any): Boolean = that match {
-      case that: ComponentEmbeddings#ComponentEmbedding =>
+      case that: ComponentEmbeddings#ComponentEmbedding[_] =>
         (that canEqual this) &&
         (this.component == that.component) &&
         (this.head == that.head)
@@ -127,23 +121,6 @@ trait ComponentEmbeddings {
     override def toString =
       "CE(" + (if (component == null) "?" else component.index) +
         ": " + toMap.mkString(", ") + ")"
-
-
-    // -- Private methods --
-
-    /**
-     * Register this component embedding in the appropriate lift sets
-     * of the target agents.
-     */
-    private def updateLiftSets = {
-      for (i <- inj.indices) {
-        inj(i).addLift(component(i), this)
-      }
-    }
-
-    // Register this embedding in the lift sets of all its target
-    // agents.
-    updateLiftSets
   }
 
 
@@ -158,12 +135,41 @@ trait ComponentEmbeddings {
      *          the pattern component containing `u` into the mixture
      *          containing `v`, or `None` if no such embedding exists.
      */
-    def apply(u: Pattern.Agent, v: Mixture.Agent): Option[ComponentEmbedding] = {
+    def findEmbedding(u: Pattern.Agent, v: Mixture.Agent)
+        : Option[ComponentEmbedding[Mixture.Agent]] = {
       val component = u.component
       val inj = new Array[Mixture.Agent](component.length)
       v.mixture.clearMarkedAgents(Visited)
-      if (extendInjection(u, v, inj, null))
-        Some(new ComponentEmbedding(inj, u.component))
+      if (extendInjection(u, v, inj)) {
+        val ce = new ComponentEmbedding[Mixture.Agent](inj, u.component)
+
+        // Register the new embedding in the lift sets of all its
+        // target agents.
+        for (i <- inj.indices)
+          inj(i).asInstanceOf[Mixture.Agent].addLift(component(i), ce)
+
+        Some(ce)
+      }
+      else None
+    }
+
+    /**
+     * Extend a pair of pattern agents into a component embedding.
+     *
+     * @param u the first pattern agent in the agent pair
+     * @param v the second pattern agent in the agent pair
+     * @returns `Some(ce)`, where `ce` is an embedding from
+     *          the pattern component containing `u` into the pattern
+     *          containing `v`, or `None` if no such embedding exists.
+     */
+    def findEmbedding(u: Pattern.Agent, v: Pattern.Agent)
+        : Option[ComponentEmbedding[Pattern.Agent]] = {
+
+      val component = u.component
+      val inj = new Array[Pattern.Agent](component.length)
+      val codomain = new mutable.BitSet
+      if (extendInjection(u, v, inj, codomain))
+        Some(new ComponentEmbedding[Pattern.Agent](inj, component))
       else None
     }
 
@@ -181,45 +187,10 @@ trait ComponentEmbeddings {
      * @returns all the embeddings the containing any of the
      *          pairs in `ps`.
      */
-    def apply(ps: Iterable[(Pattern.Agent, Mixture.Agent)])
-        : Iterable[ComponentEmbedding] = {
-
+    def findEmbeddings(ps: Iterable[(Pattern.Agent, Mixture.Agent)])
+        : Iterable[ComponentEmbedding[Mixture.Agent]] = {
       if (ps.isEmpty) Iterable.empty
-      else {
-        val component = ps.head._1.component
-        val conflicts =
-          new Array[mutable.HashSet[Mixture.Agent]](component.length)
-        for (i <- conflicts.indices) {
-          conflicts(i) = new mutable.HashSet()
-        }
-
-        (for ((u, v) <- ps) yield {
-          val inj = new Array[Mixture.Agent](component.length)
-          v.mixture.clearMarkedAgents(Visited)
-          if (extendInjection(u, v, inj, conflicts))
-            Some(new ComponentEmbedding(inj, u.component))
-          else None
-        }).flatten
-      }
-    }
-
-    /**
-     * Extend a pair of pattern agents into a component embedding.
-     *
-     * @param u the first pattern agent in the agent pair
-     * @param v the second pattern agent in the agent pair
-     * @returns `Some(ce)`, where `ce` is an embedding from
-     *          the pattern component containing `u` into the pattern
-     *          containing `v`, or `None` if no such embedding exists.
-     */
-    def findEmbedding(u: Pattern.Agent, v: Pattern.Agent)
-        : Option[Array[Pattern.Agent]] = {
-
-      val component = u.component
-      val inj = new Array[Pattern.Agent](component.length)
-      val codomain = new mutable.BitSet
-      if (extendInjection(u, v, inj, codomain)) Some(inj)
-      else None
+      else ps flatMap { p => findEmbedding(p._1, p._2) }
     }
 
     /**
@@ -240,8 +211,8 @@ trait ComponentEmbeddings {
       u: Pattern.Agent, v: Pattern.Agent, inj: Array[Pattern.Agent],
       codomain: mutable.BitSet): Boolean = {
       val i = u.index
-      if (inj(i) != null) inj(i) == v
-      else if (codomain contains v.index) false
+      if (inj(i) != null) inj(i) == v             // Functionality test
+      else if (codomain contains v.index) false   // Injectivity test
       else {
         if (u matches v) {
           inj(i) = v
@@ -276,29 +247,30 @@ trait ComponentEmbeddings {
      * @returns `true` if the injection in `inj` is total after
      *          expansion.
      */
-    // FIXME1: Code duplication.  We could really profit from a
-    // common interface for Mixture.{Agent,Site,Link} and
-    // Site.{Agent,Site,Link}.
+    // FIXME1: Code duplication.  The problem is making the
+    // injectivity check efficient for both Pattern and Mixture.
+    // While Pattern allows us to track the codomain as a simple
+    // BitSet (because we know the index of every agent), Mixture
+    // provides the marking mechanism to represent subsets internally.
     //
     // FIXME2: There are lift sets in mixtures.  We can use those to
     // test for conflicts and remove the `conflicts` array.
     private def extendInjection(
-      u: Pattern.Agent, v: Mixture.Agent, inj: Array[Mixture.Agent],
-      conflicts: Array[mutable.HashSet[Mixture.Agent]]): Boolean = {
+      u: Pattern.Agent, v: Mixture.Agent, inj: Array[Mixture.Agent])
+        : Boolean = {
       val i = u.index
-      if (inj(i) != null) inj(i) == v
-      else if (v hasMark Visited) false
-      else if (conflicts != null && (conflicts(i) contains v)) false
+      if (inj(i) != null) inj(i) == v           // Functionality test
+      else if (v hasMark Visited) false         // Injectivity test
+      else if (v.liftMap isDefinedAt u) false   // Duplicate test
       else {
         if (u matches v) {
           inj(i) = v
           v.mixture.mark(v, Visited)
-          if (conflicts != null) conflicts(i) += v
           (0 until u.sites.size) forall { j =>
             (u.neighbour(j), v.neighbour(j)) match {
               case (None, _) => true
               case (Some((w1, _)), Some((w2, _))) =>
-                extendInjection(w1, w2, inj, conflicts)
+                extendInjection(w1, w2, inj)
               case _ => false
             }
           }

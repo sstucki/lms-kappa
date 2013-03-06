@@ -3,7 +3,7 @@ package kappa
 import collection.immutable.Vector
 
 trait Embeddings extends ComponentEmbeddings {
-  this: Mixtures with Patterns =>
+  this: Agents with Mixtures with Patterns =>
 
   /**
    * A class reperesenting a total embedding as a product of
@@ -19,12 +19,14 @@ trait Embeddings extends ComponentEmbeddings {
    * ever required (e.g. `++` returning an Embedding), we can always
    * implement it later.  Does that that sound like a good compromise?
    *
+   * @param T the target agent type.
    * @param pes the [[ComponentEmbedding]]s making up this [[Embedding]].
    * @param pattern the [[Patterns#Pattern]] that constitutes the domain of
    *        this embedding.
    */
-  final case class Embedding(ces: Vector[ComponentEmbedding], pattern: Pattern)
-      extends Seq[ComponentEmbedding] {
+  final case class Embedding[T <: Agent](
+    ces: Array[ComponentEmbedding[T]], pattern: Pattern)
+      extends Seq[ComponentEmbedding[T]] {
 
     /**
      * Return the image of the root agent of a given component
@@ -49,13 +51,7 @@ trait Embeddings extends ComponentEmbeddings {
 
     // -- Extra Seq[ComponentEmbedding] API --
 
-    @inline def :+(ce: ComponentEmbedding) =
-      this.copy(ces = this.ces :+ ce)
-
-    @inline override def foreach[U](f: ComponentEmbedding => U): Unit =
+    @inline override def foreach[U](f: ComponentEmbedding[T] => U): Unit =
       ces foreach f
-
-    @inline def updated(index: ComponentIndex, elem: ComponentEmbedding) =
-      this.copy(ces = this.ces updated (index, elem))
   }
 }

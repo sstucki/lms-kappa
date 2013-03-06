@@ -23,9 +23,9 @@ class KappaModel extends Model with KappaContext with KappaActions
       new KappaSiteBuilder(state, Stub)
     @inline def !(li: Int): KappaSiteBuilder =
       new KappaSiteBuilder(state, Linked(li))
-    @inline def !(wc: Pattern.Wildcard): KappaSiteBuilder =
+    @inline def !(wc: Agent.Wildcard): KappaSiteBuilder =
       new KappaSiteBuilder(
-        state, Wildcard(wc.agentState map (_.atype), wc.siteState))
+        state, Wildcard(wc.agentState, wc.siteState))
     @inline def !* : KappaSiteBuilder =
       new KappaSiteBuilder(state, Wildcard(None, None))
   }
@@ -39,7 +39,7 @@ class KappaModel extends Model with KappaContext with KappaActions
     final case object Undefined extends Link
     final case object Stub extends Link
     final case class Wildcard(
-      agentState: Option[AgentType],
+      agentState: Option[KappaAgentState],
       siteState: Option[KappaSiteState]) extends Link
     final case class Linked(to: BondLabel) extends Link
   }
@@ -102,8 +102,8 @@ class KappaModel extends Model with KappaContext with KappaActions
           val x = v += sb.state
           sb.link match {
             case Stub           => x define Pattern.Builder.Stub
-            case Wildcard(a, s) => x define Pattern.Builder.Wildcard(
-              a map (KappaAgentState(_)), s, None)
+            case Wildcard(a, s) =>
+              x define Pattern.Builder.Wildcard(a, s, None)
             case Linked(li)     => linkMap += ((li, (i, j) :: linkMap(li)))
             case _              => { }
           }
@@ -134,13 +134,13 @@ class KappaModel extends Model with KappaContext with KappaActions
     new KappaSiteBuilder(t, KappaSiteBuilder.Stub)
 
   /** Convert sites into site builders. */
-  implicit def siteToBuilder(s: Pattern.Site): KappaSiteBuilder = {
+  implicit def siteToBuilder(s: Agent.Site[Pattern.Agent]): KappaSiteBuilder = {
     val link = s.link match {
-      case Pattern.Undefined         => KappaSiteBuilder.Undefined
-      case Pattern.Stub              => KappaSiteBuilder.Stub
-      case Pattern.Wildcard(a, s, _) =>
-        KappaSiteBuilder.Wildcard(a map (_.atype), s)
-      case Pattern.Linked(_, _, _)   => throw new IllegalArgumentException(
+      case Agent.Undefined         => KappaSiteBuilder.Undefined
+      case Agent.Stub              => KappaSiteBuilder.Stub
+      case Agent.Wildcard(a, s, _) =>
+        KappaSiteBuilder.Wildcard(a, s)
+      case Agent.Linked(_, _, _)   => throw new IllegalArgumentException(
         "attempt to build pre-connected site")
     }
     new KappaSiteBuilder(s.state, link)

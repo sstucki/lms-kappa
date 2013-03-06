@@ -5,8 +5,8 @@ import scala.language.implicitConversions
 import scala.collection.mutable
 
 trait KaSpaceActions extends Actions {
-  this: KaSpaceContext with Patterns with Mixtures with Embeddings
-      with PartialEmbeddings with Rules =>
+  this: KaSpaceContext with Agents with Patterns with Mixtures
+      with Embeddings with PartialEmbeddings with Rules =>
 
   /** Factory object for building KaSpace actions.  */
   object KaSpaceAction {
@@ -20,14 +20,12 @@ trait KaSpaceActions extends Actions {
      */
     def apply(lhs: Pattern, rhs: Pattern): Action = {
 
-      import Pattern._
-
       // Compute the offsets of the first agents of each component of
       // the LHS in the agents array passed to an action application.
       val ceOffsets: Array[Int] =
         lhs.components.scanLeft(0) { (i, ce) => i + ce.length }
 
-      @inline def lhsAgentOffset(a: Agent) =
+      @inline def lhsAgentOffset(a: Pattern.Agent) =
         ceOffsets(a.component.index) + a.index
 
       // Find the longest common prefix, i.e. longest prefix in the
@@ -90,18 +88,19 @@ trait KaSpaceActions extends Actions {
      */
     def checkGeometricSoundness(toCheck: Iterable[Mixture.Agent]): Boolean = {
 
-      import Mixture._
-
       // Check the soundness of a connected component recursively
       // through a depth-first traversal starting at a given agent.
-      def checkGeometry(u: Agent, as: mutable.Buffer[Agent]): Boolean = {
+      def checkGeometry(
+        u: Mixture.Agent, as: mutable.Buffer[Mixture.Agent]): Boolean = {
         mix.mark(u, Visited)
         as += u
         val up = u.state.position
         val uo = u.state.orientation
         u.sites forall { s =>
           (s.state.position, s.link) match {
-            case (Some(sp), Linked(v, j, KaSpaceLinkState(_, Some(lo)))) => {
+            case (Some(sp), Agent.Linked(
+              v, j, KaSpaceLinkState(_, Some(lo)))) => {
+
               val t = v.sites(j)
               t.state.position match {
                 case Some(tp) => {
@@ -126,7 +125,7 @@ trait KaSpaceActions extends Actions {
 
       // Check the agents in `as` for collisions. FIXME: Naive quadratic
       // collision detection algorithm...
-      def checkCollisions(as: Array[Agent]): Boolean = {
+      def checkCollisions(as: Array[Mixture.Agent]): Boolean = {
         as.indices forall { i =>
           (i + 1) until as.size forall { j =>
             val u = as(i)
@@ -155,7 +154,7 @@ trait KaSpaceActions extends Actions {
       // traversal.
       toCheck forall { u =>
         (u hasMark Visited) || {
-          val as = new mutable.ArrayBuffer[Agent]
+          val as = new mutable.ArrayBuffer[Mixture.Agent]
           // val cg = checkGeometry(u, as)
           // val cc = checkCollisions(as.toArray)
           // println("# geom soundness = " + cg)

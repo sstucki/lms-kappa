@@ -39,7 +39,7 @@ class KaSpaceModel extends Model
       new KaSpaceSiteBuilder(state, Stub)
     @inline def !(li: Int, ls: Option[LinkStateName]): KaSpaceSiteBuilder =
       new KaSpaceSiteBuilder(state, Linked(li, ls))
-    @inline def !(wc: Pattern.Wildcard): KaSpaceSiteBuilder =
+    @inline def !(wc: Agent.Wildcard): KaSpaceSiteBuilder =
       new KaSpaceSiteBuilder(
         state, Wildcard(wc.agentState, wc.siteState, wc.linkState))
     @inline def !* : KaSpaceSiteBuilder =
@@ -160,12 +160,13 @@ class KaSpaceModel extends Model
     new KaSpaceSiteBuilder(t, KaSpaceSiteBuilder.Stub)
 
   /** Convert sites into site builders. */
-  implicit def siteToBuilder(s: Pattern.Site): KaSpaceSiteBuilder = {
+  implicit def siteToBuilder(
+    s: Agent.Site[Pattern.Agent]): KaSpaceSiteBuilder = {
     val link = s.link match {
-      case Pattern.Undefined         => KaSpaceSiteBuilder.Undefined
-      case Pattern.Stub              => KaSpaceSiteBuilder.Stub
-      case Pattern.Wildcard(a, s, l) => KaSpaceSiteBuilder.Wildcard(a, s, l)
-      case Pattern.Linked(_, _, _)   => throw new IllegalArgumentException(
+      case Agent.Undefined         => KaSpaceSiteBuilder.Undefined
+      case Agent.Stub              => KaSpaceSiteBuilder.Stub
+      case Agent.Wildcard(a, s, l) => KaSpaceSiteBuilder.Wildcard(a, s, l)
+      case Agent.Linked(_, _, _)   => throw new IllegalArgumentException(
         "attempt to build pre-connected site")
     }
     new KaSpaceSiteBuilder(s.state, link)

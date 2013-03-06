@@ -5,7 +5,7 @@ import scala.collection.mutable
 import scala.language.implicitConversions
 
 trait Mixtures {
-  mixtures: LanguageContext with Patterns with Embeddings =>
+  mixtures: LanguageContext with Agents with Patterns with Embeddings =>
 
   /**
    * A class representing mixtures in [[kappa.Model]]s (i.e. site
@@ -104,9 +104,11 @@ trait Mixtures {
     //     implementation.
 
 
-    import Mixture._
+    import Mixtures.this.Agent._
+    type Agent = Mixture.Agent  // Convenience alias
 
-    type T = Agent
+    /** The [[Markable]] instances in this mixture are [[Agent]]s. */
+    type T = Mixture.Agent
 
     /** First agent in the doubly-linked list representing the mixture. */
     private var _head: Agent = null
@@ -166,7 +168,7 @@ trait Mixtures {
      * that state will be reflected in the checkpoint and can not be
      * reverted through a call to [[Mixture.rollback]].
      *
-     * NOTE 2: The lift sets of an agents are not checkpointed.
+     * NOTE 2: The lift maps of an agents are not checkpointed.
      *
      * @return this mixture.
      */
@@ -193,10 +195,8 @@ trait Mixtures {
 
         // Restore the state of `u` to that of `v`.
         u.state = v.state
-        for (i <- v.sites.indices) {
-          u.sites(i).state = v.sites(i).state
-          u.sites(i).link  = v.sites(i).link
-        }
+        for (i <- v.sites.indices)
+          u.sites(i) = v.sites(i)
         u.prev = v.prev
         u.next = v.next
         if (u.prev != null) u.prev.next = u
@@ -257,6 +257,7 @@ trait Mixtures {
      * @return a copy of this mixture.
      */
     def copy: Mixture = {
+
       var u: Agent = _head
       val that = new Mixture
       that._length = this._length
@@ -264,8 +265,8 @@ trait Mixtures {
       // First allocate "empty" agents for `that`
       var p: Agent = null
       while(u != null) {
-        val sites = new Array[Site](u.sites.size)
-        val v = new Agent(u.state, sites)
+        val sites = new Array[Site[Mixture.Agent]](u.sites.size)
+        val v = new Mixture.Agent(u.state, sites)
         v._mixture = that
         v.prev = p
         if (p == null) { that._head = v } else { p.next = v }
@@ -278,13 +279,15 @@ trait Mixtures {
       u = _head
       while(u != null) {
         val v = u.copy
-        for (i <- 0 until u.length) {
-          val s = u(i)
+        for (i <- u.sites.indices) {
+          val s = u.sites(i)
           val l = s.link match {
             case Linked(a, j, l) => Linked(a.copy, j, l)
             case Stub => Stub
+            case _ => throw new IllegalStateException(
+              "encountered mixture with an undefined or wildcard link")
           }
-          v.sites(i) = Site(s.state, l)
+          v.sites(i) = new Site[Agent](s.state, l)
         }
         u = u.next
       }
@@ -322,14 +325,14 @@ trait Mixtures {
 
       // Create and initialize sites
       var i: Int = 0
-      val sites = new Array[Site](siteStates.size)
+      val sites = new Array[Site[Mixture.Agent]](siteStates.size)
       for (s <- siteStates) {
-        sites(i) = new Site(s)
+        sites(i) = new Site[Mixture.Agent](s)
         i += 1
       }
 
       // Add agent to mixture
-      this += (new Agent(state, sites))
+      this += (new Mixture.Agent(state, sites))
     }
 
     /** Remove a single agent from this mixture. */
@@ -343,7 +346,7 @@ trait Mixtures {
         s.link match {
           case Linked(u, i, _) => {
             checkpointAgent(u)
-            u.sites(i).link = Stub
+            u.sites(i) = u.sites(i).copy(link = Stub)
             mark(u, SideEffect) // FIXME for perfomance
             // We should manage this in the action, since we know there
             // what is actually side-effected and what's not
@@ -411,14 +414,14 @@ trait Mixtures {
     // we might always add it just for fun.
 
     /** Connect two sites in this mixture. */
-    def connect(u1: Agent, s1: SiteIndex, l1: LinkState,
-                u2: Agent, s2: SiteIndex, l2: LinkState): Mixture = {
+    def connect(u1: Agent, i1: SiteIndex, l1: LinkState,
+                u2: Agent, i2: SiteIndex, l2: LinkState): Mixture = {
 
       checkpointAgent(u1)
       checkpointAgent(u2)
 
-      u1.sites(s1).link = Linked(u2, s2, l1)
-      u2.sites(s2).link = Linked(u1, s1, l2)
+      u1.sites(i1) = u1.sites(i1).copy(link = Linked(u2, i2, l1))
+      u2.sites(i2) = u2.sites(i2).copy(link = Linked(u1, i1, l2))
 
       // TODO Shouldn't these marks be set by the action?
       mark(u1, Updated)
@@ -428,19 +431,19 @@ trait Mixtures {
     }
 
     /** Disconnect a site in this mixture. */
-    def disconnect(u: Agent, s: SiteIndex): Mixture = {
-      val s1 = u.sites(s)
-      s1.link match {
-        case Linked(u2, i, _) => {
+    def disconnect(u: Agent, i: SiteIndex): Mixture = {
+      val s = u.sites(i)
+      s.link match {
+        case Linked(u2, i2, _) => {
           checkpointAgent(u2)
-          u2.sites(i).link = Stub
+          u2.sites(i2) = u2.sites(i2).copy(link = Stub)
           mark(u2, Updated)
           mark(u2, SideEffect) // FIXME for perfomance, see above.
         }
         case _ => { }
       }
       checkpointAgent(u)
-      s1.link = Stub
+      u.sites(i) = s.copy(link = Stub)
       mark(u, Updated)
 
       this
@@ -449,32 +452,31 @@ trait Mixtures {
     /**
      * Update the state of an agent in this mixture.
      *
-     * @param agent the agent to modify.
+     * @param u the agent to modify.
      * @param state the new state of `agent`.
      * @return this mixture with the state of `agent` changed to
      *         `state`.
      */
-    def updateAgentState(agent: Agent, state: AgentState): Mixture = {
-      checkpointAgent(agent)
-      agent.state = state
-      mark(agent, Updated)
+    def updateAgentState(u: Agent, s: AgentState): Mixture = {
+      checkpointAgent(u)
+      u.state = s
+      mark(u, Updated)
       this
     }
 
     /**
      * Update the state of a site of some agent in this mixture.
      *
-     * @param agent the agent containing the site to modify.
-     * @param siteIdx the index of the site to modify.
-     * @param state the new state of the site to modify.
+     * @param u the agent containing the site to modify.
+     * @param i the index of the site to modify.
+     * @param s the new state of the site to modify.
      * @return this mixture with the state of the site at `siteIdx`
      *         changed to `state`.
      */
-    def updateSiteState(
-      agent: Agent, siteIdx: SiteIndex, state: SiteState): Mixture = {
-      checkpointAgent(agent)
-      agent.sites(siteIdx).state = state
-      mark(agent, Updated)
+    def updateSiteState(u: Agent, i: SiteIndex, s: SiteState): Mixture = {
+      checkpointAgent(u)
+      u.sites(i) = u.sites(i).copy(state = s)
+      mark(u, Updated)
       this
     }
 
@@ -558,91 +560,12 @@ trait Mixtures {
   }
 
   object Mixture {
-    /** A class representing potential links between [[Mixture.Site]]s. */
-    // FIXME: This can be simplified by representing stubs as loops (self-links).
-    //
-    // RHZ: Do we need to simplify it that much? Representing stubs as self-links
-    // is conceptually wrong and misleading for the guy reading the code
-    //
-    // stucki: Yes, that is true, and that is why I did not implement
-    // it so far.  Using self-links I think we could avoid some
-    // overhead (essentially unnecessary object creation and pattern
-    // matches) but I'm not sure how substantial the gain in
-    // performance would be and in Scala using "Stub" is certainly
-    // more clear -- so let's keep it as it is.  In C/C++ this is a
-    // bit different, because there are no native "variant types" and
-    // so using self-links would be more efficient and might even lead
-    // to less complex code.
-    sealed abstract class Link {
-      override def toString = this match {
-        case Stub => ""
-        case Linked(a, s, l) =>
-          "!" + a.state + "." + a.sites(s).state + "." + l
-      }
-    }
-
-    /** An object representing stubs, i.e. unconnected [[Mixture.Site]]s. */
-    case object Stub extends Link
-
-    /**
-     * A class representing actual links links between [[Mixture.Site]]s.
-     *
-     * Instances of this class also hold the [[LinkState]] in the
-     * direction from the source site (i.e. the site that stores the
-     * instance) to the target site (i.e. the site that is pointed to
-     * by the instance).
-     *
-     * A few words about why target sites are stored in a "relative"
-     * fashion, i.e. as (agent, site index) pairs rather than just a
-     * reference to the target site.  There are two main reasons for
-     * this:
-     *
-     *  1) Links between sites in [[Mixture]]s are predominantly
-     *     created by applying an action (see [[Rules#Action]]) to a
-     *     mixture.  An action is a function that takes a mixture and
-     *     a sequence of agents as its input and updates the mixture.
-     *     Since the agents that are to be updated are parameters of
-     *     the action, the concrete sites to be modified are not know
-     *     when the action is created, instead the action refers to
-     *     the sites just by their index w.r.t. the corresponding
-     *     (formal) agent parameter.  To simplify the operations that
-     *     actions perform on agents and sites it makes sense to store
-     *     links in an analogous way.
-     *
-     *  2) Copying mixtures is slightly cumbersome because all the
-     *     inter-agent and agent-mixture pointers have to be updated
-     *     in the copy of the mixture so as to refer to the copies of
-     *     the original agents rather than the originals themselves.
-     *     Storing links in a "relative" fashion removes some of this
-     *     complexity, since the position of sites w.r.t. their agents
-     *     do not change.
-     *
-     * @param agent the target agent of this link.
-     * @param site the index of the target site in the target agent of
-     *        this link.
-     * @param state the state of the link from source to target.
-     */
-    final case class Linked(agent: Agent, site: SiteIndex, state: LinkState)
-        extends Link
-
-    /**
-     * A class representing sites of [[Mixture.Agent]]s.
-     *
-     * FIXME: `state` and `link` should probably be read-only outside
-     * of [[Mixture]].
-     *
-     * @param state the state of this site
-     * @param link whether and how this site is linked to another site.
-     */
-    final case class Site(var state: SiteState, var link: Link = Stub) {
-      override def toString = state.toString + link
-    }
 
     /**
      * A class representing agents in [[Mixture]]s.
      *
      * This class has two roles: it acts as a container for agent
-     * information (agent state, interfaces, lift sets) and, at the
+     * information (agent state, interfaces, lift maps) and, at the
      * same time, as a cell in a doubly linked list that forms the
      * mixture.  The reason for this double-role is that in this way
      * an [[Agent]]s can be pointed to directly (i.e. without an
@@ -655,19 +578,24 @@ trait Mixtures {
      *
      * @param state the state of this agent.
      * @param sites the interface of this agent.
-     * @param liftSet lift set for component embeddings.
+     * @param liftMap lift map for component embeddings.
      * @param mixture a reference to the [[Mixture]] this agent belongs to.
      * @param next a reference to the next agent in the [[Mixture]]
      *        this agent belongs to.
      * @param prev a reference to the previous agent in the [[Mixture]]
      *        this agent belongs to.
      */
-    final case class Agent protected[Mixture] (
+    final class Agent protected[Mixture] (
       var state: AgentState,
-      val sites: Array[Site],
-      val liftSet: mutable.HashSet[(Pattern.Agent, ComponentEmbedding)] =
-        new mutable.HashSet())
-        extends Seq[Site] with Markable {
+      val sites: Array[Mixtures.this.Agent.Site[Agent]],
+      val liftMap: mutable.HashMap[Pattern.Agent, ComponentEmbedding[Agent]] =
+        new mutable.HashMap())
+        extends Mixtures.this.Agent with Markable {
+
+      import Mixtures.this.Agent._
+
+      /** Sites of this agent may only link to other [[Agent]]s. */
+      type LinkTarget = Agent
 
       protected[Mixture] var _mixture: Mixture = null
       protected[Mixture] var next: Agent = null
@@ -699,44 +627,29 @@ trait Mixtures {
         // Now setup the interfaces of `v`
         for (i <- this.sites.indices) {
           val s = this.sites(i)
-          v.sites(i) = Site(s.state, s.link)
+          v.sites(i) = new Site(s.state, s.link)
         }
         v
       }
 
       /**
-       * Returns the neighbor of a site if it is connected.
-       *
-       * @param site the index of the site whose neighbor we try to find.
-       * @return `Some(a, s)`, where `a` is the neighboring agent of
-       *         this site and `s` is the index of the neighboring site
-       *         in `a`, or `None` if this site is not connected.
-       */
-      // Wow! BE!! =)
-      @inline def neighbour(site: SiteIndex): Option[(Agent, SiteIndex)] =
-        sites(site).link match {
-          case Linked(a, s, _) => Some((a, s))
-          case _ => None
-        }
-
-      /**
-       * Register a component embedding in the lift set of this agent.
+       * Register a component embedding in the lift map of this agent.
        *
        * @param u the pre-image of this agent in the component embedding.
        * @param ce the component embedding to add.
        */
-      def addLift(u: Pattern.Agent, ce: ComponentEmbedding) {
-        liftSet += ((u, ce))
+      def addLift(u: Pattern.Agent, ce: ComponentEmbedding[Agent]) {
+        liftMap += ((u, ce))
       }
 
       /**
-       * Remove a component embedding from the lift set of this agent.
+       * Remove a component embedding from the lift map of this agent.
        *
        * @param u the pre-image of this agent in the component embedding.
        * @param ce the component embedding to remove.
        */
-      def removeLift(u: Pattern.Agent, ce: ComponentEmbedding) {
-        liftSet -= ((u, ce))
+      def removeLift(u: Pattern.Agent) {
+        liftMap -= u
       }
 
       /**
@@ -744,73 +657,11 @@ trait Mixtures {
        * consistency and remove those that are no longer valid.
        */
       def pruneLifts {
-        val invalidLifts = liftSet filter { p => !(p._1 matches this) }
-        for ((u, ce) <- invalidLifts) {
+        val invalidLifts = liftMap filterNot (_._1 matches this)
+        for (ce <- invalidLifts.values) {
           ce.component.removeEmbedding(ce)
         }
       }
-
-      // -- Core Seq[Site] API --
-      @inline def apply(idx: Int): Site = sites(idx)
-      @inline def iterator: Iterator[Site] = sites.iterator
-      @inline def length: Int = sites.length
-
-      // -- Extra Seq[Site] API --
-      @inline override def foreach[U](f: Site => U): Unit =
-        sites.foreach(f)
-
-      // -- Equals API --
-      /** TODO: Is this method redundant? */
-      override def canEqual(that: Any) = that.isInstanceOf[Agent]
-
-      // -- Any API --
-      /**
-       * Tests whether the argument (`that`) is a reference to the
-       * receiver object (`this`).
-       *
-       * NOTE: There are multiple reasons fro overriding the `equals`
-       * method in this class:
-       *
-       *  1) Since this class is also a sequence of [[Site]]s (it
-       *     extends `Seq[Site]`), it inherits its `equals`
-       *     implementation from [[scala.collection.GenSeqLike]].
-       *     This method eventually ends up calling [[Site.equals]]
-       *     (via [[scala.collection.IterableLike.sameElements]]).
-       *     But because sites contain links, which in turn may
-       *     contain references to [[Agent]]s (i.e. if they are
-       *     instances of [[Linked]]), a call to the default `equals`
-       *     method may end up in a recursive loop, eventually causing
-       *     a stack overflow.
-       *
-       *  2) For efficiency.  We really consider different instances
-       *     of this class as different agents.  If you want to test
-       *     for structural equality, use [[Agent.isEquivTo]] instead.
-       *
-       * @return `true` if the argument is a reference to the receiver
-       *         agent; `false` otherwise.
-       */
-      override def equals(that: Any): Boolean =
-        that.isInstanceOf[Agent] && (this eq that.asInstanceOf[Agent])
-
-      /**
-       * Calculate a hash code value for the agent.
-       *
-       * NOTE: The reasons for overriding the `hashCode` method in
-       * this class are the same as those mentioned in
-       * [[Agent.equals]].
-       *
-       * TODO: Is it OK to rely on
-       * [[java.lang.System.identityHashCode]]?  A possible
-       * alternative would be, to use a counter in the companion
-       * object to provide unique (up to counter wrap-around) hash
-       * codes when creating an instance of this class.
-       *
-       * @return the hash code value for this agent.
-       */
-      override def hashCode(): Int =
-        java.lang.System.identityHashCode(this)
-
-      override def toString() = state + sites.mkString("(", ",", ")")
     }
 
 
@@ -824,6 +675,9 @@ trait Mixtures {
 
     /** Converts a pattern into a mixture. */
     def apply(pattern: Pattern): Mixture = {
+
+      import Mixtures.this.Agent._
+
       val m = new Mixture
       for (c <- pattern.components) {
 
@@ -833,7 +687,7 @@ trait Mixtures {
         // Allocate "empty" copies of agents in this component
         val as = new Array[Agent](c.agents.size)
         for (u <- c.agents) {
-          val v = Agent(u.state, new Array[Site](u.sites.size))
+          val v = new Agent(u.state, new Array[Site[Agent]](u.sites.size))
           m += v
           as(u.index) = v
         }
@@ -843,8 +697,8 @@ trait Mixtures {
           var i = 0
           for (s <- u.sites) {
             val l = s.link match {
-              case Pattern.Linked(u, j, l) => Linked(as(u.index), j, l)
-              case Pattern.Stub => Stub
+              case Linked(u, j, l) => Linked(as(u.index), j, l)
+              case Stub => Stub
               case _ => throw new IllegalArgumentException(
                 "attempt to create mixture with an undefined or wildcard link")
             }

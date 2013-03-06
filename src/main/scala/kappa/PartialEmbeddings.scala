@@ -3,7 +3,7 @@ package kappa
 import scala.collection.mutable
 
 trait PartialEmbeddings {
-  this: Patterns =>
+  this: Agents with Patterns =>
 
   /**
    * A class representing a partial embedding between a pair of
@@ -22,9 +22,8 @@ trait PartialEmbeddings {
    *     conconstitutes the domain of left and right legs (`leftInj`
    *     and `rightInj`).
    *
-   *  2. We should probably have a class for embeddings between
-   *     [[Patterns#Pattern.Component]]s and use those to represent
-   *     left/right legs of this partial embedding.
+   *  2. Represent left/right legs of this partial embedding using
+   *     [[Embedding[Patterns#Pattern.Agent]].
    *
    * @param leftInj an array of [[Patterns#Pattern.Agent]]s representing
    *        the left leg of the span associated with this partial
@@ -79,9 +78,9 @@ trait PartialEmbeddings {
 
   object PartialEmbedding {
 
-    import Pattern._
-
-    def apply(leftInj: Seq[Agent], rightInj: Seq[Agent]): PartialEmbedding =
+    def apply(
+      leftInj: Seq[Pattern.Agent],
+      rightInj: Seq[Pattern.Agent]): PartialEmbedding =
     {
       if (leftInj.size != rightInj.size) throw new IllegalArgumentException(
         "attempt to construct partial embedding with incompatible left " +
@@ -90,7 +89,8 @@ trait PartialEmbeddings {
       new PartialEmbedding(leftInj.toArray, rightInj.toArray)
     }
 
-    def apply(leftToRight: Map[Agent, Agent]): PartialEmbedding = {
+    def apply(
+      leftToRight: Map[Pattern.Agent, Pattern.Agent]): PartialEmbedding = {
       val (left, right) = leftToRight.toIterable.unzip
       new PartialEmbedding(left.toArray, right.toArray)
     }
@@ -107,7 +107,7 @@ trait PartialEmbeddings {
      * @return all partial embedding components between two pattern
      *         components.
      */
-    def findPartialEmbeddings(c1: Component, c2: Component)
+    def findPartialEmbeddings(c1: Pattern.Component, c2: Pattern.Component)
         : Iterable[PartialEmbedding] = {
 
       val conflicts =
@@ -117,7 +117,7 @@ trait PartialEmbeddings {
       }
 
       (for (u <- c1; v <- c2) yield {
-        val inj = new Array[Agent](c1.length)
+        val inj = new Array[Pattern.Agent](c1.length)
         val codomain = new mutable.BitSet
         val meets = new Array[Agent](c1.length)
         if (extendPartialInjection(u, v, inj, codomain, conflicts, meets)) {
@@ -158,7 +158,7 @@ trait PartialEmbeddings {
      * @returns `true` if no conflict occurred during expansion.
      */
     private def extendPartialInjection(
-      u: Agent, v: Agent, inj: Array[Agent],
+      u: Pattern.Agent, v: Pattern.Agent, inj: Array[Pattern.Agent],
       codomain: mutable.BitSet, conflicts: Array[mutable.BitSet],
       meets: Array[Agent]): Boolean = {
 

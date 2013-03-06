@@ -3,8 +3,8 @@ package kappa
 import scala.collection.mutable
 
 trait Actions {
-  this: LanguageContext with Patterns with Mixtures with Embeddings
-      with PartialEmbeddings with Rules =>
+  this: LanguageContext with Agents with Patterns with Mixtures
+      with Embeddings with PartialEmbeddings with Rules =>
 
   /**
    * A class representing actions.
@@ -40,7 +40,7 @@ trait Actions {
     val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
     val preCondition:  Option[(Action, Action.Agents) => Boolean] = None,
     val postCondition: Option[(Action, Action.Agents) => Boolean] = None)
-      extends Function2[Embedding, Mixture, Boolean]
+      extends Function2[Embedding[Mixture.Agent], Mixture, Boolean]
   {
     import Action._
 
@@ -114,7 +114,9 @@ trait Actions {
      * @return `true` if the action application resulted in a
      *         productive event, `false` otherwise.
      */
-    def apply(embedding: Embedding, mixture: Mixture = mix): Boolean = {
+    def apply(
+      embedding: Embedding[Mixture.Agent],
+      mixture: Mixture = mix): Boolean = {
 
       // Check consistency and populate the agents array.
       val additions = rhs.length - pe.length
@@ -187,7 +189,7 @@ trait Actions {
      *         their domain that did not match their images.
      */
     protected[Action] def checkConsistency(
-      embedding: Embedding, agents: Agents): (Boolean, Int) = {
+      embedding: Embedding[Mixture.Agent], agents: Agents): (Boolean, Int) = {
 
       mix.clearMarkedAgents(Visited)
       var clash: Boolean = false
@@ -258,7 +260,7 @@ trait Actions {
       for ((ci, ae) <- activationMap; ps <- ae) {
         val c = patternComponents(ci)
         val ps2 = ps map { case (u, v) => (u, agents(v)) }
-        val ces = ComponentEmbedding(ps2)
+        val ces = ComponentEmbedding.findEmbeddings(ps2)
         for (ce <- ces) {
           c.addEmbedding(ce)
           //updates += 1
@@ -276,7 +278,7 @@ trait Actions {
       val mas2 = mix.markedAgents(SideEffect)
       for (c <- patternComponents) {
         val ps = for (u <- c; v <- sideAffected) yield (u, v)
-        val ces = ComponentEmbedding(ps)
+        val ces = ComponentEmbedding.findEmbeddings(ps)
         for (ce <- ces) {
           c.addEmbedding(ce)
           //sideEffects += 1
@@ -413,7 +415,7 @@ trait Actions {
       rhsAgentOffsets: Map[Pattern.Agent, AgentIndex])
         : Seq[Action.Atom] = {
 
-      import Pattern._
+      import Agent._
 
       def findStateChange[T <: Matchable[T]](ls: T, rs: T): Option[T] =
         if (ls isEquivTo rs) None         // No state change
@@ -422,7 +424,7 @@ trait Actions {
           "attempt to change state " + ls + " to incomplete state " +
             rs + " in rule: " + lhs + " -> " + rhs)
 
-      def linkState(u: Agent, s: SiteIndex): LinkState =
+      def linkState(u: Pattern.Agent, s: SiteIndex): LinkState =
         u.sites(s).link match {
           case Linked(_, _, l) => l
           case _ => throw new IllegalArgumentException(
@@ -435,14 +437,15 @@ trait Actions {
       val ceOffsets: Array[Int] =
         lhs.components.scanLeft(0) { (i, ce) => i + ce.length }
 
-      @inline def lhsAgentOffset(a: Agent) =
+      @inline def lhsAgentOffset(a: Pattern.Agent) =
         ceOffsets(a.component.index) + a.index
 
-      @inline def rhsAgentOffset(a: Agent) =
+      @inline def rhsAgentOffset(a: Pattern.Agent) =
         rhsAgentOffsets(a)
 
       @inline def linkDeletion(
-        atoms: mutable.Buffer[Atom], u1: Agent, j1: SiteIndex, u2: Agent) {
+        atoms: mutable.Buffer[Atom], u1: Pattern.Agent,
+        j1: SiteIndex, u2: Pattern.Agent) {
         val o1 = lhsAgentOffset(u1)
         val o2 = lhsAgentOffset(u2)
         if (o2 <= o1) {
@@ -452,8 +455,8 @@ trait Actions {
 
       @inline def linkAddition(
         atoms: mutable.Buffer[Atom],
-        u1: Agent, s1: SiteIndex,
-        u2: Agent, s2: SiteIndex, l2: LinkState) {
+        u1: Pattern.Agent, s1: SiteIndex,
+        u2: Pattern.Agent, s2: SiteIndex, l2: LinkState) {
         val o1 = rhsAgentOffset(u1)
         val o2 = rhsAgentOffset(u2)
         val l1 = linkState(u2, s2)
