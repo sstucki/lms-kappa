@@ -1,9 +1,7 @@
 package kappa
 
-//import scala.language.implicitConversions
-//import scala.language.postfixOps
+import collection.mutable
 
-import scala.collection.mutable
 
 trait Agents {
   this: LanguageContext =>
@@ -13,29 +11,124 @@ trait Agents {
    */
   trait Agent extends Matchable[Agent] with Equals {
 
+    import Agent._
+
+
+    // -- Abstract interface --
+
     /** Subtype of [[Agent]] that sites of this agent may link to. */
     type LinkTarget <: Agent
 
-    /** Type of sites of this agent. */
-    type Site = Agent.Site[LinkTarget]
+    /** The type of [[Link]]s found in this agent. */
+    type Link = Agent.Link[LinkTarget]
 
-    /** The state of the agent. */
+    /** The state of this agent. */
     def state: AgentState
 
-    /** The sites of the agent. */
-    def sites: Array[Site]
+    /** The states of the sites of this agent. */
+    protected def _siteStates: Array[SiteState]
+
+    /** The links of the sites of this agent. */
+    protected def _links: Array[Link]
+
+
+    // -- Concrete interface --
+
+    /** The states of the sites of this agent. */
+    @inline def siteStates: collection.IndexedSeq[SiteState] =
+      mutable.WrappedArray.make(_siteStates)
+
+    /** The links of the sites of this agent. */
+    @inline def links: collection.IndexedSeq[Link] =
+      mutable.WrappedArray.make(_links)
+
+    /** The number of sites of this agent. */
+    @inline def length: Int = _links.length
+
+    /** The range of indices of this agent. */
+    @inline def indices: Range = _links.indices
 
     /**
      * Returns the neighbor of a given site of this agent if it is
      * connected.
      *
      * @param i site index
-     * @return `Some((u, j))`, where `u` and `j` are the neighboring
-     *          agent and site index of this agent at site index `i`,
-     *          if the site `i` is connected, and `None` otherwise.
+     * @return `Some(u)`, where `u` is the neighboring agent of this
+     *         agent at site index `i`, if the site `i` is connected,
+     *         and `None` otherwise.
      */
-    @inline def neighbour(i: SiteIndex): Option[(LinkTarget, SiteIndex)] =
-      sites(i).neighbour
+    @inline def neighbour(i: SiteIndex): Option[LinkTarget] =
+      _links(i) match {
+        case Linked(u, j, _) => Some(u)
+        case _ => None
+      }
+
+    /**
+     * Returns the neighboring site of a given site of this agent if
+     * it is connected.
+     *
+     * @param i site index
+     * @return `Some((u, j))`, where `u` and `j` are the neighboring
+     *         agent and site index of this agent at site index `i`,
+     *         if the site `i` is connected, and `None` otherwise.
+     */
+    @inline def neighbourSite(i: SiteIndex): Option[(LinkTarget, SiteIndex)] =
+      _links(i) match {
+        case Linked(u, j, _) => Some((u, j))
+        case _ => None
+      }
+
+
+    // -- Sites interface --
+
+    /**
+     * A class representing sites in [[Agent]]s.
+     *
+     * @param index the index of this site within the enclosing agent.
+     * @param state the state of this site
+     * @param link whether and how this site is linked to another site.
+     */
+    final class Site private[Agent] (
+      val index: SiteIndex, val state: SiteState, val link: Link) {
+
+      /** The enclosing agent of this site. */
+      @inline def agent = Agent.this
+
+      /**
+       * Returns the neighbor of a site if it is connected.
+       *
+       * @return `Some((u, j))`, where `u` and `j` are the neighboring
+       *          agent and site index of this site if it is
+       *          connected, and `None` otherwise.
+       */
+      @inline def neighbour: Option[LinkTarget#Site] =
+        link match {
+          case Linked(u, j, _) => Some(u.site(j))
+          case _ => None
+        }
+
+      override def toString = state.toString + link
+    }
+
+    /**
+     * Return a given site of this agent as a [[Site]].
+     *
+     * @param i the index of the site to return.
+     * @return the `i`th site of this agent.
+     */
+    @inline def site(i: SiteIndex): Site =
+      new Site(i, _siteStates(i), _links(i))
+
+    /**
+     * Return a view of the sites of this agent.
+     *
+     * NOTE: This will return a collection of [[Site]]s representing
+     * the sites of this agent.  This method is provided for
+     * convenience only, don't use it in performance critical code.
+     *
+     * @return a view of the sites of this agent.
+     */
+    @inline def _sites: IndexedSeq[Site] = for (i <- indices) yield site(i)
 
 
     // -- Matchable[Agent] API --
@@ -46,9 +139,12 @@ trait Agents {
      * @return `true` if this agent matches `that`.
      */
     def matches(that: Agent): Boolean = {
-      (this.sites.size == that.sites.size) &&
+      (this.length == that.length) &&
       (this.state matches that.state) &&
-      (this.sites zip that.sites forall { case (s1, s2) => s1 matches s2 })
+      (this._siteStates zip that._siteStates forall {
+        case (s1, s2) => s1 matches s2
+      }) &&
+      (this._links zip that._links forall { case (l1, l2) => l1 matches l2 })
     }
 
     /**
@@ -62,30 +158,30 @@ trait Agents {
      * @return the join of `this` and `that`.
      */
     final def join(that: Agent): Option[Agent] =
-      if (this.sites.size != that.sites.size) None
+      if (this.length != that.length) None
       else {
-
-        // Generate all "combinations" of site joins
-        def intfs = {
-          val sitesJoins =
-            for (i <- 0 until sites.size)
-            yield this.sites(i) join that.sites(i)
-
-          val intfs: Option[Vector[Agent.Site[Agent]]] = Some(Vector())
-          sitesJoins.foldLeft(intfs) {
-            (intfs, siteJoins) =>
-            for (intf <- intfs; j <- siteJoins) yield intf :+ j
+        val siteStateJoins = new Array[SiteState](length)
+        val linkJoins = new Array[Agent.Link[Agent]](length)
+        val allJoins = (indices forall { i =>
+          val sj = this._siteStates(i) join that._siteStates(i)
+          sj match {
+            case Some(s) => siteStateJoins(i) = s; true
+            case None    => false
           }
-        }
-
-        for {
-          st <- this.state join that.state
-          intf <- intfs
-        } yield new Agent {
+        }) && (indices forall { i =>
+          val lj = this._links(i) join that._links(i)
+          lj match {
+            case Some(l) => linkJoins(i) = l; true
+            case None    => false
+          }
+        })
+        if (allJoins) for (st <- this.state join that.state)
+        yield new Agent {
           type LinkTarget = Agent
           val state = st
-          val sites = intf.toArray
-        }
+          val _siteStates = siteStateJoins
+          val _links = linkJoins
+        } else None
       }
 
     /**
@@ -99,30 +195,30 @@ trait Agents {
      * @return the meet of `this` and `that`.
      */
     final def meet(that: Agent): Option[Agent] =
-      if (this.sites.size != that.sites.size) None
+      if (this.length != that.length) None
       else {
-
-        // Generate all "combinations" of site meets
-        def intfs = {
-          val sitesMeets =
-            for (i <- 0 until sites.size)
-            yield this.sites(i) meet that.sites(i)
-
-          val intfs: Option[Vector[Agent.Site[Agent]]] = Some(Vector())
-          sitesMeets.foldLeft(intfs) {
-            (intfs, siteMeets) =>
-            for (intf <- intfs; m <- siteMeets) yield intf :+ m
+        val siteStateMeets = new Array[SiteState](length)
+        val linkMeets = new Array[Agent.Link[Agent]](length)
+        val allMeets = (indices forall { i =>
+          val sj = this._siteStates(i) meet that._siteStates(i)
+          sj match {
+            case Some(s) => siteStateMeets(i) = s; true
+            case None    => false
           }
-        }
-
-        for {
-          st <- this.state meet that.state
-          intf <- intfs
-        } yield new Agent {
+        }) && (indices forall { i =>
+          val lj = this._links(i) meet that._links(i)
+          lj match {
+            case Some(l) => linkMeets(i) = l; true
+            case None    => false
+          }
+        })
+        if (allMeets) for (st <- this.state meet that.state)
+        yield new Agent {
           type LinkTarget = Agent
           val state = st
-          val sites = intf.toArray
-        }
+          val _siteStates = siteStateMeets
+          val _links = linkMeets
+        } else None
       }
 
     /**
@@ -130,9 +226,11 @@ trait Agents {
      *
      * @return `true` if this agent is valid in a mixture.
      */
-    def isComplete =
-      this.state.isComplete && (this.sites forall (_.isComplete))
-
+    def isComplete = {
+      this.state.isComplete &&
+      (this._siteStates forall (_.isComplete)) &&
+      (this._links forall (_.isComplete))
+    }
 
     // -- Equals API --
     override def canEqual(that: Any) = that.isInstanceOf[Agent]
@@ -184,7 +282,7 @@ trait Agents {
     override def hashCode(): Int =
       java.lang.System.identityHashCode(this)
 
-    override def toString() = state + sites.mkString("(", ",", ")")
+    override def toString() = state + _sites.mkString("(", ",", ")")
   }
 
 
@@ -213,7 +311,7 @@ trait Agents {
           (a1 matches a2) && (s1 matches s2) && (l1 matches l2)
         case (Wildcard(a1, s1, l1), Linked(a2, s2, l2)) =>
           (a1 matches Some(a2.state)) &&
-          (s1 matches Some(a2.sites(s2).state)) &&
+          (s1 matches Some(a2._siteStates(s2))) &&
           (l1 matches Some(l2))
         case (Linked(_, s1, l1), Linked(_, s2, l2)) =>
           (s1 == s2) && (l1 matches l2)
@@ -250,7 +348,7 @@ trait Agents {
         case (Wildcard(a1, s1, l1), Linked(u2, s2, l2)) => {
           val wc = for {
             a <- a1 join Some(u2.state)
-            s <- s1 join Some(u2.sites(s2).state)
+            s <- s1 join Some(u2._siteStates(s2))
             l <- l1 join Some(l2)
           } yield new Wildcard(a.om, s.om, l.om)
           wc orElse Some(Undefined)
@@ -258,7 +356,7 @@ trait Agents {
         case (Linked(u1, s1, l1), Wildcard(a2, s2, l2)) => {
           val wc = for {
             a <- Some(u1.state)           join a2
-            s <- Some(u1.sites(s1).state) join s2
+            s <- Some(u1._siteStates(s1)) join s2
             l <- Some(l1)                 join l2
           } yield new Wildcard(a.om, s.om, l.om)
           wc orElse Some(Undefined)
@@ -266,8 +364,8 @@ trait Agents {
         case (Linked(u1, s1, l1), Linked(u2, s2, l2)) if (s1 == s2) => {
           val l = l1 join l2
           l map (Linked(u1, s1, _)) orElse {
-            val a = u1.state           meet u2.state
-            val s = u1.sites(s1).state meet u2.sites(s2).state
+            val a = u1.state           join u2.state
+            val s = u1._siteStates(s1) join u2._siteStates(s2)
             Some(Wildcard(a, s, l))
           }
         }
@@ -295,14 +393,14 @@ trait Agents {
           // FIXME: See note above.
           for {
             a <- a1 meet Some(u2.state)
-            s <- s1 meet Some(u2.sites(s2).state)
+            s <- s1 meet Some(u2._siteStates(s2))
             l <- l1 meet Some(l2)
           } yield new Linked(u2, s2, l.om.get)
         case (Linked(u1, s1, l1), Wildcard(a2, s2, l2)) =>
           // FIXME: See note above.
           for {
             a <- Some(u1.state)           meet a2
-            s <- Some(u1.sites(s1).state) meet s2
+            s <- Some(u1._siteStates(s1)) meet s2
             l <- Some(l1)                 meet l2
           } yield new Linked(u1, s1, l.om.get)
         case (Linked(u1, s1, l1), Linked(u2, s2, l2)) => {
@@ -332,8 +430,8 @@ trait Agents {
           "!" + (a getOrElse "_") + "." + (s getOrElse "_") +
           "." + (l getOrElse "_")
         case Stub => ""
-        case Linked(a, s, l) =>
-          "!" + a.state + "." + a.sites(s).state + "." + l
+        case Linked(u, i, l) =>
+          "!" + u.state + "." + u._siteStates(i) + "." + l
       }
     }
 
@@ -400,73 +498,6 @@ trait Agents {
       agentState: Option[AgentState],
       siteState: Option[SiteState],
       linkState: Option[LinkState]) extends Link[Nothing]
-
-    /**
-     * A class representing sites in [[Agent]]s.
-     *
-     * @tparam T subtype of [[Agent]] that this site may link to.
-     * @param state the state of this site
-     * @param link whether and how this site is linked to another site.
-     */
-    final case class Site[+T <: Agent](
-      val state: SiteState, val link: Link[T] = Undefined)
-        extends Matchable[Site[Agent]] {
-
-
-      /**
-       * Returns the neighbor of a site if it is connected.
-       *
-       * @return `Some((u, j))`, where `u` and `j` are the neighboring
-       *          agent and site index of this site if it is
-       *          connected, and `None` otherwise.
-       */
-      @inline def neighbour: Option[(T, SiteIndex)] =
-        link match {
-          case Linked(u, j, _) => Some(u, j)
-          case _ => None
-        }
-
-
-      // -- Matchable[Site[Agent]] API --
-
-      /**
-       * Compare this site against another `that`.
-       *
-       * @return `true` if `this` matches `that`.
-       */
-      def matches(that: Site[Agent]): Boolean =
-        (this.state matches that.state) && (this.link matches that.link)
-
-      /**
-       * Returns the join of this site and `that`.
-       *
-       * @return the join of `this` and `that`.
-       */
-      final def join(that: Site[Agent]): Option[Site[Agent]] = for {
-        s <- this.state join that.state
-        l <- this.link join that.link
-      } yield new Site(s, l)
-
-      /**
-       * Returns the meet of this site and `that`.
-       *
-       * @return the meet of `this` and `that`.
-       */
-      final def meet(that: Site[Agent]): Option[Site[Agent]] = for {
-        s <- this.state meet that.state
-        l <- this.link meet that.link
-      } yield new Site(s, l)
-
-      /**
-       * Checks if this site can be used in mixtures.
-       *
-       * @return `true` if this site is valid in a mixture.
-       */
-      def isComplete = this.state.isComplete && this.link.isComplete
-
-      // -- Any API --
-      override def toString = state.toString + link
-    }
   }
 }
 

@@ -1,5 +1,8 @@
 package kappa
 
+import scala.reflect.ClassTag
+
+
 trait KappaContext extends KappaLikeContext
 {
   this: KappaSymbols =>
@@ -22,9 +25,13 @@ trait KappaContext extends KappaLikeContext
     KappaAgentState(agentType)
   def mkSiteState(agentType: AgentType, siteName: SiteName, state: Option[SiteStateName]) =
     KappaSiteState(agentType, siteName, state)
-  def mkLinkState(link: Link, state: Option[LinkStateName]) =
+  def mkLinkState(link: LinkId, state: Option[LinkStateName]) =
     KappaLinkState
 
+  /** An implicit providing a class tag for [[SiteState]]s. */
+  implicit def siteStateClassTag = implicitly[ClassTag[SiteState]]
+
+  
   // TODO: If we were to use dedicated symbol classes rather than Ints
   // to represent symbols, some of these wrappers would likely not be
   // necessary as we could use the symbols directly to represent the

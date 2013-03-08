@@ -1,9 +1,11 @@
 package kappa
 
+import scala.reflect.ClassTag
+
+
 // RHZ: There is a lot of copy-paste and repetition here!
 // There are things that we need to abstract out
-trait KaSpaceContext extends KappaLikeContext
-{
+trait KaSpaceContext extends KappaLikeContext {
   this: KaSpaceSymbols =>
 
   type AgentType = String
@@ -24,8 +26,12 @@ trait KaSpaceContext extends KappaLikeContext
     KaSpaceAgentState(agentType, state)
   def mkSiteState(agentType: AgentType, siteName: SiteName, state: Option[SiteStateName]) =
     KaSpaceSiteState(agentType, siteName, state)
-  def mkLinkState(link: Link, state: Option[LinkStateName]) =
+  def mkLinkState(link: LinkId, state: Option[LinkStateName]) =
     KaSpaceLinkState(link, state)
+
+  /** An implicit providing a class tag for [[SiteState]]s. */
+  implicit def siteStateClassTag = implicitly[ClassTag[SiteState]]
+
 
   final case class KaSpaceAgentState(
     atype: AgentType, radius: Option[AgentStateName],
@@ -107,7 +113,7 @@ trait KaSpaceContext extends KappaLikeContext
       name + (position map (":" + _) getOrElse "")
   }
 
-  case class KaSpaceLinkState(link: Link, orientation: Option[LinkStateName])
+  case class KaSpaceLinkState(link: LinkId, orientation: Option[LinkStateName])
     extends Matchable[KaSpaceLinkState]
   {
     // -- Matchable[KaSpaceLinkState] API --

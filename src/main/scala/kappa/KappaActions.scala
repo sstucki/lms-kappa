@@ -32,7 +32,7 @@ trait KappaActions extends Actions {
       val zipped = (lhs zip rhs)
       val firstDiffIndex = zipped indexWhere {
         case (la, ra) =>
-          !((la.sites.length == ra.sites.length) &&
+          !((la.indices == ra.indices) &&
             (la.state matchesInLongestCommonPrefix ra.state))
       }
       val commonPrefixLength =

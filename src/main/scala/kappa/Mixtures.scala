@@ -5,7 +5,7 @@ import scala.collection.mutable
 import scala.language.implicitConversions
 
 trait Mixtures {
-  mixtures: LanguageContext with Agents with Patterns with Embeddings =>
+  this: LanguageContext with Agents with Patterns with Embeddings =>
 
   /**
    * A class representing mixtures in [[kappa.Model]]s (i.e. site
@@ -103,18 +103,17 @@ trait Mixtures {
     //     want to target other target languages in an LMS-based
     //     implementation.
 
-
-    import Mixtures.this.Agent._
-    type Agent = Mixture.Agent  // Convenience alias
+    import Mixture.Link
+    import Mixtures.this.Agent.{Stub,Linked}
 
     /** The [[Markable]] instances in this mixture are [[Agent]]s. */
     type T = Mixture.Agent
 
     /** First agent in the doubly-linked list representing the mixture. */
-    private var _head: Agent = null
+    private var _head: Mixture.Agent = null
 
     /** First agent in the doubly-linked list representing the mixture. */
-    override def head: Agent =
+    override def head: Mixture.Agent =
       if (_head == null) throw new NoSuchElementException(
         "attempt to reference head element in empty mixture")
       else _head
@@ -122,8 +121,8 @@ trait Mixtures {
     /** The number of agents in this mixture. */
     private var _length: Int = 0
 
-    private class MixtureIterator extends Iterator[Agent] {
-      private var nextAgent: Agent = _head
+    private class MixtureIterator extends Iterator[Mixture.Agent] {
+      private var nextAgent: Mixture.Agent = _head
 
       def next = {
         val n = nextAgent
@@ -140,7 +139,8 @@ trait Mixtures {
      * FIXME: Should we use [[Mixture]] for this?
      */
     final class Checkpoint(
-      val head: Agent, val length: Int, var agents: List[Agent])
+      val head: Mixture.Agent, val length: Int,
+      var agents: List[Mixture.Agent])
 
     /** The stack of mixture checkpoints. */
     private var _checkpoints: List[Checkpoint] = Nil
@@ -195,8 +195,10 @@ trait Mixtures {
 
         // Restore the state of `u` to that of `v`.
         u.state = v.state
-        for (i <- v.sites.indices)
-          u.sites(i) = v.sites(i)
+        for (i <- v.indices) {
+          u._siteStates(i) = v._siteStates(i)
+          u._links(i) = v._links(i)
+        }
         u.prev = v.prev
         u.next = v.next
         if (u.prev != null) u.prev.next = u
@@ -239,7 +241,7 @@ trait Mixtures {
      *
      * @param u the agent to add to the current checkpoint.
      */
-    @inline private def checkpointAgent(u: Agent) {
+    @inline private def checkpointAgent(u: Mixture.Agent) {
       if (!_checkpoints.isEmpty && !(u hasMark Updated)) {
         val v = u.checkpointCopy
         val cp = _checkpoints.head
@@ -258,15 +260,16 @@ trait Mixtures {
      */
     def copy: Mixture = {
 
-      var u: Agent = _head
+      var u = _head
       val that = new Mixture
       that._length = this._length
 
-      // First allocate "empty" agents for `that`
-      var p: Agent = null
+      // First allocate unconnected agents for `that`
+      var p: Mixture.Agent = null
       while(u != null) {
-        val sites = new Array[Site[Mixture.Agent]](u.sites.size)
-        val v = new Mixture.Agent(u.state, sites)
+        val ss = u._siteStates.clone
+        val ls = new Array[Link](u.length)
+        val v = new Mixture.Agent(u.state, ss, ls)
         v._mixture = that
         v.prev = p
         if (p == null) { that._head = v } else { p.next = v }
@@ -279,15 +282,14 @@ trait Mixtures {
       u = _head
       while(u != null) {
         val v = u.copy
-        for (i <- u.sites.indices) {
-          val s = u.sites(i)
-          val l = s.link match {
+        for (i <- u.indices) {
+          val l = u._links(i) match {
             case Linked(a, j, l) => Linked(a.copy, j, l)
-            case Stub => Stub
+            case Stub            => Stub
             case _ => throw new IllegalStateException(
               "encountered mixture with an undefined or wildcard link")
           }
-          v.sites(i) = new Site[Agent](s.state, l)
+          v._links(i) = l
         }
         u = u.next
       }
@@ -303,7 +305,7 @@ trait Mixtures {
     }
 
     /** Add a single agent to this mixture. */
-    def +=(agent: Agent): Mixture = {
+    private[Mixture] def +=(agent: Mixture.Agent): Mixture = {
       agent._mixture = this
       agent.prev = null
       agent.next = _head
@@ -324,29 +326,26 @@ trait Mixtures {
     def +=(state: AgentState, siteStates: Seq[SiteState]): Mixture = {
 
       // Create and initialize sites
-      var i: Int = 0
-      val sites = new Array[Site[Mixture.Agent]](siteStates.size)
-      for (s <- siteStates) {
-        sites(i) = new Site[Mixture.Agent](s)
-        i += 1
-      }
+      val ss = siteStates.toArray
+      val ls = Array.fill[Link](ss.length)(Stub)
 
       // Add agent to mixture
-      this += (new Mixture.Agent(state, sites))
+      this += (new Mixture.Agent(state, ss, ls))
     }
 
     /** Remove a single agent from this mixture. */
-    def -=(agent: Agent): Mixture = {
+    def -=(agent: Mixture.Agent): Mixture = {
 
       checkpointAgent(agent)
 
       // Disconnect agent
-      for (s <- agent.sites) {
+      for (l <- agent._links) {
         // RHZ: Why not use disconnect here?
-        s.link match {
+        // sstucki: It's a bit more expensive, but maybe not too much ...?
+        l match {
           case Linked(u, i, _) => {
             checkpointAgent(u)
-            u.sites(i) = u.sites(i).copy(link = Stub)
+            u._links(i) = Stub
             mark(u, SideEffect) // FIXME for perfomance
             // We should manage this in the action, since we know there
             // what is actually side-effected and what's not
@@ -414,14 +413,14 @@ trait Mixtures {
     // we might always add it just for fun.
 
     /** Connect two sites in this mixture. */
-    def connect(u1: Agent, i1: SiteIndex, l1: LinkState,
-                u2: Agent, i2: SiteIndex, l2: LinkState): Mixture = {
+    def connect(u1: Mixture.Agent, i1: SiteIndex, l1: LinkState,
+                u2: Mixture.Agent, i2: SiteIndex, l2: LinkState): Mixture = {
 
       checkpointAgent(u1)
       checkpointAgent(u2)
 
-      u1.sites(i1) = u1.sites(i1).copy(link = Linked(u2, i2, l1))
-      u2.sites(i2) = u2.sites(i2).copy(link = Linked(u1, i1, l2))
+      u1._links(i1) = Linked(u2, i2, l1)
+      u2._links(i2) = Linked(u1, i1, l2)
 
       // TODO Shouldn't these marks be set by the action?
       mark(u1, Updated)
@@ -431,19 +430,18 @@ trait Mixtures {
     }
 
     /** Disconnect a site in this mixture. */
-    def disconnect(u: Agent, i: SiteIndex): Mixture = {
-      val s = u.sites(i)
-      s.link match {
+    def disconnect(u: Mixture.Agent, i: SiteIndex): Mixture = {
+      u._links(i) match {
         case Linked(u2, i2, _) => {
           checkpointAgent(u2)
-          u2.sites(i2) = u2.sites(i2).copy(link = Stub)
+          u2._links(i2) = Stub
           mark(u2, Updated)
           mark(u2, SideEffect) // FIXME for perfomance, see above.
         }
         case _ => { }
       }
       checkpointAgent(u)
-      u.sites(i) = s.copy(link = Stub)
+      u._links(i) = Stub
       mark(u, Updated)
 
       this
@@ -457,7 +455,7 @@ trait Mixtures {
      * @return this mixture with the state of `agent` changed to
      *         `state`.
      */
-    def updateAgentState(u: Agent, s: AgentState): Mixture = {
+    def updateAgentState(u: Mixture.Agent, s: AgentState): Mixture = {
       checkpointAgent(u)
       u.state = s
       mark(u, Updated)
@@ -473,9 +471,9 @@ trait Mixtures {
      * @return this mixture with the state of the site at `siteIdx`
      *         changed to `state`.
      */
-    def updateSiteState(u: Agent, i: SiteIndex, s: SiteState): Mixture = {
+    def updateSiteState(u: Mixture.Agent, i: SiteIndex, s: SiteState): Mixture = {
       checkpointAgent(u)
-      u.sites(i) = u.sites(i).copy(state = s)
+      u._siteStates(i) = s
       mark(u, Updated)
       this
     }
@@ -491,8 +489,8 @@ trait Mixtures {
      * @return this mixture with `that` appended to it.
      */
     def ++=(that: Mixture): Mixture = {
-      var a: Agent = that._head
-      var last: Agent = null
+      var a = that._head
+      var last: Mixture.Agent = null
       while (a != null) {
         a._mixture = this
         unmark(a)
@@ -538,17 +536,17 @@ trait Mixtures {
       }
 
 
-    // -- Core Seq[Agent] API --
-    @inline def apply(idx: Int): Agent = {
+    // -- Core Seq[Mixture.Agent] API --
+    @inline def apply(idx: Int): Mixture.Agent = {
       if (idx >= _length) throw new IndexOutOfBoundsException
       (iterator drop idx).next
     }
-    @inline def iterator: Iterator[Agent] = new MixtureIterator
+    @inline def iterator: Iterator[Mixture.Agent] = new MixtureIterator
     @inline override def length: Int = _length
 
 
-    // -- Extra Seq[Agent] API --
-    @inline override def foreach[U](f: Agent => U): Unit = {
+    // -- Extra Seq[Mixture.Agent] API --
+    @inline override def foreach[U](f: Mixture.Agent => U): Unit = {
       var u = _head
       while (u != null) {
         f(u)
@@ -561,6 +559,8 @@ trait Mixtures {
 
   object Mixture {
 
+    import Mixtures.this.Agent.{Linked,Stub}
+
     /**
      * A class representing agents in [[Mixture]]s.
      *
@@ -568,11 +568,11 @@ trait Mixtures {
      * information (agent state, interfaces, lift maps) and, at the
      * same time, as a cell in a doubly linked list that forms the
      * mixture.  The reason for this double-role is that in this way
-     * an [[Agent]]s can be pointed to directly (i.e. without an
-     * extra layer of indirection, e.g. in
-     * [[PartialEmbeddings#PartialEmbedding]s) and removed from the
-     * mixture efficiently (i.e. without the need of a back-pointer
-     * from an agent to its list cell).
+     * an [[Agent]]s can be pointed to directly (i.e. without an extra
+     * layer of indirection, e.g. in
+     * [[ComponentEmbeddings#ComponentEmbedding]s) and removed from
+     * the mixture efficiently (i.e. without the need of a
+     * back-pointer from an agent to its list cell).
      *
      * TODO: Should we make this an inner class of [[Mixture]]?
      *
@@ -587,12 +587,11 @@ trait Mixtures {
      */
     final class Agent protected[Mixture] (
       var state: AgentState,
-      val sites: Array[Mixtures.this.Agent.Site[Agent]],
+      protected[Mixture] val _siteStates: Array[SiteState],
+      protected[Mixture] val _links: Array[Mixtures.this.Agent.Link[Agent]],
       val liftMap: mutable.HashMap[Pattern.Agent, ComponentEmbedding[Agent]] =
         new mutable.HashMap())
         extends Mixtures.this.Agent with Markable {
-
-      import Mixtures.this.Agent._
 
       /** Sites of this agent may only link to other [[Agent]]s. */
       type LinkTarget = Agent
@@ -616,19 +615,13 @@ trait Mixtures {
        * @return a copy of this agent (sharing states and links).
        */
       protected[Mixture] def checkpointCopy: Agent = {
-        // First allocate an "empty" agent `v` tracking `this`.
-        val vSites = new Array[Site](this.sites.size)
-        val v = new Agent(this.state, vSites)
+        // Allocate an agent `v` tracking `this`.
+        val v = new Agent(
+          this.state, this._siteStates.clone, this._links.clone)
         v._mixture = this._mixture
         v.prev = this.prev
         v.next = this.next
         v.copy = this
-
-        // Now setup the interfaces of `v`
-        for (i <- this.sites.indices) {
-          val s = this.sites(i)
-          v.sites(i) = new Site(s.state, s.link)
-        }
         v
       }
 
@@ -664,6 +657,8 @@ trait Mixtures {
       }
     }
 
+    type Link = Mixtures.this.Agent.Link[Agent]
+
 
     /** Creates an empty mixture. */
     @inline def apply(): Mixture = new Mixture
@@ -676,34 +671,33 @@ trait Mixtures {
     /** Converts a pattern into a mixture. */
     def apply(pattern: Pattern): Mixture = {
 
-      import Mixtures.this.Agent._
-
       val m = new Mixture
       for (c <- pattern.components) {
 
         if (!c.isComplete) throw new IllegalArgumentException(
           "attempt to create mixture from incomplete pattern: " + pattern)
 
-        // Allocate "empty" copies of agents in this component
+        // Allocate unconnected copies of agents in this component
         val as = new Array[Agent](c.agents.size)
         for (u <- c.agents) {
-          val v = new Agent(u.state, new Array[Site[Agent]](u.sites.size))
+          val n = u.length
+          val v = new Agent(
+            u.state, new Array[SiteState](n), new Array[Link](n))
+          u.siteStates.copyToArray(v._siteStates)
           m += v
           as(u.index) = v
         }
 
         // Setup the interfaces of the agents in the component
         for (u <- c.agents) {
-          var i = 0
-          for (s <- u.sites) {
-            val l = s.link match {
+          for (i <- u.indices) {
+            val l = u.links(i) match {
               case Linked(u, j, l) => Linked(as(u.index), j, l)
-              case Stub => Stub
+              case Stub            => Stub
               case _ => throw new IllegalArgumentException(
                 "attempt to create mixture with an undefined or wildcard link")
             }
-            as(u.index).sites(i) = Site(s.state, l)
-            i += 1
+            as(u.index)._links(i) = l
           }
         }
       }

@@ -217,10 +217,10 @@ trait ComponentEmbeddings {
         if (u matches v) {
           inj(i) = v
           codomain += v.index
-          (0 until u.sites.size) forall { j =>
+          u.indices forall { j =>
             (u.neighbour(j), v.neighbour(j)) match {
               case (None, _) => true
-              case (Some((w1, _)), Some((w2, _))) => {
+              case (Some(w1), Some(w2)) => {
                 extendInjection(w1, w2, inj, codomain)
               }
               case _ => false
@@ -266,10 +266,10 @@ trait ComponentEmbeddings {
         if (u matches v) {
           inj(i) = v
           v.mixture.mark(v, Visited)
-          (0 until u.sites.size) forall { j =>
+          u.indices forall { j =>
             (u.neighbour(j), v.neighbour(j)) match {
               case (None, _) => true
-              case (Some((w1, _)), Some((w2, _))) =>
+              case (Some(w1), Some(w2)) =>
                 extendInjection(w1, w2, inj)
               case _ => false
             }

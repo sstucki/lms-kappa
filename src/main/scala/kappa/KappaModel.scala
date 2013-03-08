@@ -134,7 +134,7 @@ class KappaModel extends Model with KappaContext with KappaActions
     new KappaSiteBuilder(t, KappaSiteBuilder.Stub)
 
   /** Convert sites into site builders. */
-  implicit def siteToBuilder(s: Agent.Site[Pattern.Agent]): KappaSiteBuilder = {
+  implicit def siteToBuilder(s: Pattern.Agent#Site): KappaSiteBuilder = {
     val link = s.link match {
       case Agent.Undefined         => KappaSiteBuilder.Undefined
       case Agent.Stub              => KappaSiteBuilder.Stub

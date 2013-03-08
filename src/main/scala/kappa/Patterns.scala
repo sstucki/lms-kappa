@@ -1,9 +1,7 @@
 package kappa
 
-//import scala.language.implicitConversions
-//import scala.language.postfixOps
-
 import scala.collection.mutable
+
 
 trait Patterns {
   this: LanguageContext with Agents with Actions with Rules
@@ -32,7 +30,6 @@ trait Patterns {
       extends Seq[Pattern.Agent] {
 
     import Pattern._
-    type Agent = Pattern.Agent  // Convenience alias
 
     /**
      * Return the (overestimated) number of matchings of this pattern
@@ -73,12 +70,12 @@ trait Patterns {
       else iterator.mkString("", ",", "")
 
 
-    // -- Core Seq[Agent] API --
-    @inline def apply(idx: Int): Agent = agents(idx)
-    @inline def iterator: Iterator[Agent] = agents.iterator
+    // -- Core Seq[Pattern.Agent] API --
+    @inline def apply(idx: Int): Pattern.Agent = agents(idx)
+    @inline def iterator: Iterator[Pattern.Agent] = agents.iterator
     @inline def length: Int = agents.length
 
-    @inline def apply(ci: ComponentIndex, ai: AgentIndex): Agent =
+    @inline def apply(ci: ComponentIndex, ai: AgentIndex): Pattern.Agent =
       components(ci).agents(ai)
   }
 
@@ -111,11 +108,13 @@ trait Patterns {
      * A class representing agents in [[Pattern.Component]]s.
      *
      * @param state the state of the agent.
-     * @param sites the sites of the agent.
+     * @param _siteStates the states of the sites of the agent.
+     * @param _links the links of the sites of the agent.
      */
-    final class Agent(
+    final class Agent private[Pattern] (
       val state: AgentState,
-      val sites: Array[Patterns.this.Agent.Site[Agent]])
+      protected[Pattern] val _siteStates: Array[SiteState],
+      protected[Pattern] val _links: Array[Patterns.this.Agent.Link[Agent]])
         extends Patterns.this.Agent {
 
       /** Sites of this agent may only link to other [[Agent]]s. */
@@ -314,11 +313,11 @@ trait Patterns {
           val consistent = (0 until agents.length) forall { i =>
             val u = agents(i)
             val v = ce(i)
-            (u matches v) && (u.sites.indices forall {
+            (u matches v) && (u.indices forall {
               j =>
               (u.neighbour(j), v.neighbour(j)) match {
                 case (None, _) => true
-                case (Some((w1, _)), Some((w2, _))) => ce(w1.index) == w2
+                case (Some(w1), Some(w2)) => ce(w1.index) == w2
                 case _ => false
               }
             })
@@ -583,11 +582,13 @@ trait Patterns {
 
           // Allocate sites and agent
           val u = agents(i)
-          val ss = new Array[Agent.Site[Pattern.Agent]](u.sites.length)
+          val n = u.sites.length
+          val ss = new Array[SiteState](n)
+          val ls = new Array[Agent.Link[Pattern.Agent]](n)
           for (j <- u.sites.indices) {
-            ss(j) = new Agent.Site[Pattern.Agent](u.sites(j).state)
+            ss(j) = u.sites(j).state
           }
-          val v = new Pattern.Agent(u.state, ss)
+          val v = new Pattern.Agent(u.state, ss, ls)
           as(i) = v
 
           // Add the agent to its component
@@ -609,7 +610,7 @@ trait Patterns {
               case Builder.Linked(to, state) =>
                 Agent.Linked[Pattern.Agent](as(to.agent.index), to.index, state)
             }
-            v.sites(j) = v.sites(j).copy(link = l)
+            v._links(j) = l
           }
         }
 

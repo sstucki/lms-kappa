@@ -4,9 +4,8 @@ import scala.collection.mutable
 
 import scala.language.implicitConversions
 
-class KaSpaceModel extends Model
-    with KaSpaceContext with KaSpaceActions with KaSpaceParser
-    with KaSpaceSymbols {
+class KaSpaceModel extends Model with KaSpaceContext with KaSpaceActions
+    with KaSpaceParser with KaSpaceSymbols {
 
   /** Run a simulation of this model. */
   override def run() {
@@ -161,7 +160,7 @@ class KaSpaceModel extends Model
 
   /** Convert sites into site builders. */
   implicit def siteToBuilder(
-    s: Agent.Site[Pattern.Agent]): KaSpaceSiteBuilder = {
+    s: Pattern.Agent#Site): KaSpaceSiteBuilder = {
     val link = s.link match {
       case Agent.Undefined         => KaSpaceSiteBuilder.Undefined
       case Agent.Stub              => KaSpaceSiteBuilder.Stub

@@ -34,7 +34,7 @@ trait KaSpaceActions extends Actions {
       val zipped = (lhs zip rhs)
       val firstDiffIndex = zipped indexWhere {
         case (la, ra) =>
-          !((la.sites.length == ra.sites.length) &&
+          !((la.length == ra.length) &&
             (la.state matchesInLongestCommonPrefix ra.state))
       }
       val commonPrefixLength =
@@ -96,13 +96,14 @@ trait KaSpaceActions extends Actions {
         as += u
         val up = u.state.position
         val uo = u.state.orientation
-        u.sites forall { s =>
-          (s.state.position, s.link) match {
+        u.indices forall { i =>
+          (u.siteStates(i).position, u.links(i)) match {
             case (Some(sp), Agent.Linked(
               v, j, KaSpaceLinkState(_, Some(lo)))) => {
 
-              val t = v.sites(j)
-              t.state.position match {
+              v.siteStates(j).position match {
+              //(v: u.LinkTarget).siteStates(j).position match {
+              //(v: KaSpaceActions.this.Mixture.Agent).siteStates(j).position match {
                 case Some(tp) => {
                   val vo = lo * uo
                   val vp = up + uo * sp - vo * tp

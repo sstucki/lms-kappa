@@ -213,10 +213,10 @@ trait Actions {
 
           // Check agent consistency
           val u = ce.component(k)
-          (u matches v) && (u.sites.indices forall {
+          (u matches v) && (u.indices forall {
             j => (u.neighbour(j), v.neighbour(j)) match {
               case (None, _) => true
-              case (Some((w1, _)), Some((w2, _))) => ce(w1.index) == w2
+              case (Some(w1), Some(w2)) => ce(w1.index) == w2
               case _ => false
             }
           })
@@ -425,7 +425,7 @@ trait Actions {
             rs + " in rule: " + lhs + " -> " + rhs)
 
       def linkState(u: Pattern.Agent, s: SiteIndex): LinkState =
-        u.sites(s).link match {
+        u.links(s) match {
           case Linked(_, _, l) => l
           case _ => throw new IllegalArgumentException(
             "expected site " + s + " of agent " + u +
@@ -482,8 +482,7 @@ trait Actions {
         case (ru, ro) => ro >= pe.length
       }
       for ((ru, ro) <- rhsAdditions) {
-        if (ru.isComplete) atoms += AgentAddition(
-          ro, ru.state, (for (s <- ru.sites) yield s.state))
+        if (ru.isComplete) atoms += AgentAddition(ro, ru.state, ru.siteStates)
         else throw new IllegalArgumentException(
           "attempt to add incomplete agent " + ru + " in rule: " +
             lhs + " -> " + rhs)
@@ -500,17 +499,15 @@ trait Actions {
       // Find all site state changes (in the common context)
       for {
         (lu, ru) <- pe
-        j <- lu.sites.indices
-        s <- findStateChange(lu.sites(j).state, ru.sites(j).state)
+        j <- lu.indices
+        s <- findStateChange(lu.siteStates(j), ru.siteStates(j))
       } {
         atoms += SiteStateChange(lhsAgentOffset(lu), j, s)
       }
 
       // Find all the link changes (in the common context)
-      for ((lu, ru) <- pe; j <- lu.sites.indices) {
-        val ls = lu.sites(j)
-        val rs = ru.sites(j)
-        (ls.link, rs.link) match {
+      for ((lu, ru) <- pe; j <- lu.indices) {
+        (lu.links(j), ru.links(j)) match {
           case (Stub | Wildcard(_, _, _) | Linked(_, _, _), Undefined) =>
             throw new IllegalArgumentException(
               "attempt to undefine site " + j + " of agent " + lu +
@@ -553,10 +550,9 @@ trait Actions {
       // Find all remaining link additions (between newly added agents)
       for {
         (ru, ro) <- rhsAdditions
-        j <- ru.sites.indices
+        j <- ru.indices
       } {
-        val rs = ru.sites(j)
-        rs.link match {
+        ru.links(j) match {
           case Undefined =>
             throw new IllegalArgumentException(
               "attempt to add agent " + ru + " with undefined site " + j +

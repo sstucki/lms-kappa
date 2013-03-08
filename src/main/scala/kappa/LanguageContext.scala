@@ -1,12 +1,15 @@
 package kappa
 
+import scala.reflect.ClassTag
+
+
 /** Generic language context trait. */
 trait LanguageContext {
 
   type AgentType
   type SiteName
 
-  type Link = (AgentType, SiteName, AgentType, SiteName)
+  type LinkId = (AgentType, SiteName, AgentType, SiteName)
 
   // State types
   type AgentStateName
@@ -20,7 +23,10 @@ trait LanguageContext {
 
   def mkAgentState(agentType: AgentType, state: Option[AgentStateName]): AgentState
   def mkSiteState (agentType: AgentType, siteName: SiteName, state: Option[SiteStateName]): SiteState
-  def mkLinkState(link: Link, state: Option[LinkStateName]): LinkState
+  def mkLinkState(link: LinkId, state: Option[LinkStateName]): LinkState
+
+  /** An implicit providing a class tag for [[SiteState]]s. */
+  implicit def siteStateClassTag: ClassTag[SiteState]
 }
 
 /** Language context for Kappa-like languages. */

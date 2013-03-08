@@ -30,7 +30,7 @@ trait KappaSymbols extends Symbols {
   var siteNameSyms       : Map[AgentType, Map[SiteName, SiteNameSym]] = Map()
   var agentStateNameSyms : Map[AgentType, Map[AgentStateName, AgentStateNameSym]] = Map()
   var siteStateNameSyms  : Map[AgentType, Map[SiteName, Map[SiteStateName, SiteStateNameSym]]] = Map()
-  var linkStateNameSyms  : Map[Link, Map[LinkStateName, LinkStateNameSym]] = Map()
+  var linkStateNameSyms  : Map[LinkId, Map[LinkStateName, LinkStateNameSym]] = Map()
 
   def initSymbols(cg: AST.ContactGraph) {
     import AST.{CGAgent,CGSite,CGLinkAnnot}
@@ -85,7 +85,7 @@ trait KaSpaceSymbols extends Symbols {
   // RHZ: For proper site graph type-checking I need more than this
   var hasAgentStateNames : Map[AgentType, Boolean] = Map()
   var hasSiteStateNames  : Map[AgentType, Map[SiteName, Boolean]] = Map()
-  var hasLinkStateNames  : Map[Link, Boolean] = Map()
+  var hasLinkStateNames  : Map[LinkId, Boolean] = Map()
 
   def initSymbols(cg: AST.ContactGraph) {
     import AST.{CGAgent,CGSite,CGLinkAnnot}
