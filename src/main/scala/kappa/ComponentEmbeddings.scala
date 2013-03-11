@@ -3,27 +3,26 @@ package kappa
 import scala.collection.mutable
 
 trait ComponentEmbeddings {
-  this: Agents with Mixtures with Patterns =>
+  this: SiteGraphs with Patterns with Mixtures =>
 
   /**
    * A class representing an embedding from a single connected
    * component of a site graph into a mixture.
    *
    * ''WARNING'': For convenience, this class provides the interface
-   * of a `Seq[Agents#Agent]`.  However, using some methods from the
-   * `Seq` API might not result in the expected behavior.  E.g. `++`
-   * will return a `Seq[Agents#Agent]` rather than the expected
+   * of a `Seq[SiteGraphs#SiteGraph#AgentIntf]`.  However, using some
+   * methods from the `Seq` API might not result in the expected
+   * behavior.  E.g. `++` will return a
+   * `Seq[SiteGraphs#SiteGraph#AgentIntf]` rather than the expected
    * `ComponentEmbedding`.
    *
    * @param T the target agent type.
-   * @param inj an array of [[Agents#.Agent]]s representing
-   *        the injection from pattern agent indices to mixture
-   *        agents.
-   * @param component the connected [[Patterns#Pattern.Component]]
-   *        (of `pattern`) that conconstitutes the domain of this
-   *        embedding.
+   * @param inj an array of agents representing the injection from
+   *        pattern agent indices to mixture agents.
+   * @param component the connected component (of `pattern`) that
+   *        conconstitutes the domain of this embedding.
    */
-  final case class ComponentEmbedding[T <: Agent] private (
+  final class ComponentEmbedding[T <: SiteGraph#AgentIntf] private (
     val inj: Array[T], val component: Pattern.Component) extends Seq[T] {
 
     type Source = AgentIndex
@@ -131,9 +130,9 @@ trait ComponentEmbeddings {
      *
      * @param u the pattern agent in the agent pair
      * @param v the mixture agent in the agent pair
-     * @returns `Some(ce)`, where `ce` is an embedding from
-     *          the pattern component containing `u` into the mixture
-     *          containing `v`, or `None` if no such embedding exists.
+     * @return `Some(ce)`, where `ce` is an embedding from
+     *         the pattern component containing `u` into the mixture
+     *         containing `v`, or `None` if no such embedding exists.
      */
     def findEmbedding(u: Pattern.Agent, v: Mixture.Agent)
         : Option[ComponentEmbedding[Mixture.Agent]] = {
@@ -158,9 +157,9 @@ trait ComponentEmbeddings {
      *
      * @param u the first pattern agent in the agent pair
      * @param v the second pattern agent in the agent pair
-     * @returns `Some(ce)`, where `ce` is an embedding from
-     *          the pattern component containing `u` into the pattern
-     *          containing `v`, or `None` if no such embedding exists.
+     * @return `Some(ce)`, where `ce` is an embedding from
+     *         the pattern component containing `u` into the pattern
+     *         containing `v`, or `None` if no such embedding exists.
      */
     def findEmbedding(u: Pattern.Agent, v: Pattern.Agent)
         : Option[ComponentEmbedding[Pattern.Agent]] = {
@@ -184,8 +183,8 @@ trait ComponentEmbeddings {
      *
      * @param ps a collection of pattern/mixture agent pairs from the
      *        same pattern component and mixture, respectively.
-     * @returns all the embeddings the containing any of the
-     *          pairs in `ps`.
+     * @return all the embeddings the containing any of the
+     *         pairs in `ps`.
      */
     def findEmbeddings(ps: Iterable[(Pattern.Agent, Mixture.Agent)])
         : Iterable[ComponentEmbedding[Mixture.Agent]] = {
@@ -205,7 +204,7 @@ trait ComponentEmbeddings {
      * @param inj the partial injection to extend.
      * @param codomain a bit set representing indices of the agents in
      *        the codomain of the partial injection.
-     * @returns `true` if the injection in `inj` is total.
+     * @return `true` if the injection in `inj` is total.
      */
     private def extendInjection(
       u: Pattern.Agent, v: Pattern.Agent, inj: Array[Pattern.Agent],
@@ -240,21 +239,14 @@ trait ComponentEmbeddings {
      * @param v the next agent in the image of the injection to
      *        inspect in the traversal.
      * @param inj the partial injection to extend.
-     * @param conflicts a conflict map used to avoid the construction
-     *        of redundant injections by recording injection pairs
-     *        encountered during previous traversals (only used
-     *        during multiple traversals).
-     * @returns `true` if the injection in `inj` is total after
-     *          expansion.
+     * @return `true` if the injection in `inj` is total after
+     *         expansion.
      */
-    // FIXME1: Code duplication.  The problem is making the
+    // FIXME: Code duplication.  The problem is making the
     // injectivity check efficient for both Pattern and Mixture.
     // While Pattern allows us to track the codomain as a simple
     // BitSet (because we know the index of every agent), Mixture
     // provides the marking mechanism to represent subsets internally.
-    //
-    // FIXME2: There are lift sets in mixtures.  We can use those to
-    // test for conflicts and remove the `conflicts` array.
     private def extendInjection(
       u: Pattern.Agent, v: Mixture.Agent, inj: Array[Mixture.Agent])
         : Boolean = {

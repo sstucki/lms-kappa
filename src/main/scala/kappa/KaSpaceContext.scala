@@ -30,7 +30,7 @@ trait KaSpaceContext extends KappaLikeContext {
     KaSpaceLinkState(link, state)
 
   /** An implicit providing a class tag for [[SiteState]]s. */
-  implicit def siteStateClassTag = implicitly[ClassTag[SiteState]]
+  implicit val siteStateClassTag = ClassTag[SiteState](classOf[SiteState])
 
 
   final case class KaSpaceAgentState(

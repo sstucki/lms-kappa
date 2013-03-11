@@ -3,7 +3,7 @@ package kappa
 import scala.language.implicitConversions
 
 trait KappaActions extends Actions {
-  this: KappaContext with Agents with Patterns with Mixtures
+  this: KappaContext with SiteGraphs with Patterns with Mixtures
       with Embeddings with PartialEmbeddings with Rules =>
 
   /** Factory object for building Kappa actions.  */

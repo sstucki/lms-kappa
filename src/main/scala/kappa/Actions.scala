@@ -3,7 +3,7 @@ package kappa
 import scala.collection.mutable
 
 trait Actions {
-  this: LanguageContext with Agents with Patterns with Mixtures
+  this: LanguageContext with SiteGraphs with Patterns with Mixtures
       with Embeddings with PartialEmbeddings with Rules =>
 
   /**
@@ -415,7 +415,8 @@ trait Actions {
       rhsAgentOffsets: Map[Pattern.Agent, AgentIndex])
         : Seq[Action.Atom] = {
 
-      import Agent._
+      import SiteGraph.{Link, Undefined, Stub, Wildcard}
+      import Pattern.Linked
 
       def findStateChange[T <: Matchable[T]](ls: T, rs: T): Option[T] =
         if (ls isEquivTo rs) None         // No state change

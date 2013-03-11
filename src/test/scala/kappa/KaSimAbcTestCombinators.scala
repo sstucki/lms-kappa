@@ -72,7 +72,7 @@ class KaSimAbcTestCombinators extends KappaModel with FlatSpec {
 
   // #### Variables (cont)
   // %obs: 'AB' A(x!x.B)
-  withObs(A(ax!Agent.Wildcard(Some(B), Some(bx), None)), "AB")
+  withObs(A(ax!SiteGraph.Wildcard(Some(B), Some(bx), None)), "AB")
   // %obs: 'Cuu' C(x1~u?,x2~u?)
   withObs(C(x1_u?, x2_u?), "Cuu")
   // %obs: 'Cpu' C(x1~p?,x2~u?)

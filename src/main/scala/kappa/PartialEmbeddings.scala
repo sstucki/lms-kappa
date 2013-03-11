@@ -3,7 +3,7 @@ package kappa
 import scala.collection.mutable
 
 trait PartialEmbeddings {
-  this: Agents with Patterns =>
+  this: SiteGraphs with Patterns =>
 
   /**
    * A class representing a partial embedding between a pair of
@@ -23,7 +23,7 @@ trait PartialEmbeddings {
    *     and `rightInj`).
    *
    *  2. Represent left/right legs of this partial embedding using
-   *     [[Embedding[Patterns#Pattern.Agent]].
+   *     [[Embeddings#Embedding]].
    *
    * @param leftInj an array of [[Patterns#Pattern.Agent]]s representing
    *        the left leg of the span associated with this partial
@@ -34,7 +34,7 @@ trait PartialEmbeddings {
    *        embedding, i.e. the (total) injection from the index set
    *        of `top` to the codomain of this partial embedding.
    */
-  final case class PartialEmbedding private (
+  final class PartialEmbedding private (
     val leftInj: Array[Pattern.Agent], val rightInj: Array[Pattern.Agent])
       extends Seq[(Pattern.Agent, Pattern.Agent)] {
 
@@ -119,7 +119,7 @@ trait PartialEmbeddings {
       (for (u <- c1; v <- c2) yield {
         val inj = new Array[Pattern.Agent](c1.length)
         val codomain = new mutable.BitSet
-        val meets = new Array[Agent](c1.length)
+        val meets = new Array[SiteGraph#AgentIntf](c1.length)
         if (extendPartialInjection(u, v, inj, codomain, conflicts, meets)) {
           val pairs =
             for (i <- (0 until c1.length) if inj(i) != null)
@@ -160,7 +160,7 @@ trait PartialEmbeddings {
     private def extendPartialInjection(
       u: Pattern.Agent, v: Pattern.Agent, inj: Array[Pattern.Agent],
       codomain: mutable.BitSet, conflicts: Array[mutable.BitSet],
-      meets: Array[Agent]): Boolean = {
+      meets: Array[SiteGraph#AgentIntf]): Boolean = {
 
       val i = u.index
       if (inj(i) != null) true

@@ -10,12 +10,10 @@ class TestPatterns extends KappaModel with FlatSpec
 
   it should "connect sites correctly" in {
     val p: Pattern = "A(b!1), B(a!1)"
-    val nb1 = p(0).neighbour(1).get
-    val nb2 = p(1).neighbour(0).get
-    assert(nb1._1.state == p(1).state)
-    assert(nb2._1.state == p(0).state)
-    assert(nb1._1.sites(nb1._2).state == p(1).sites(0).state)
-    assert(nb2._1.sites(nb2._2).state == p(0).sites(1).state)
+    assert(p(0).sites(1).neighbour.get.agent.state == p(1).state)
+    assert(p(1).sites(0).neighbour.get.agent.state == p(0).state)
+    assert(p(0).sites(1).neighbour.get.state == p(1).sites(0).state)
+    assert(p(1).sites(0).neighbour.get.state == p(0).sites(1).state)
   }
 
   it should "get components right" in {

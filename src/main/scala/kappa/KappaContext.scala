@@ -29,9 +29,9 @@ trait KappaContext extends KappaLikeContext
     KappaLinkState
 
   /** An implicit providing a class tag for [[SiteState]]s. */
-  implicit def siteStateClassTag = implicitly[ClassTag[SiteState]]
+  implicit val siteStateClassTag = ClassTag[SiteState](classOf[SiteState])
 
-  
+
   // TODO: If we were to use dedicated symbol classes rather than Ints
   // to represent symbols, some of these wrappers would likely not be
   // necessary as we could use the symbols directly to represent the

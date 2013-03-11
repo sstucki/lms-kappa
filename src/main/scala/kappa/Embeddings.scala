@@ -3,7 +3,7 @@ package kappa
 import collection.immutable.Vector
 
 trait Embeddings extends ComponentEmbeddings {
-  this: Agents with Mixtures with Patterns =>
+  this: SiteGraphs with Patterns with Mixtures =>
 
   /**
    * A class reperesenting a total embedding as a product of
@@ -24,8 +24,8 @@ trait Embeddings extends ComponentEmbeddings {
    * @param pattern the [[Patterns#Pattern]] that constitutes the domain of
    *        this embedding.
    */
-  final case class Embedding[T <: Agent](
-    ces: Array[ComponentEmbedding[T]], pattern: Pattern)
+  final class Embedding[T <: SiteGraph#AgentIntf](
+    val ces: Array[ComponentEmbedding[T]], val pattern: Pattern)
       extends Seq[ComponentEmbedding[T]] {
 
     /**

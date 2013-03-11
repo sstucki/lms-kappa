@@ -4,7 +4,7 @@ import scala.collection.mutable
 
 
 trait Patterns {
-  this: LanguageContext with Agents with Actions with Rules
+  this: LanguageContext with SiteGraphs with Actions with Rules
       with Mixtures with ComponentEmbeddings with Embeddings =>
 
   /**
@@ -29,6 +29,7 @@ trait Patterns {
     val siteGraphString: String = "")
       extends Seq[Pattern.Agent] {
 
+    import SiteGraph.{Link, Undefined, Stub, Wildcard}
     import Pattern._
 
     /**
@@ -102,7 +103,13 @@ trait Patterns {
   // Mixture class.
 
   /** Companion object of the [[Patterns#Pattern]] class. */
-  object Pattern {
+  object Pattern extends SiteGraph {
+
+    import SiteGraph.{Link, Undefined, Stub, Wildcard}
+
+
+    /** The type of agents in [[Pattern.Component]]s. */
+    type Agent = Pattern.AgentImpl
 
     /**
      * A class representing agents in [[Pattern.Component]]s.
@@ -111,14 +118,11 @@ trait Patterns {
      * @param _siteStates the states of the sites of the agent.
      * @param _links the links of the sites of the agent.
      */
-    final class Agent private[Pattern] (
+    final class AgentImpl private[Pattern] (
       val state: AgentState,
       protected[Pattern] val _siteStates: Array[SiteState],
-      protected[Pattern] val _links: Array[Patterns.this.Agent.Link[Agent]])
-        extends Patterns.this.Agent {
-
-      /** Sites of this agent may only link to other [[Agent]]s. */
-      type LinkTarget = Agent
+      protected[Pattern] val _links: Array[Link])
+        extends AgentIntf {
 
       /** The component this agent belongs to. */
       protected[Pattern] var _component: Component = null
@@ -137,6 +141,21 @@ trait Patterns {
         if (_index < 0) throw new NullPointerException(
           "attempt to access index of orphan agent")
         else _index
+
+
+      // -- Pattern.AgentIntf API --
+
+      /** The states of the sites of this agent. */
+      @inline def siteStates: IndexedSeq[SiteState] = _siteStates
+
+      /** The links of the sites of this agent. */
+      @inline def links: IndexedSeq[Link] = _links
+
+      /** The number of sites of this agent. */
+      @inline override def length: Int = _links.length
+
+      /** The range of indices of this agent. */
+      @inline override def indices: Range = 0 until _links.length
     }
 
     /**
@@ -584,7 +603,7 @@ trait Patterns {
           val u = agents(i)
           val n = u.sites.length
           val ss = new Array[SiteState](n)
-          val ls = new Array[Agent.Link[Pattern.Agent]](n)
+          val ls = new Array[Link](n)
           for (j <- u.sites.indices) {
             ss(j) = u.sites(j).state
           }
@@ -604,11 +623,11 @@ trait Patterns {
           val v = as(i)
           for (j <- u.sites.indices) {
             val l = u.sites(j).link match {
-              case Builder.Undefined         => Agent.Undefined
-              case Builder.Stub              => Agent.Stub
-              case Builder.Wildcard(a, s, l) => Agent.Wildcard(a, s, l)
+              case Builder.Undefined         => SiteGraph.Undefined
+              case Builder.Stub              => SiteGraph.Stub
+              case Builder.Wildcard(a, s, l) => SiteGraph.Wildcard(a, s, l)
               case Builder.Linked(to, state) =>
-                Agent.Linked[Pattern.Agent](as(to.agent.index), to.index, state)
+                Pattern.Linked(as(to.agent.index), to.index, state)
             }
             v._links(j) = l
           }

@@ -5,7 +5,7 @@ import scala.language.implicitConversions
 import scala.collection.mutable
 
 trait KaSpaceActions extends Actions {
-  this: KaSpaceContext with Agents with Patterns with Mixtures
+  this: KaSpaceContext with SiteGraphs with Patterns with Mixtures
       with Embeddings with PartialEmbeddings with Rules =>
 
   /** Factory object for building KaSpace actions.  */
@@ -98,7 +98,7 @@ trait KaSpaceActions extends Actions {
         val uo = u.state.orientation
         u.indices forall { i =>
           (u.siteStates(i).position, u.links(i)) match {
-            case (Some(sp), Agent.Linked(
+            case (Some(sp), Mixture.Linked(
               v, j, KaSpaceLinkState(_, Some(lo)))) => {
 
               v.siteStates(j).position match {

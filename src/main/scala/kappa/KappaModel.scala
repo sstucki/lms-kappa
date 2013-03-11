@@ -23,7 +23,7 @@ class KappaModel extends Model with KappaContext with KappaActions
       new KappaSiteBuilder(state, Stub)
     @inline def !(li: Int): KappaSiteBuilder =
       new KappaSiteBuilder(state, Linked(li))
-    @inline def !(wc: Agent.Wildcard): KappaSiteBuilder =
+    @inline def !(wc: SiteGraph.Wildcard): KappaSiteBuilder =
       new KappaSiteBuilder(
         state, Wildcard(wc.agentState, wc.siteState))
     @inline def !* : KappaSiteBuilder =
@@ -136,11 +136,11 @@ class KappaModel extends Model with KappaContext with KappaActions
   /** Convert sites into site builders. */
   implicit def siteToBuilder(s: Pattern.Agent#Site): KappaSiteBuilder = {
     val link = s.link match {
-      case Agent.Undefined         => KappaSiteBuilder.Undefined
-      case Agent.Stub              => KappaSiteBuilder.Stub
-      case Agent.Wildcard(a, s, _) =>
+      case SiteGraph.Undefined         => KappaSiteBuilder.Undefined
+      case SiteGraph.Stub              => KappaSiteBuilder.Stub
+      case SiteGraph.Wildcard(a, s, _) =>
         KappaSiteBuilder.Wildcard(a, s)
-      case Agent.Linked(_, _, _)   => throw new IllegalArgumentException(
+      case Pattern.Linked(_, _, _)     => throw new IllegalArgumentException(
         "attempt to build pre-connected site")
     }
     new KappaSiteBuilder(s.state, link)
