@@ -105,9 +105,6 @@ trait Patterns {
   /** Companion object of the [[Patterns#Pattern]] class. */
   object Pattern extends SiteGraph {
 
-    import SiteGraph.{Link, Undefined, Stub, Wildcard}
-
-
     /** The type of agents in [[Pattern.Component]]s. */
     type Agent = Pattern.AgentImpl
 
@@ -121,8 +118,10 @@ trait Patterns {
     final class AgentImpl private[Pattern] (
       val state: AgentState,
       protected[Pattern] val _siteStates: Array[SiteState],
-      protected[Pattern] val _links: Array[Link])
+      protected[Pattern] val _links: Array[SiteGraph.Link])
         extends AgentIntf {
+
+      import SiteGraph.{Link, Undefined, Stub, Wildcard}
 
       /** The component this agent belongs to. */
       protected[Pattern] var _component: Component = null
@@ -171,8 +170,10 @@ trait Patterns {
      * @param agents the agents in this component
      */
     case class Component private[Pattern] (val agents: Array[Agent])
-        extends Seq[Agent] with Matchable[Component]
-    {
+        extends Seq[Agent] with Matchable[Component] {
+
+      import SiteGraph.{Link, Undefined, Stub, Wildcard}
+
       /** The pattern this component belongs to. */
       protected[Pattern] var _pattern: Pattern = null
 
@@ -493,20 +494,22 @@ trait Patterns {
      */
     class Builder(val siteGraphString: String) {
 
+      import Builder._
+
       final class Agent private[Builder] (
         val index: AgentIndex, val state: AgentState) {
 
         final class Site private[Agent] (
           val index: SiteIndex, val state: SiteState) {
 
-          private var _link: Builder.Link = Builder.Undefined
+          private var _link: Builder.Link = Undefined
           @inline def link = _link
 
           @inline def agent = Agent.this
 
           def define(link: Builder.Defined) = {
             _link = _link match {
-              case Builder.Undefined => link
+              case Undefined => link
               case _ => throw new IllegalStateException(
                 "attempt to define previously defined site")
             }
@@ -514,8 +517,8 @@ trait Patterns {
           }
 
           def connect(to: Agent#Site, fromState: LinkState, toState: LinkState) = {
-            this define Builder.Linked(to, fromState)
-            to   define Builder.Linked(this, toState)
+            this define Linked(to, fromState)
+            to   define Linked(this, toState)
             this
           }
         }
@@ -528,6 +531,9 @@ trait Patterns {
           s
         }
       }
+
+      final case class Linked(to: Agent#Site, state: LinkState)
+          extends Defined
 
       /** The set of agents added to the builder. */
       val agents = mutable.ArrayBuffer[Agent]()
@@ -555,7 +561,7 @@ trait Patterns {
             componentMap(i) = j
             val u = agents(i)
             for (s <- u.sites) s.link match {
-              case Builder.Linked(to, _) =>
+              case Linked(to, _) =>
                 traverseComponent(to.agent.index, j)
               case _ => {}
             }
@@ -603,7 +609,7 @@ trait Patterns {
           val u = agents(i)
           val n = u.sites.length
           val ss = new Array[SiteState](n)
-          val ls = new Array[Link](n)
+          val ls = new Array[SiteGraph.Link](n)
           for (j <- u.sites.indices) {
             ss(j) = u.sites(j).state
           }
@@ -623,10 +629,10 @@ trait Patterns {
           val v = as(i)
           for (j <- u.sites.indices) {
             val l = u.sites(j).link match {
-              case Builder.Undefined         => SiteGraph.Undefined
-              case Builder.Stub              => SiteGraph.Stub
-              case Builder.Wildcard(a, s, l) => SiteGraph.Wildcard(a, s, l)
-              case Builder.Linked(to, state) =>
+              case Undefined         => SiteGraph.Undefined
+              case Stub              => SiteGraph.Stub
+              case Wildcard(a, s, l) => SiteGraph.Wildcard(a, s, l)
+              case Linked(to, state) =>
                 Pattern.Linked(as(to.agent.index), to.index, state)
             }
             v._links(j) = l
@@ -648,13 +654,6 @@ trait Patterns {
         agentState: Option[AgentState],
         siteState: Option[SiteState],
         linkState: Option[LinkState]) extends Defined
-      // FIXME: It would be nice if Linked were an inner class of
-      // Builder with the `to` field having type Agent#Site.  But due
-      // to SI-4400 (https://issues.scala-lang.org/browse/SI-4400) we
-      // then either a) get a warning when pattern matching Linked or
-      // b) we need to make Linked non-final.
-      final case class Linked(to: Builder#Agent#Site, state: LinkState)
-          extends Defined
     }
   }
 
