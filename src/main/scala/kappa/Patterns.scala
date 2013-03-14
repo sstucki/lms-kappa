@@ -4,8 +4,8 @@ import scala.collection.mutable
 
 
 trait Patterns {
-  this: LanguageContext with SiteGraphs with Actions with Rules
-      with Mixtures with ComponentEmbeddings with Embeddings =>
+  this: LanguageContext with ContactGraphs with SiteGraphs with Mixtures
+      with Actions with Rules with ComponentEmbeddings with Embeddings =>
 
   /**
    * A class representing patterns in [[Model]]s (i.e. site graphs).
@@ -80,27 +80,6 @@ trait Patterns {
       components(ci).agents(ai)
   }
 
-
-  // RHZ: Why not work with path-dependent types? There are things that can only
-  // be done on agents in the same pattern (like connecting) and path-dependent
-  // types let us enforce that with the type system... And for the things that
-  // can be done on any pair of components or agents, we use the supertype
-  // Pattern#Component or Pattern#Agent
-  //
-  // sstucki: Yes, but things are a bit more subtle than that.  The
-  // way Patterns are built right now is that we first build a
-  // collection of Agents and then pass them to the Pattern
-  // constructor.  That is not possible when Agent is an inner class
-  // of Pattern.  You can simply not create an inner Agent without
-  // first creating the Outer pattern.  Now if we were to make Pattern
-  // more mutable, this would work (just create a Pattern and have
-  // e.g. a ":+" that takes an agent state and creates an agent).  We
-  // would have to build sites similarly (if we want them to be inner
-  // classes of Patterns or even Agents).  Maybe that is the way to
-  // go, but as things look right now it's not possible.  Btw. it is
-  // possible to make Agents inner classes in Mixtures as these are
-  // already built in this way.  I added a comment about this in the
-  // Mixture class.
 
   /** Companion object of the [[Patterns#Pattern]] class. */
   object Pattern extends SiteGraph {

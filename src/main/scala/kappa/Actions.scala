@@ -1,6 +1,9 @@
 package kappa
 
+import scala.language.implicitConversions
+
 import scala.collection.mutable
+
 
 trait Actions {
   this: LanguageContext with SiteGraphs with Patterns with Mixtures
@@ -573,5 +576,22 @@ trait Actions {
       atoms.toList
     }
   }
+
+  /** Base class for factory objects used to build actions. */
+  abstract class ActionBuilder {
+
+    /**
+     * Construct an action from a LHS and RHS pattern.
+     *
+     * @param lhs the left-hand side of the resulting action.
+     * @param rhs the right-hand side of the resulting action.
+     */
+    def apply(lhs: Pattern, rhs: Pattern): Action
+  }
+
+  /** Convert a pair `(lhs, rhs)` of patterns into an action. */
+  implicit def patternPairToAction(lr: (Pattern, Pattern))(
+    implicit ab: ActionBuilder): Action =
+    ab(lr._1, lr._2)
 }
 

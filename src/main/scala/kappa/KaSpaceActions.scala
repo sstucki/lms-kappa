@@ -9,7 +9,7 @@ trait KaSpaceActions extends Actions {
       with Embeddings with PartialEmbeddings with Rules =>
 
   /** Factory object for building KaSpace actions.  */
-  object KaSpaceAction {
+  implicit object KaSpaceActionBuilder extends ActionBuilder {
 
     /**
      * Construct a KaSpace action from a LHS and RHS pattern using the
@@ -167,8 +167,9 @@ trait KaSpaceActions extends Actions {
     }
   }
 
-  /** Convert a pair `(lhs, rhs)` of patterns into a KaSpace action. */
-  implicit def patternPairToKaSpaceAction(lr: (Pattern, Pattern)): Action =
-    KaSpaceAction(lr._1, lr._2)
+  // FIXME: Remove
+  // /** Convert a pair `(lhs, rhs)` of patterns into a KaSpace action. */
+  // implicit def patternPairToKaSpaceAction(lr: (Pattern, Pattern)): Action =
+  //   KaSpaceAction(lr._1, lr._2)
 }
 

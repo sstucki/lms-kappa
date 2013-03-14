@@ -7,7 +7,7 @@ trait KappaActions extends Actions {
       with Embeddings with PartialEmbeddings with Rules =>
 
   /** Factory object for building Kappa actions.  */
-  object KappaAction {
+  implicit object KappaActionBuilder extends ActionBuilder {
 
     /**
      * Construct a Kappa action from a LHS and RHS pattern using the
@@ -60,6 +60,6 @@ trait KappaActions extends Actions {
 
   /** Convert a pair `(lhs, rhs)` of patterns into a Kappa action. */
   implicit def patternPairToKappaAction(lr: (Pattern, Pattern)): Action =
-    KappaAction(lr._1, lr._2)
+    KappaActionBuilder(lr._1, lr._2)
 }
 

@@ -21,22 +21,22 @@ class TestModel extends KappaModel with FlatSpec
   // assignments
 
   var k = 5
-  val r1 = "A(s), A(s)" -> "A(s!1), A(s!1)" :@ k * 2
+  val r1 = "A(s), A(s)" -> "A(s!1), A(s!1)" :@ k * 1E-4
   println(r1.action.atoms)
   println(r1)
   k = 6
   println(r1)
 
   // This is not parseable yet
-  //val r2 = "A(s:p!A)" -> "A(s:q!1), B(s:p!1)" :@ 2
+  //val r2 = "A(s:p!A)" -> "A(s:q!1), B(s:p!1)" :@ 1
   //println(r2.action.atoms)
 
   withObs(r1.action.lhs, "LHS r1")
   //withObs(r2.action.lhs, "LHS r2")
   //withObs("B()", "B")
-  withObs("A()", "A")
+  withObs("A(s:q)", "Aq")
 
-  val r3 = "A(s!1), A(s!1)" -> "A(s), A(s)" :@ 10
+  val r3 = "A(s!1), A(s!1)" -> "A(s), A(s)" :@ 1
 
   // Quasi-steady-state approximation
   val vmax = 1

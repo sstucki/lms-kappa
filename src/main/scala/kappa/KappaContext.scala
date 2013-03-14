@@ -3,122 +3,205 @@ package kappa
 import scala.reflect.ClassTag
 
 
-trait KappaContext extends KappaLikeContext
-{
-  this: KappaSymbols =>
+trait KappaContext extends KappaLikeContext {
+  this: ContactGraphs with  KappaAbstractSyntax with KappaParser =>
 
-  type AgentType = String
-  type SiteName  = String
-
-  // State types
-  type AgentStateName = Unit
-  type SiteStateName  = String
-  type LinkStateName  = Unit
-
-  // Composite state types
+  // -- State types --
   type AgentState = KappaAgentState
   type SiteState  = KappaSiteState
   type LinkState  = KappaLinkState
-
-  // RHZ: We discard states in agents and links because Kappa doesn't have them
-  def mkAgentState(agentType: AgentType, state: Option[AgentStateName]) =
-    KappaAgentState(agentType)
-  def mkSiteState(agentType: AgentType, siteName: SiteName, state: Option[SiteStateName]) =
-    KappaSiteState(agentType, siteName, state)
-  def mkLinkState(link: LinkId, state: Option[LinkStateName]) =
-    KappaLinkState
 
   /** An implicit providing a class tag for [[SiteState]]s. */
   implicit val siteStateClassTag = ClassTag[SiteState](classOf[SiteState])
 
 
-  // TODO: If we were to use dedicated symbol classes rather than Ints
-  // to represent symbols, some of these wrappers would likely not be
-  // necessary as we could use the symbols directly to represent the
-  // states (in cases where the states are not tuples).
-  final case class KappaAgentState(atype: AgentType)
-      extends AgentStateIntf[KappaAgentState]
-  {
-    val atypeSym: AgentTypeSym = agentTypeSyms(atype)
+  /** Kappa agent state. */
+  final case class KappaAgentState(agentStateSet: KappaAgentStateSet)
+      extends KappaLikeAgentState[KappaAgentState] {
 
-    // -- AgentStateIntf[KappaAgentState] API --
+    // -- KappaLikeAgentState[KappaAgentState] API --
+
+    @inline def agentType = agentStateSet.agentType
+
+    @inline def label = None
 
     @inline def matchesInLongestCommonPrefix(that: KappaAgentState) =
-      this.atypeSym == that.atypeSym
+      this.agentStateSet == that.agentStateSet
+
 
     // -- Matchable[KappaAgentState] API --
 
-    @inline def matches(that: KappaAgentState) = this.atypeSym == that.atypeSym
+    @inline def matches(that: KappaAgentState) =
+      this.agentStateSet == that.agentStateSet
 
     @inline override def isEquivTo[U <: KappaAgentState](that: U): Boolean =
-      this.atypeSym == that.atypeSym
+      this.agentStateSet == that.agentStateSet
 
     @inline def join(that: KappaAgentState) =
-      if (this.atypeSym == that.atypeSym) Some(this) else None
+      if (this.agentStateSet == that.agentStateSet) Some(this) else None
 
     @inline def meet(that: KappaAgentState) =
-      if (this.atypeSym == that.atypeSym) Some(this) else None
+      if (this.agentStateSet == that.agentStateSet) Some(this) else None
 
     @inline def isComplete = true
 
+
     // -- Any API --
 
-    @inline override def toString = atype
+    @inline override def toString = agentType
   }
 
+
+  /** Kappa site state. */
   final case class KappaSiteState(
-    atype: AgentType, name: SiteName, state: Option[SiteStateName])
-      extends Matchable[KappaSiteState] {
-    val nameSym: SiteNameSym = siteNameSyms(atype)(name)
-    val stateSym: Option[SiteStateNameSym] = state map siteStateNameSyms(atype)(name)
+    siteStateSet: KappaSiteStateSet, internalState: Option[SiteLabel])
+      extends KappaLikeSiteState[KappaSiteState] {
+
+    val labelSym = internalState map siteStateSet.getLabelSym
+
+
+    // -- KappaLikeAgentState[KappaAgentState] API --
+
+    @inline def siteName = siteStateSet.siteName
+
+    @inline def label = internalState
 
     // -- Matchable[KappaSiteState] API --
 
     @inline def matches(that: KappaSiteState) =
-      (this.nameSym == that.nameSym) &&
-      Matchable.optionMatches(this.stateSym, that.stateSym)(_==_)
+      (this.siteStateSet == that.siteStateSet) &&
+      Matchable.optionMatches(this.labelSym, that.labelSym)(_==_)
 
     @inline override def isEquivTo[U <: KappaSiteState](that: U): Boolean =
-      (this.nameSym == that.nameSym) && (this.stateSym == that.stateSym)
+      (this.siteStateSet == that.siteStateSet) && (this.labelSym == that.labelSym)
 
     @inline def join(that: KappaSiteState) =
-      if (this.nameSym == that.nameSym) (this.stateSym, that.stateSym) match {
+      if (this.siteStateSet == that.siteStateSet) (this.labelSym, that.labelSym) match {
         case (Some(s1), Some(s2)) if s1 == s2 => Some(this)
-        case _ => Some(KappaSiteState(atype, name, None))
+        case _ => Some(KappaSiteState(siteStateSet, None))
       } else None
 
     @inline def meet(that: KappaSiteState) =
-      if (this.nameSym == that.nameSym) (this.stateSym, that.stateSym) match {
+      if (this.siteStateSet == that.siteStateSet) (this.labelSym, that.labelSym) match {
         case (None, _) => Some(that)
         case (_, None) => Some(this)
         case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
       } else None
 
-    val noStateInCG = siteStateNameSyms(atype)(name).isEmpty
-    @inline def isComplete = noStateInCG || !state.isEmpty
+    @inline def isComplete = siteStateSet.isEmpty || !internalState.isEmpty
 
     // -- Any API --
 
-    @inline override def toString = name + (state map (":" + _) getOrElse "")
+    @inline override def toString = siteName + (internalState map (":" + _) getOrElse "")
   }
 
-  sealed case class KappaLinkState() extends Matchable[KappaLinkState] {
+
+  /** Kappa link state. */
+  final case class KappaLinkState(linkName: Option[LinkId])
+      extends KappaLikeLinkState[KappaLinkState] {
+    // -- GenericLinkState[KappaLinkState] API --
+
+    @inline def linkStateSet: KappaLinkStateSet = KappaLinkStateSet
+
+    // -- KappaLikeLinkState[KappaLinkState] API --
+
+    @inline def label: Option[LinkLabel] = None
+
     // -- Matchable[KappaLinkState] API --
-    @inline final def matches(that: KappaLinkState) = true
 
-    @inline final override def isEquivTo[U <: KappaLinkState](that: U): Boolean = true
+    @inline def matches(that: KappaLinkState) = true
 
-    @inline final def join(that: KappaLinkState) = Some(KappaLinkState)
+    @inline override def isEquivTo[U <: KappaLinkState](that: U): Boolean = true
 
-    @inline final def meet(that: KappaLinkState) = Some(KappaLinkState)
+    @inline def join(that: KappaLinkState) = Some(this)
 
-    @inline final def isComplete = true
+    @inline def meet(that: KappaLinkState) = Some(this)
+
+    @inline def isComplete = true
 
     // -- Any API --
 
-    @inline final override def toString = ""
+    @inline override def toString = linkName map (_.toString) getOrElse ""
   }
 
-  object KappaLinkState extends KappaLinkState
+
+  // -- State set types --
+  type AgentStateSet = KappaAgentStateSet
+  type SiteStateSet = KappaSiteStateSet
+  type LinkStateSet = KappaLinkStateSet
+
+
+  /** Creates an agent state set from a set of agent state names. */
+  def mkAgentStateSet(agentStateSet: AgentStateSetName): AgentStateSet =
+    KappaAgentStateSet(agentStateSet.agentType)
+
+  /** Creates a site state set from a set of site state names. */
+  def mkSiteStateSet(agentStateSet: AgentStateSet, siteStateSet: SiteStateSetName): SiteStateSet =
+    KappaSiteStateSet(siteStateSet.siteName, siteStateSet.labels, agentStateSet)
+
+  /** Creates a link state set from a set of link state names. */
+  def mkLinkStateSet(source: SiteStateSet, target: SiteStateSet, stateSet: LinkStateSetName): LinkStateSet =
+    KappaLinkStateSet
+
+
+  /** Kappa agent state sets. */
+  final case class KappaAgentStateSet(agentType: AgentType)
+      extends KappaLikeAgentStateSet {
+
+    // -- KappaLikeLinkStateSet API --
+
+    @inline def labels: List[AgentLabel] = List()
+
+    // -- GenericLinkStateSet API --
+
+    /** Tests whether this set contains a given site state. */
+    @inline override def contains(astate: AgentState): Boolean =
+      agentType == astate.agentType
+
+    /** Tests whether this set is empty. (Better description required) */
+    @inline override def isEmpty: Boolean = true
+  }
+
+
+  /** Kappa site state sets. */
+  final case class KappaSiteStateSet(
+    siteName: SiteName,
+    internalStates: List[SiteLabel],
+    agentStateSet: AgentStateSet)
+      extends KappaLikeSiteStateSet {
+
+    // Site label symbols
+    type SiteLabelSym = Int
+    private val labelSyms: Map[SiteLabel, SiteLabelSym] = internalStates.zipWithIndex.toMap
+    @inline def getLabelSym(label: SiteLabel): SiteLabelSym = labelSyms(label)
+
+    // -- KappaLikeSiteStateSet API --
+
+    @inline def labels = internalStates
+
+    // TODO This should be KappaLikeSiteStateName(siteName, internalStates.headOption)
+    // if what we want to construct is a mixture agent to have KaSim-like semantics.
+    @inline def undefinedSite: KappaSiteState =
+      AbstractKappaSiteState(siteName, None).toSiteState(agentStateSet)
+  }
+
+
+  /** Kappa link state sets. */
+  sealed case class KappaLinkStateSet() extends KappaLikeLinkStateSet {
+
+    // -- KappaLikeLinkStateSet API --
+
+    @inline final def labels: List[LinkLabel] = List()
+
+    // -- GenericLinkStateSet API --
+
+    /** Tests whether this set contains a given site state. */
+    @inline final override def contains(lstate: LinkState): Boolean = true
+
+    /** Tests whether this set is empty. (Better description required) */
+    @inline final override def isEmpty: Boolean = true
+  }
+
+  object KappaLinkStateSet extends KappaLinkStateSet
 }
 
