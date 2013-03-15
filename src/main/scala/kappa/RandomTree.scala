@@ -16,7 +16,7 @@ import util.Random
  * [[nextRandom]] method can be used to sample the distribution:
  * [[nextRandom]] picks a random element from the interval, with
  * probability proportional to the weight of the element.
- * 
+ *
  * Unlike the random trees used by KaSim, instances of this class
  * represent fixed-size random trees, that is, the size of the tree is
  * fixed at creation time and can not be modified afterwards.

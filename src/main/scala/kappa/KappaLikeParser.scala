@@ -7,9 +7,9 @@ import scala.util.parsing.combinator._
 trait KappaLikeParser extends Parser {
   this: KappaLikeContext =>
 
-  lazy val agentType: Parser[AgentType] = ident
-  lazy val siteName : Parser[SiteName]  = ident
-  lazy val linkName : Parser[LinkName]  = wholeNumber ^^ (_.toInt)
+  lazy val agentType: Parser[AgentTypeName] = ident
+  lazy val siteName : Parser[SiteName]      = ident
+  lazy val linkName : Parser[LinkName]      = wholeNumber ^^ (_.toInt)
 
   def agentLabel: Parser[AgentLabel]
   def siteLabel: Parser[SiteLabel]
@@ -20,7 +20,7 @@ trait KappaLikeParser extends Parser {
   type SiteStateName = KappaLikeSiteStateName
   type LinkStateName = KappaLikeLinkStateName
 
-  case class KappaLikeAgentStateName(val agentType: AgentType,
+  case class KappaLikeAgentStateName(val agentType: AgentTypeName,
                                      val label: Option[AgentLabel])
   case class KappaLikeSiteStateName(val siteName: SiteName,
                                     val label: Option[SiteLabel])
@@ -52,7 +52,7 @@ trait KappaLikeParser extends Parser {
   type SiteStateSetName = KappaLikeSiteStateSetName
   type LinkStateSetName = KappaLikeLinkStateSetName
 
-  case class KappaLikeAgentStateSetName(val agentType: AgentType,
+  case class KappaLikeAgentStateSetName(val agentType: AgentTypeName,
                                         val labels: List[AgentLabel])
   case class KappaLikeSiteStateSetName(val siteName: SiteName,
                                        val labels: List[SiteLabel])

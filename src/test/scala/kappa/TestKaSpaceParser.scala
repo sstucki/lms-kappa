@@ -14,10 +14,11 @@ class TestKaSpaceParser extends KaSpaceModel with FlatSpec
     val p = p"A : $radiusA (s : ${xUnit * 2})"
 
     val agentStateSet = contactGraph.agentStateSets(0)
+    val siteStateSet = contactGraph.siteStateSets(0)
 
-    assert(contactGraph.agentStateSets(0) ===
+    assert(agentStateSet ===
       KaSpaceAgentStateSet("A", List(radiusA)))
-    assert(contactGraph.siteStateSets(0) ===
+    assert(siteStateSet ===
       KaSpaceSiteStateSet("s", List(xUnit * 2), agentStateSet))
 
     assert(p(0).state === KaSpaceAgentState(agentStateSet, Some(radiusA)))

@@ -22,11 +22,11 @@ class TestPatterns extends KappaModel with FlatSpec
   }
 
   it should "get wildcards right" in {
-    val p1 = Pattern("A(b!_)")
-    assert(p1(0).sites(1).link === Pattern.Wildcard(None, None, None))
-    val p2 = Pattern("A(b!A.b._)")
+    val p1: Pattern = "A(b!_)"
+    assert(p1(0).sites(1).link === SiteGraph.Wildcard(None, None, None))
+    val p2: Pattern = "A(b!A.b._)"
     assert(p2(0).sites(1).link ===
-      Pattern.Wildcard(Some(p1(0).state), Some(p1(0).sites(1).state), None))
+      SiteGraph.Wildcard(Some(p1(0).state), Some(p1(0).sites(1).state), None))
   }
 }
 

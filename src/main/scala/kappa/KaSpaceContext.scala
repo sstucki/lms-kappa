@@ -169,7 +169,7 @@ trait KaSpaceContext extends KappaLikeContext {
 
   /** KaSpace agent state set. */
   final case class KaSpaceAgentStateSet(
-    agentType: AgentType,
+    agentType: AgentTypeName,
     radii: List[AgentLabel])
       extends KappaLikeAgentStateSet {
 

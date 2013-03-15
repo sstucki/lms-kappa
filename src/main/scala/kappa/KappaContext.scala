@@ -145,7 +145,7 @@ trait KappaContext extends KappaLikeContext {
 
 
   /** Kappa agent state sets. */
-  final case class KappaAgentStateSet(agentType: AgentType)
+  final case class KappaAgentStateSet(agentType: AgentTypeName)
       extends KappaLikeAgentStateSet {
 
     // -- KappaLikeLinkStateSet API --
@@ -182,7 +182,7 @@ trait KappaContext extends KappaLikeContext {
     // TODO This should be KappaLikeSiteStateName(siteName, internalStates.headOption)
     // if what we want to construct is a mixture agent to have KaSim-like semantics.
     @inline def undefinedSite: KappaSiteState =
-      AbstractKappaSiteState(siteName, None).toSiteState(agentStateSet)
+      new AbstractKappaSiteState(siteName, None).toSiteState(agentStateSet)
   }
 
 

@@ -26,47 +26,178 @@ trait AbstractSyntax {
 
   // -- Nodes of abstract syntax trees and their builders. --
 
-  /** A class representing abstract agent states. */
-  abstract class AbstractAgentState {
+  /**
+   * An abstract class representing partially built abstract patterns.
+   *
+   * Every abstract syntax node that can be converted into a pattern
+   * (i.e. that can be used in pattern position) should extend this
+   * class.
+   */
+  abstract class PartialAbstractPattern {
 
-    @inline def apply(sites: AbstractSite*): AbstractAgent =
-      AbstractAgentBuilder(this).apply(sites: _*)
-    @inline def ~(that: AbstractAgent): AbstractPattern =
-      this.toAbstractAgent ~ that
-    @inline def ->(that: Pattern)(implicit ab: ActionBuilder) =
+    /** Convert this partial abstract pattern into an abstract pattern. */
+    def toAbstractPattern: AbstractPattern
+
+    /** Append an abstract agent to this partial abstract pattern.  */
+    @inline def :+(that: AbstractAgent): AbstractPattern =
+      this.toAbstractPattern :+ that
+
+    /** Prepend an abstract agent to this partial abstract pattern.  */
+    @inline def +:(that: AbstractAgent): AbstractPattern =
+      that +: this.toAbstractPattern
+
+    /** Prepend an abstract agent to this partial abstract pattern.  */
+    @inline def ::(that: AbstractAgent): AbstractPattern =
+      that +: this
+
+    /** Build an action from this partial pattern and a pattern. */
+    @inline def ->(that: Pattern)(implicit ab: ActionBuilder): Action =
       ab(this.toPattern, that)
 
+    /** Convert this partial abstract pattern into a pattern. */
+    @inline def toPattern: Pattern = toAbstractPattern.toPattern
+  }
+
+  /**
+   * An abstract class representing partially built abstract agents.
+   *
+   * Every abstract syntax node that can be converted into an agent
+   * (i.e. that can be used in agent position) should extend this
+   * class.
+   */
+  abstract class PartialAbstractAgent extends PartialAbstractPattern {
+
+    /** Convert this partial abstract agent into an abstract agent. */
+    @inline def toAbstractAgent: AbstractAgent
+
+    /** Convert this partial abstract agent into an abstract pattern. */
+    @inline def toAbstractPattern: AbstractPattern =
+      toAbstractAgent.toAbstractPattern
+  }
+
+  /**
+   * An abstract class representing partially built abstract sites.
+   *
+   * Every abstract syntax node that can be converted into a site
+   * (i.e. that can be used in site position) should extend this
+   * class.
+   */
+  abstract class PartialAbstractSite {
+
+    /** Convert this partial abstract site into an abstract site. */
+    def toAbstractSite: AbstractSite
+  }
+
+  /**
+   * An abstract class representing partially built abstract links.
+   *
+   * Every abstract syntax node that can be converted into a link
+   * (i.e. that can be used in link position) should extend this
+   * class.
+   */
+  abstract class PartialAbstractLink {
+
+    /** Convert this partial abstract link into an abstract link. */
+    def toAbstractLink: AbstractLink
+  }
+
+
+  /** A class representing abstract agent states. */
+  abstract class AbstractAgentState extends PartialAbstractAgent {
+
+    /**
+     * Build an abstract agent from this partial abstract agent.
+     *
+     * @param sites a sequence of partial abstract sites representing
+     *        the interface of the abstract agent to build.
+     */
+    def apply(sites: PartialAbstractSite*): AbstractAgent = {
+
+      // Convert partial sites into total sites.
+      val totalSites: Seq[AbstractSite] = sites map (_.toAbstractSite)
+
+      // Create the concrete agent state from the abstract one and get
+      // its associated agent state set.
+      val as = toAgentState
+      val asSet = as.agentStateSet
+
+      // Create the concrete site states and complete the interface by
+      // filling in undefined sites states.
+      val linkMap = {
+        for (s <- totalSites) yield (s.state.toSiteState(asSet), s.link)
+      }.toMap withDefaultValue AbstractUndefined
+      val allSiteStates = asSet.completeInterface(linkMap.keys)
+      val intf = allSiteStates map { s => (s, linkMap(s)) }
+
+      // Then create the agent wrapper
+      AbstractAgent(as, intf)
+    }
+
     @inline def toAbstractAgent: AbstractAgent = apply()
-    @inline def toPattern: Pattern = toAbstractAgent.toPattern
 
     /** Creates an agent state from this abstract agent state. */
     def toAgentState: AgentState
   }
 
   /** A class representing abstract site states. */
-  abstract class AbstractSiteState {
+  abstract class AbstractSiteState extends PartialAbstractSite {
 
+    /**
+     * Build an undefined abstract site from this partial abstract
+     * site.
+     */
     @inline def ?(): AbstractSite =
-      AbstractSiteBuilder(this).?
-    @inline def !-(): AbstractSite =
-      AbstractSiteBuilder(this).!-
-    @inline def !(name: LinkId, state: AbstractLinkState): AbstractSite =
-      AbstractSiteBuilder(this).!(name, state)
-    @inline def !(linked: AbstractLinked): AbstractSite =
-      AbstractSiteBuilder(this).!(linked)
-    @inline def !(wc: AbstractWildcard): AbstractSite =
-      AbstractSiteBuilder(this).!(wc)
-    @inline def !*(): AbstractSite =
-      AbstractSiteBuilder(this).!*
+      AbstractSite(this, AbstractUndefined)
 
-    @inline def toAbstractSite: AbstractSite = this.?
+    /** Build a free abstract site from this partial abstract site. */
+    @inline def !-(): AbstractSite =
+      AbstractSite(this, AbstractStub)
+
+    /**
+     * Build a linked abstract site from this partial abstract site.
+     *
+     * @param name the name of the link connecting this partial
+     *        abstract site.
+     * @param state the state of the link connecting this partial
+     *        abstract site.
+     */
+    @inline def !(name: LinkId, state: AbstractLinkState): AbstractSite =
+      this ! AbstractLinked(name, state)
+
+    /**
+     * Build an abstract site with a wildcard link from this partial
+     * abstract site.
+     *
+     * @param wc the wildcard connected to this partial abstract site.
+     */
+    @inline def !(
+      agentState: Option[AbstractAgentState],
+      siteState: Option[AbstractSiteState],
+      linkState: Option[AbstractLinkState]): AbstractSite =
+      this ! AbstractWildcard(agentState, siteState, linkState)
+
+    /**
+     * Build an abstract site with a maximally general wildcard link
+     * from this partial abstract site.
+     */
+    @inline def !*(): AbstractSite = this ! (None, None, None)
+
+    /**
+     * Build a linked abstract site from this partial abstract site.
+     *
+     * @param link the link connecting this partial abstract site.
+     */
+    @inline def !(link: PartialAbstractLink): AbstractSite =
+      AbstractSite(this, link.toAbstractLink)
+
+    @inline def toAbstractSite: AbstractSite = this.!-
 
     /** Creates a site state from this abstract site state. */
     def toSiteState(agentStateSet: AgentStateSet): SiteState
   }
 
   /** A class representing abstract link states. */
-  abstract class AbstractLinkState {
+  abstract class AbstractLinkState extends PartialAbstractLink {
 
     // FIXME: Still storing the source and target of a link in the
     // state itself, but that information should be stored in the
@@ -78,7 +209,9 @@ trait AbstractSyntax {
 
 
   /** A class representing abstract links. */
-  sealed abstract class AbstractLink
+  sealed abstract class AbstractLink extends PartialAbstractLink {
+    @inline def toAbstractLink: AbstractLink = this
+  }
 
   /** A class representing undefined links at abstract sites. */
   final case object AbstractUndefined extends AbstractLink
@@ -94,98 +227,48 @@ trait AbstractSyntax {
 
   /** A class representing actual links at abstract sites. */
   final case class AbstractLinked(
-    name: LinkId, state: AbstractLinkState) extends AbstractLink
+    id: LinkId, state: AbstractLinkState) extends AbstractLink
 
-
-  /** A class to build abstract  sites. */
-  final case class AbstractSiteBuilder(val state: AbstractSiteState) {
-
-    @inline def ?(): AbstractSite =
-      AbstractSite(state, AbstractUndefined)
-    @inline def !-(): AbstractSite =
-      AbstractSite(state, AbstractStub)
-    @inline def !(name: LinkId, ls: AbstractLinkState): AbstractSite =
-      AbstractSite(state, AbstractLinked(name, ls))
-    @inline def !(linked: AbstractLinked): AbstractSite =
-      AbstractSite(state, linked)
-    @inline def !(wc: AbstractWildcard): AbstractSite =
-      AbstractSite(state, wc)
-    @inline def !*(): AbstractSite =
-      AbstractSite(state, AbstractWildcard(None, None, None))
-    @inline def toAbstractSite: AbstractSite = this.?
-  }
 
   /** A class representing abstract sites. */
-  final case class AbstractSite(
-    state: AbstractSiteState, link: AbstractLink)
+  final case class AbstractSite(state: AbstractSiteState, link: AbstractLink)
+      extends PartialAbstractSite {
 
-  /** A class to build abstract agents. */
-  final case class AbstractAgentBuilder(
-    state: AbstractAgentState) {
-
-    def apply(sites: AbstractSite*): AbstractAgent = {
-
-      val siteSeq: Seq[AbstractSite] = sites
-
-      // Create the concrete agent state from the abstract one and get
-      // its associated agent state set.
-      val as = state.toAgentState
-      val asSet = as.agentStateSet
-
-      // Create the concrete site states and complete the interface by
-      // filling in undefined sites states.
-      val linkMap = {
-        for (s <- siteSeq) yield (s.state.toSiteState(asSet), s.link)
-      }.toMap withDefaultValue AbstractUndefined
-      val allSiteStates = asSet.completeInterface(linkMap.keys)
-      val intf = allSiteStates map { s => (s, linkMap(s)) }
-
-      // Then create the agent wrapper
-      AbstractAgent(as, intf)
-    }
-
-    @inline def ~(that: AbstractAgent): AbstractPattern =
-      this.toAbstractAgent ~ that
-    @inline def ->(that: Pattern)(implicit ab: ActionBuilder) =
-      ab(this.toPattern, that)
-
-    @inline def toAbstractAgent: AbstractAgent = apply()
-    @inline def toPattern: Pattern = toAbstractAgent.toPattern
+    @inline def toAbstractSite = this
   }
 
   /** A class representing abstract agents. */
   final case class AbstractAgent(
-    state: AgentState, sites: Seq[(SiteState, AbstractLink)]) {
+    state: AgentState, sites: Seq[(SiteState, AbstractLink)])
+      extends PartialAbstractAgent {
 
-    @inline def ~(that: AbstractAgent): AbstractPattern =
-      this.toAbstractPattern ~ that
-    @inline def ->(that: Pattern)(implicit ab: ActionBuilder) =
-      ab(this.toPattern, that)
-
-    @inline def toAbstractPattern: AbstractPattern =
+    @inline def toAbstractAgent = this
+    @inline override def toAbstractPattern: AbstractPattern =
       AbstractPattern(Vector(this))
-    @inline def toPattern: Pattern = toAbstractPattern.toPattern
   }
 
   /** An abstract class to build patterns. */
   final case class AbstractPattern(
     agents: Vector[AbstractAgent] = Vector(),
-    siteGraphString: String = "") {
+    siteGraphString: String = "") extends PartialAbstractPattern {
 
-    @inline def ~(that: AbstractAgent): AbstractPattern = {
+    @inline override def +:(that: AbstractAgent): AbstractPattern = {
+      AbstractPattern(that +: agents, siteGraphString)
+    }
+
+    @inline override def :+(that: AbstractAgent): AbstractPattern = {
       AbstractPattern(agents :+ that, siteGraphString)
     }
 
-    @inline def ->(that: Pattern)(implicit ab: ActionBuilder) =
-      ab(this.toPattern, that)
+    @inline override def toAbstractPattern: AbstractPattern = this
 
-    def toPattern: Pattern = {
+    override def toPattern: Pattern = {
 
       val linkMap = new mutable.HashMap[
         LinkId, List[(AgentIndex, SiteIndex, AbstractLinkState)]]() withDefaultValue Nil
 
       // Create agents
-      val pb = new Pattern.Builder("")
+      val pb = new Pattern.Builder(siteGraphString)
       for ((u, i) <- agents.zipWithIndex) {
         val v = pb += u.state
         for (((sstate, link), j) <- u.sites.zipWithIndex) {
@@ -235,21 +318,9 @@ trait AbstractSyntax {
 
   // -- Sugar for pattern and mixture construction. --
 
-  /** Convert abstract agent states into patterns. */
-  implicit def abstractAgentStateToPattern(
-    t: AbstractAgentState): Pattern = t.toPattern
-
-  /** Convert abstract site states into abstract sites. */
-  implicit def abstractSiteStateToAbstractSite(
-    t: AbstractSiteState): AbstractSite = t.toAbstractSite
-
-  /** Convert abstract agents into patterns. */
-  implicit def abstractAgentToAbstractPattern(w: AbstractAgent): Pattern =
-    w.toPattern
-
-  /** Convert abstract patterns into patterns. */
-  implicit def abstractPatternToPattern(p: AbstractPattern): Pattern =
-    p.toPattern
+  /** Convert partial abstract patterns into patterns. */
+  implicit def partialAbstractPatternToPattern(
+    p: PartialAbstractPattern): Pattern = p.toPattern
 
   // FIXME: These should become redundant once the Parser.AST has been
   // replaced by Abstract* classes.
@@ -290,8 +361,7 @@ trait AbstractSyntax {
         new AbstractSite(
           siteStateNameToAbstractSiteState(s.state), link)
       }
-      val ab = new AbstractAgentBuilder(astate)
-      pb = pb ~ ab(sites: _*)
+      pb = pb :+ astate(sites: _*)
     }
 
     // Build

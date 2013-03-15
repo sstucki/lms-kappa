@@ -15,18 +15,15 @@ class KaSimAbcTestCombinators extends KappaModel with FlatSpec {
 
   contactGraph = "A(x!{1},c!{2,3}),B(x!{1}),C(x1:{u,p}!{2},x2:{u,p}!{3})"
 
-  val A    = KappaAgentState("A")
-  val B    = KappaAgentState("B")
-  val C    = KappaAgentState("C")
-  val ax   = KappaSiteState("A", "x",  None)
-  val bx   = KappaSiteState("B", "x",  None)
-  val c    = KappaSiteState("A", "c",  None)
-  val x1   = KappaSiteState("C", "x1", None)
-  val x1_u = KappaSiteState("C", "x1", Some("u"))
-  val x1_p = KappaSiteState("C", "x1", Some("p"))
-  val x2   = KappaSiteState("C", "x2", None)
-  val x2_u = KappaSiteState("C", "x2", Some("u"))
-  val x2_p = KappaSiteState("C", "x2", Some("p"))
+  object A extends AgentType("A")
+  object B extends AgentType("B")
+  object C extends AgentType("C")
+  val x  = Site("x")
+  val c  = Site("c")
+  val x1 = Site("x1")
+  val x2 = Site("x2")
+  val u  = "u"
+  val p  = "p"
 
 
   // #### Rates
@@ -46,39 +43,37 @@ class KaSimAbcTestCombinators extends KappaModel with FlatSpec {
   // #### Rules
 
   // 'a.b' A(x),B(x) <-> A(x!1),B(x!1) @ 'on_rate','off_rate' #A binds B
-  val r0f = A(ax) ~ B(bx) -> A(ax!1) ~ B(bx!1) :@ on_rate
+  val r0f = (A(x) :: B(x)) -> (A(x!1) :: B(x!1)) :@ on_rate
 
   // #'a..b' A(x!1),B(x!1) -> A(x),B(x) @ 'off_rate' # AB dissociation
-  val r0r = A(ax!1) ~ B(bx!1) -> A(ax) ~ B(bx) :@ off_rate
+  val r0r = (A(x!1) :+ B(x!1)) -> (A(x) :+ B(x)) :@ off_rate
 
   // 'ab.c' A(x!_,c),C(x1~u) ->A(x!_,c!2),C(x1~u!2) @ 'on_rate' # AB binds C
-  val r1 =
-    A(ax!*, c) ~ C(x1_u) -> A(ax!*, c!2) ~ C(x1_u!2) :@ on_rate
+  val r1 = (A(x!*, c) +: C(x1~u)) -> (A(x!*, c!2) :+ C(x1~u!2)) :@ on_rate
 
   // 'mod x1' C(x1~u!1),A(c!1) ->C(x1~p),A(c) @ 'mod_rate' # AB modifies x1
-  val r2 =
-    C(x1_u!1) ~ A(c!1) -> C(x1_p) ~ A(c) :@ mod_rate
+  val r2 = (C(x1~u!1) :+ A(c!1)) -> (C(x1~p) :+ A(c)) :@ mod_rate
 
   // 'a.c' A(x,c),C(x1~p,x2~u) -> A(x,c!1),C(x1~p,x2~u!1) @ 'on_rate'
   // # A binds C on x2
   val r3 =
-    A(ax, c) ~ C(x1_p, x2_u) -> A(ax, c!1) ~ C(x1_p, x2_u!1) :@ on_rate
+    (A(x, c) :+ C(x1~p, x2~u)) -> (A(x, c!1) :+ C(x1~p, x2~u!1)) :@ on_rate
 
   // 'mod x2' A(x,c!1),C(x1~p,x2~u!1) -> A(x,c),C(x1~p,x2~p) @ 'mod_rate'
   // # A modifies x2
   val r4 =
-    A(ax, c!1) ~ C(x1_p, x2_u!1) -> A(ax, c) ~ C(x1_p, x2_p) :@ mod_rate
+    (A(x, c!1) :+ C(x1~p, x2~u!1)) -> (A(x, c) :+ C(x1~p, x2~p)) :@ mod_rate
 
 
   // #### Variables (cont)
   // %obs: 'AB' A(x!x.B)
-  withObs(A(ax!SiteGraph.Wildcard(Some(B), Some(bx), None)), "AB")
+  withObs(A(x!(Some(B), Some(x), None)), "AB")
   // %obs: 'Cuu' C(x1~u?,x2~u?)
-  withObs(C(x1_u?, x2_u?), "Cuu")
+  withObs(C(x1~u?, x2~u?), "Cuu")
   // %obs: 'Cpu' C(x1~p?,x2~u?)
-  withObs(C(x1_p?, x2_u?), "Cpu")
+  withObs(C(x1~p?, x2~u?), "Cpu")
   // %obs: 'Cpp' C(x1~p?,x2~p?)
-  withObs(C(x1_p?, x2_p?), "Cpp")
+  withObs(C(x1~p?, x2~p?), "Cpp")
 
   // %var: 'n_a' 1000
   val n_a = 100
@@ -90,11 +85,11 @@ class KaSimAbcTestCombinators extends KappaModel with FlatSpec {
 
   // #### Initial conditions
   // %init: 'n_a' A()
-  withInit(A(ax, c), n_a)
+  withInit(A(x, c), n_a)
   // %init: 'n_b' B()
-  withInit(B(bx), n_b)
+  withInit(B(x), n_b)
   // %init: 'n_c' C()
-  withInit(C(x1_u, x2_u), n_c)
+  withInit(C(x1~u, x2~u), n_c)
 
 
   withMaxEvents(10000)

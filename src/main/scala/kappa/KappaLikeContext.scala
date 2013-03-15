@@ -19,7 +19,7 @@ trait KappaLikeContext extends LanguageContext {
   trait KappaLikeAgentStateSet extends GenericAgentStateSet {
 
     /** Returns the agent type associated with this agent state set. */
-    def agentType: AgentType
+    def agentType: AgentTypeName
 
     /** Returns the set of labels associated with this agent state set. */
     def labels: List[AgentLabel]
@@ -61,7 +61,7 @@ trait KappaLikeContext extends LanguageContext {
 
   // -- Constituents of site graph state types --
 
-  type AgentType = String
+  type AgentTypeName = String
   type SiteName = String
   type LinkName = Int
   type AgentLabel
@@ -81,7 +81,7 @@ trait KappaLikeContext extends LanguageContext {
     this: T =>
 
     /** Returns the agent type. */
-    def agentType: AgentType
+    def agentType: AgentTypeName
 
     /** Returns the agent label. */
     def label: Option[AgentLabel]
