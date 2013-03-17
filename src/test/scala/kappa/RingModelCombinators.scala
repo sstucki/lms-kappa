@@ -3,7 +3,7 @@ package kappa
 import org.scalatest.FlatSpec
 import scala.math._
 
-class RingModel extends KaSpaceModel with FlatSpec
+class RingModelCombinators extends KaSpaceModel with FlatSpec
 {
   // Agent radius
   val radius = 1
@@ -19,6 +19,13 @@ class RingModel extends KaSpaceModel with FlatSpec
   contactGraph = s"""A:{$radius} (c:{$posR}!{3:{$wRL}}, b:{$posL}!{1:{$wLR}}),
                      B:{$radius} (a:{$posR}!{1:{$wRL}}, c:{$posL}!{2:{$wLR}}),
                      C:{$radius} (b:{$posR}!{2:{$wRL}}, a:{$posL}!{3:{$wLR}})"""
+
+  object A extends AgentType("A")
+  object B extends AgentType("B")
+  object C extends AgentType("C")
+  val a = Site("a")
+  val b = Site("b")
+  val c = Site("c")
 
   // Number of molecules in initial mixture.
   val nA = 3000
@@ -60,61 +67,61 @@ class RingModel extends KaSpaceModel with FlatSpec
 
   // -- Rules --
   withRules(  // Bind
-    "A(b), B(a)" -> s"A(b!1:$wLR), B(a!1:$wRL)" :@ on_rate,
-    "B(c), C(b)" -> s"B(c!1:$wLR), C(b!1:$wRL)" :@ on_rate,
-    "C(a), A(c)" -> s"C(a!1:$wLR), A(c!1:$wRL)" :@ on_rate)
+    A(b), B(a) -> A(b!1~wLR), B(a!1~wRL) :@ on_rate,
+    B(c), C(b) -> B(c!1~wLR), C(b!1~wRL) :@ on_rate,
+    C(a), A(c) -> C(a!1~wLR), A(c!1~wRL) :@ on_rate)
 
   withRules(  // Unbind
-    "A(b!1), B(a!1)" -> "A(b), B(a)" :@ off_rate,
-    "B(c!1), C(b!1)" -> "B(c), C(b)" :@ off_rate,
-    "C(a!1), A(c!1)" -> "C(a), A(c)" :@ off_rate)
+    A(b!1), B(a!1) -> A(b), B(a) :@ off_rate,
+    B(c!1), C(b!1) -> B(c), C(b) :@ off_rate,
+    C(a!1), A(c!1) -> C(a), A(c) :@ off_rate)
 
   withRules(  // Close
-    "B(a, c!1), C(b!1, a!2), A(c!2, b)" ->
-    s"B(a!3:$wRL, c!1), C(b!1, a!2), A(c!2, b!3:$wLR)" :@ close_rate,
-    "C(b, a!1), A(c!1, b!2), B(a!2, c)" ->
-    s"C(b!3:$wRL, a!1), A(c!1, b!2), B(a!2, c!3:$wLR)" :@ close_rate,
-    "A(c, b!1), B(a!1, c!2), C(b!2, a)" ->
-    s"A(c!3:$wRL, b!1), B(a!1, c!2), C(b!2, a!3:$wLR)" :@ close_rate)
+    B(a, c!1), C(b!1, a!2), A(c!2, b) ->
+      B(a!3~wRL, c!1), C(b!1, a!2), A(c!2, b!3~wLR) :@ close_rate,
+    C(b, a!1), A(c!1, b!2), B(a!2, c) ->
+      C(b!3~wRL, a!1), A(c!1, b!2), B(a!2, c!3~wLR) :@ close_rate,
+    A(c, b!1), B(a!1, c!2), C(b!2, a) ->
+      A(c!3~wRL, b!1), B(a!1, c!2), C(b!2, a!3~wLR) :@ close_rate)
 
 
   // -- Mixture --
-  withInit(m"A:$radius (b:$posL, c:$posR)" * nA)
-  withInit(m"B:$radius (a:$posR, c:$posL)" * nB)
-  withInit(m"C:$radius (a:$posL, b:$posR)" * nC)
+  withInit((A~radius)(b~posL, c~posR), nA)
+  withInit((B~radius)(a~posR, c~posL) * nB)
+  withInit((C~radius)(a~posL, b~posR) * nC)
 
 
   // -- Expected observables --
 
   // Monomers
-  withObs("A(b, c)", "A")
-  withObs("B(a, c)", "B")
-  withObs("C(a, b)", "C")
+  withObs(A(b, c), "A")
+  withObs(B(a, c), "B")
+  withObs(C(a, b), "C")
 
   // Dimers
-  withObs("A(b!1, c), B(a!1, c)", "AB")
-  withObs("A(c!1, b), C(a!1, b)", "AC")
-  withObs("B(c!1, a), C(b!1, a)", "BC")
+  withObs(A(b!1, c) :: B(a!1, c), "AB")
+  withObs(A(c!1, b) :: C(a!1, b), "AC")
+  withObs(B(c!1, a) :: C(b!1, a), "BC")
 
   // Trimers
-  withObs("A(b!1, c), B(a!1, c!2), C(a, b!2)", "ABC")
-  withObs("B(c!2, a), C(b!2, a!1), A(b, c!1)", "BCA")
-  withObs("C(a!1, b), A(c!1, b!2), B(a!2, c)", "CAB")
+  withObs(A(b!1, c) :+ B(a!1, c!2) :+ C(a, b!2), "ABC")
+  withObs(B(c!2, a) +: C(b!2, a!1) +: A(b, c!1), "BCA")
+  withObs(C(a!1, b) +: A(c!1, b!2) :+ B(a!2, c), "CAB")
 
   // Triangle
-  withObs("A(c!3, b!1), B(a!1, c!2), C(b!2, a!3)", "triangle")
+  withObs(A(c!3, b!1) :: B(a!1, c!2) :: C(b!2, a!3), "triangle")
 
 
   // -- Unexpected observables --
 
   // Hexagon
-  withObs("A(c!6, b!1), B(a!1, c!2), C(b!2, a!3), " +
-          "A(c!3, b!4), B(a!4, c!5), C(b!5, a!6)", "hexagon")
+  withObs(A(c!6, b!1) :+ B(a!1, c!2) :+ C(b!2, a!3) :+
+          A(c!3, b!4) :+ B(a!4, c!5) :+ C(b!5, a!6), "hexagon")
 
   // Tetramers
-  withObs("A(b!1), B(a!1, c!2), C(b!2, a!3), A(c!3)", "ABCA")
-  withObs("B(c!2), C(b!2, a!3), A(c!3, b!1), B(a!1)", "BCAB")
-  withObs("C(a!3), A(c!3, b!1), B(a!1, c!2), C(b!2)", "CABC")
+  withObs(A(b!1) :+ B(a!1, c!2) :+ C(b!2, a!3) :+ A(c!3), "ABCA")
+  withObs(B(c!2) :+ C(b!2, a!3) :+ A(c!3, b!1) :+ B(a!1), "BCAB")
+  withObs(C(a!3) :+ A(c!3, b!1) :+ B(a!1, c!2) :+ C(b!2), "CABC")
 
 
   // Simulate!

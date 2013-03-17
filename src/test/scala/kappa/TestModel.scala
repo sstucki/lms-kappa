@@ -6,7 +6,7 @@ class TestModel extends KappaModel with FlatSpec
 {
   //behavior of "Models"
 
-  contactGraph = "A(s:{p,q}!{1,1})"
+  contactGraph = "A(s:{p,q}!{1,1,2}),B(s!{2})"
 
   // Manual setup of Symbol table
   //
@@ -22,26 +22,26 @@ class TestModel extends KappaModel with FlatSpec
 
   var k = 5
   val r1 = "A(s), A(s)" -> "A(s!1), A(s!1)" :@ k * 1E-4
+  withRule(r1)
   println(r1.action.atoms)
   println(r1)
   k = 6
   println(r1)
 
-  // This is not parseable yet
-  //val r2 = "A(s:p!A)" -> "A(s:q!1), B(s:p!1)" :@ 1
-  //println(r2.action.atoms)
+  val r2 = withRule("A(s:p!A)" -> "A(s:q!1), B(s!1)" :@ 1)
+  println(r2.action.atoms)
 
   withObs(r1.action.lhs, "LHS r1")
-  //withObs(r2.action.lhs, "LHS r2")
-  //withObs("B()", "B")
+  withObs(r2.action.lhs, "LHS r2")
+  withObs("B()", "B")
   withObs("A(s:q)", "Aq")
 
-  val r3 = "A(s!1), A(s!1)" -> "A(s), A(s)" :@ 1
+  val r3 = withRule("A(s!1), A(s!1)" -> "A(s), A(s)" :@ 1)
 
   // Quasi-steady-state approximation
   val vmax = 1
   val kM = 1
-  val r4 = "A(s:p)" -> "A(s:q)" :@ (vmax / (kM + "A(s:p)".inMix))
+  val r4 = withRule("A(s:p)" -> "A(s:q)" :@ (vmax / (kM + "A(s:p)".inMix)))
 
   withInit(Mixture("A(s:p)") * 100)
   println("Mixture: " + mix)

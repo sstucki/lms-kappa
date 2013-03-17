@@ -162,7 +162,7 @@ trait Actions {
         } else {
           // Roll back to the state of the mixture prior to the action
           // application.
-          println("# post-condition = false.")
+          //println("# post-condition = false.")
           mix.rollback
           false
         }

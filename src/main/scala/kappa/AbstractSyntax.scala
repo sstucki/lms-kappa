@@ -106,7 +106,7 @@ trait AbstractSyntax {
      *
      * @param rate stochastic kinetic rate constant
      */
-    def :@(rate: => Double): AbstractMassActionRuleTail =
+    @inline def :@(rate: => Double): AbstractMassActionRuleTail =
       AbstractMassActionRuleTail(this.toAbstractPattern, () => rate)
 
     /**
@@ -114,11 +114,22 @@ trait AbstractSyntax {
      *
      * @param law kinetic law expression
      */
-    def !@(law: => Double): AbstractRateLawRuleTail =
+    @inline def !@(law: => Double): AbstractRateLawRuleTail =
       AbstractRateLawRuleTail(this.toAbstractPattern, () => law)
+
+    /**
+     * Build a mixture with `x` copies of this abstract pattern.
+     *
+     * @param x the number of copies of this abstract pattern in the
+     *        resulting mixture.
+     */
+    @inline def *(x: Int): Mixture = this.toMixture * x
 
     /** Convert this partial abstract pattern into a pattern. */
     @inline def toPattern: Pattern = toAbstractPattern.toPattern
+
+    /** Convert this partial abstract pattern into a mixture. */
+    @inline def toMixture: Mixture = Mixture(this.toPattern)
   }
 
   /**
@@ -149,19 +160,6 @@ trait AbstractSyntax {
 
     /** Convert this partial abstract site into an abstract site. */
     def toAbstractSite: AbstractSite
-  }
-
-  /**
-   * An abstract class representing partially built abstract links.
-   *
-   * Every abstract syntax node that can be converted into a link
-   * (i.e. that can be used in link position) should extend this
-   * class.
-   */
-  abstract class PartialAbstractLink {
-
-    /** Convert this partial abstract link into an abstract link. */
-    def toAbstractLink: AbstractLink
   }
 
 
@@ -217,17 +215,6 @@ trait AbstractSyntax {
       AbstractSite(this, AbstractStub)
 
     /**
-     * Build a linked abstract site from this partial abstract site.
-     *
-     * @param name the name of the link connecting this partial
-     *        abstract site.
-     * @param state the state of the link connecting this partial
-     *        abstract site.
-     */
-    @inline def !(name: LinkId, state: AbstractLinkState): AbstractSite =
-      this ! AbstractLinked(name, state)
-
-    /**
      * Build an abstract site with a wildcard link from this partial
      * abstract site.
      *
@@ -250,8 +237,8 @@ trait AbstractSyntax {
      *
      * @param link the link connecting this partial abstract site.
      */
-    @inline def !(link: PartialAbstractLink): AbstractSite =
-      AbstractSite(this, link.toAbstractLink)
+    @inline def !(link: AbstractLink): AbstractSite =
+      AbstractSite(this, link)
 
     @inline def toAbstractSite: AbstractSite = this.!-
 
@@ -259,22 +246,9 @@ trait AbstractSyntax {
     def toSiteState(agentStateSet: AgentStateSet): SiteState
   }
 
-  /** A class representing abstract link states. */
-  abstract class AbstractLinkState extends PartialAbstractLink {
-
-    // FIXME: Still storing the source and target of a link in the
-    // state itself, but that information should be stored in the
-    // contact graph (ie as we do with Patterns).
-
-    /** Creates a link state from this abstract link state. */
-    def toLinkState(source: SiteStateSet, target: SiteStateSet): LinkState
-  }
-
-
+  
   /** A class representing abstract links. */
-  sealed abstract class AbstractLink extends PartialAbstractLink {
-    @inline def toAbstractLink: AbstractLink = this
-  }
+  sealed abstract class AbstractLink
 
   /** A class representing undefined links at abstract sites. */
   final case object AbstractUndefined extends AbstractLink
@@ -288,9 +262,24 @@ trait AbstractSyntax {
     siteState: Option[AbstractSiteState],
     linkState: Option[AbstractLinkState]) extends AbstractLink
 
-  /** A class representing actual links at abstract sites. */
-  final case class AbstractLinked(
-    id: LinkId, state: AbstractLinkState) extends AbstractLink
+  /**
+   * A class representing abstract link states.
+   *
+   * NOTE: This class plays a dual role as an abstract link as well as
+   * the state of that link.
+   */
+  abstract class AbstractLinkState extends AbstractLink {
+
+    // FIXME: Still storing the source and target of a link in the
+    // state itself, but that information should be stored in the
+    // contact graph (ie as we do with Patterns).
+
+    /** The link ID of this abstract link. */
+    def id: LinkId
+
+    /** Creates a link state from this abstract link state. */
+    def toLinkState(source: SiteStateSet, target: SiteStateSet): LinkState
+  }
 
 
   /** A class representing abstract sites. */
@@ -330,14 +319,18 @@ trait AbstractSyntax {
 
     override def toPattern: Pattern = {
 
-      val linkMap = new mutable.HashMap[
-        LinkId, List[(AgentIndex, SiteIndex, AbstractLinkState)]]() withDefaultValue Nil
+      // Create a builder to build this pattern
+      val pb = new Pattern.Builder(siteGraphString)
+
+      // Create a map to track which sites a given link connects.
+      type LinkMapValue = List[(pb.type#Agent#Site, AbstractLinkState)]
+      val linkMap =
+        new mutable.HashMap[LinkId, LinkMapValue]() withDefaultValue Nil
 
       // Create agents
-      val pb = new Pattern.Builder(siteGraphString)
-      for ((u, i) <- agents.zipWithIndex) {
+      for (u <- agents) {
         val v = pb += u.state
-        for (((sstate, link), j) <- u.sites.zipWithIndex) {
+        for ((sstate, link) <- u.sites) {
           val x = v += sstate
           link match {
             case AbstractUndefined         => { }
@@ -352,17 +345,17 @@ trait AbstractSyntax {
                 yield ls.toLinkState(sstate.siteStateSet, ss.siteStateSet)
               x define Pattern.Builder.Wildcard(aso, sso, lso)
             }
-            case AbstractLinked(ln, ls)    =>
-              linkMap += ((ln, ((i, j, ls) :: linkMap(ln))))
+            case l: AbstractLinkState    => {
+              val li = l.id
+              linkMap += ((li, (x, l) :: linkMap(li)))
+            }
           }
         }
       }
 
       // Connect links
       for (l <- linkMap) l match {
-        case (_, List((i1, j1, l1), (i2, j2, l2))) => {
-          val s1 = pb.agents(i1).sites(j1)
-          val s2 = pb.agents(i2).sites(j2)
+        case (_, List((s1, l1), (s2, l2))) => {
           val t1 = s1.state.siteStateSet
           val t2 = s2.state.siteStateSet
           val ls1 = l1.toLinkState(t1, t2)
@@ -529,8 +522,7 @@ trait AbstractSyntax {
             a map agentStateNameToAbstractAgentState,
             s map siteStateNameToAbstractSiteState,
             l map linkStateNameToAbstractLinkState)
-          case AST.Linked(lsn)       => AbstractLinked(
-            lsn.id, linkStateNameToAbstractLinkState(lsn))
+          case AST.Linked(lsn)       => linkStateNameToAbstractLinkState(lsn)
         }
         new AbstractSite(
           siteStateNameToAbstractSiteState(s.state), link)

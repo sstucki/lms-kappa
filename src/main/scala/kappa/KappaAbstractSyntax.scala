@@ -64,8 +64,6 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
   class AbstractKappaLinkState(val id: LinkId)
       extends AbstractLinkState {
 
-    @inline final def toAbstractLink: AbstractLink = AbstractLinked(id, this)
-
     /** Creates a link state from this abstract link state. */
     @inline final def toLinkState(
       source: SiteStateSet, target: SiteStateSet): LinkState =

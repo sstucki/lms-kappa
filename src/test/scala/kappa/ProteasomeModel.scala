@@ -27,12 +27,13 @@ class ProteasomeModel extends KaSpaceModel with FlatSpec
                                  br:{$posBR}!{3:{$wBR},3:{$wBR}})"""
 
   // Rules
-  val bindLR = "A(r) , A(l) " -> s"A( r!1:$wRL), A( l!1:$wLR)" :@ 1
-  val bindBL = "A(bl), A(bl)" -> s"A(bl!1:$wBL), A(bl!1:$wBL)" :@ 1
-  val bindBR = "A(br), A(br)" -> s"A(br!1:$wBR), A(br!1:$wBR)" :@ 1
-  val unbindLR = "A(r!1) , A(l!1) " -> "A(r) , A(l) " :@ 1
-  val unbindBL = "A(bl!1), A(bl!1)" -> "A(bl), A(bl)" :@ 1
-  val unbindBR = "A(br!1), A(br!1)" -> "A(br), A(br)" :@ 1
+  withRules(
+    "A(r) , A(l) " -> s"A( r!1:$wRL), A( l!1:$wLR)" :@ 1,  // bind l-r
+    "A(bl), A(bl)" -> s"A(bl!1:$wBL), A(bl!1:$wBL)" :@ 1,  // bind bl-bl
+    "A(br), A(br)" -> s"A(br!1:$wBR), A(br!1:$wBR)" :@ 1,  // bind br-br
+    "A(r!1) , A(l!1) " -> "A(r) , A(l) " :@ 1,             // unbind l-r
+    "A(bl!1), A(bl!1)" -> "A(bl), A(bl)" :@ 1,             // unbind bl-bl
+    "A(br!1), A(br!1)" -> "A(br), A(br)" :@ 1)             // unbind br-br
 
   // Mixture
   withInit(m"A:$radius(l:$posL, r:$posR, bl:$posBL, br:$posBR)" * 50)

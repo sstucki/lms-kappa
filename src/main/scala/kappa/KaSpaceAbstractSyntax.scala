@@ -67,8 +67,6 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
     val id: LinkId, val orientation: Option[LinkLabel])
       extends AbstractLinkState {
 
-    @inline final def toAbstractLink: AbstractLink = AbstractLinked(id, this)
-
     /** Creates a link state from this abstract link state. */
     @inline final def toLinkState(
       source: SiteStateSet, target: SiteStateSet): LinkState = {
@@ -141,8 +139,6 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
     /** Build an abstract link state with a particular label. */
     @inline final def ~(label: LinkLabel): AbstractLinkState =
       AbstractKaSpaceLinkState(id, Some(label))
-
-    @inline final def toAbstractLink: AbstractLink = AbstractLinked(id, this)
 
     @inline final def toLinkState(
       source: SiteStateSet, target: SiteStateSet): LinkState =
