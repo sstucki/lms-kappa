@@ -37,8 +37,9 @@ trait Rules {
       action.rhs.toString + " :@ " +
       //rate(ones.take(lhs.arity):_*)
       law()
-
-    // Register every instance of this class in the model
-    register
   }
+
+
+  /** Register a rule in the model */
+  def registerRule(r: Rule) = r.register
 }

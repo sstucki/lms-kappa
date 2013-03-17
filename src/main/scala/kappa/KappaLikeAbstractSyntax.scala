@@ -20,6 +20,7 @@ trait KappaLikeAbstractSyntax extends AbstractSyntax {
       with Patterns
       with Mixtures
       with Actions
+      with Rules
       with KappaLikeParser =>
 
 

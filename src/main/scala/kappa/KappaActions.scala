@@ -57,9 +57,5 @@ trait KappaActions extends Actions {
       new Action(lhs, rhs, pe, rhsAgentOffsets, None, None)
     }
   }
-
-  /** Convert a pair `(lhs, rhs)` of patterns into a Kappa action. */
-  implicit def patternPairToKappaAction(lr: (Pattern, Pattern)): Action =
-    KappaActionBuilder(lr._1, lr._2)
 }
 

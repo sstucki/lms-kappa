@@ -22,9 +22,19 @@ trait AbstractSyntax {
       with Patterns
       with Mixtures
       with Actions
+      with Rules
       with Parser =>
 
   // -- Nodes of abstract syntax trees and their builders. --
+
+  /**
+   * An abstract class representing partial rules.
+   *
+   * Every abstract syntax node that that may appear in a
+   * comma-separated list that can be combined into a rule should
+   * extend this class.
+   */
+  sealed abstract class PartialAbstractRule
 
   /**
    * An abstract class representing partially built abstract patterns.
@@ -33,7 +43,7 @@ trait AbstractSyntax {
    * (i.e. that can be used in pattern position) should extend this
    * class.
    */
-  abstract class PartialAbstractPattern {
+  abstract class PartialAbstractPattern extends PartialAbstractRule {
 
     /** Convert this partial abstract pattern into an abstract pattern. */
     def toAbstractPattern: AbstractPattern
@@ -42,17 +52,70 @@ trait AbstractSyntax {
     @inline def :+(that: AbstractAgent): AbstractPattern =
       this.toAbstractPattern :+ that
 
+    /** Append an abstract action to this partial abstract pattern.  */
+    @inline def :+(that: AbstractAction): AbstractAction = this ++ that
+
+    /** Append an abstract pattern to this partial abstract pattern.  */
+    @inline def ++(that: AbstractPattern): AbstractPattern =
+      this.toAbstractPattern ++ that
+
+    /** Append an abstract action to this partial abstract pattern.  */
+    @inline def ++(that: AbstractAction): AbstractAction =
+      AbstractAction(this ++ that.lhs, that.rhs)
+
+    /** Append an abstract rule tail to this partial abstract pattern.  */
+    @inline def ++(that: AbstractRuleTail): AbstractRuleTail =
+      that.prependAbstractPattern(this.toAbstractPattern)
+
     /** Prepend an abstract agent to this partial abstract pattern.  */
     @inline def +:(that: AbstractAgent): AbstractPattern =
       that +: this.toAbstractPattern
+
+    /** Prepend an abstract action to this partial abstract pattern.  */
+    @inline def +:(that: AbstractAction): AbstractAction =
+      that ++ this.toAbstractPattern
 
     /** Prepend an abstract agent to this partial abstract pattern.  */
     @inline def ::(that: AbstractAgent): AbstractPattern =
       that +: this
 
-    /** Build an action from this partial pattern and a pattern. */
+    /** Prepend an abstract action to this partial abstract pattern.  */
+    @inline def ::(that: AbstractAction): AbstractAction =
+      that +: this
+
+    /**
+     * Build an abstract action from this partial abstract pattern and
+     * an abstract agent.
+     */
+    @inline def ->(that: AbstractAgent): AbstractAction =
+      AbstractAction(this.toAbstractPattern, that.toAbstractPattern)
+
+    /** Build an action from this partial abstract pattern and a pattern. */
     @inline def ->(that: Pattern)(implicit ab: ActionBuilder): Action =
       ab(this.toPattern, that)
+
+    /**
+     * Build an action from this partial abstract pattern and the
+     * empty pattern.
+     */
+    @inline def ->()(implicit ab: ActionBuilder): Action =
+      ab(this.toPattern, AbstractPattern().toPattern)
+
+    /**
+     * Build the tail of a rule that follows mass-action kinetics.
+     *
+     * @param rate stochastic kinetic rate constant
+     */
+    def :@(rate: => Double): AbstractMassActionRuleTail =
+      AbstractMassActionRuleTail(this.toAbstractPattern, () => rate)
+
+    /**
+     * Build the tail of a rule that follow an arbitrary rate law.
+     *
+     * @param law kinetic law expression
+     */
+    def !@(law: => Double): AbstractRateLawRuleTail =
+      AbstractRateLawRuleTail(this.toAbstractPattern, () => law)
 
     /** Convert this partial abstract pattern into a pattern. */
     @inline def toPattern: Pattern = toAbstractPattern.toPattern
@@ -247,17 +310,20 @@ trait AbstractSyntax {
       AbstractPattern(Vector(this))
   }
 
-  /** An abstract class to build patterns. */
+  /** A class representing abstract patterns. */
   final case class AbstractPattern(
     agents: Vector[AbstractAgent] = Vector(),
     siteGraphString: String = "") extends PartialAbstractPattern {
 
-    @inline override def +:(that: AbstractAgent): AbstractPattern = {
-      AbstractPattern(that +: agents, siteGraphString)
-    }
-
     @inline override def :+(that: AbstractAgent): AbstractPattern = {
       AbstractPattern(agents :+ that, siteGraphString)
+    }
+
+    @inline override def ++(that: AbstractPattern): AbstractPattern =
+      AbstractPattern(this.agents ++ that.agents, siteGraphString)
+
+    @inline override def +:(that: AbstractAgent): AbstractPattern = {
+      AbstractPattern(that +: agents, siteGraphString)
     }
 
     @inline override def toAbstractPattern: AbstractPattern = this
@@ -315,6 +381,112 @@ trait AbstractSyntax {
     }
   }
 
+  /** A class representing abstract actions. */
+  final case class AbstractAction(
+    lhs: AbstractPattern, rhs: AbstractPattern) extends PartialAbstractRule {
+
+    /** Append an abstract agent to this abstract action.  */
+    @inline def :+(that: AbstractAgent): AbstractAction =
+      AbstractAction(lhs, rhs :+ that)
+
+    /** Append an abstract pattern to this abstract action.  */
+    @inline def ++(that: AbstractPattern): AbstractAction =
+      AbstractAction(lhs, rhs ++ that)
+
+    /** Append an abstract rule tail to this abstract action.  */
+    @inline def ++(that: AbstractRuleTail)(
+      implicit ab: ActionBuilder): AbstractRule = {
+      val action = AbstractAction(lhs, this.rhs ++ that.rhs).toAction
+      new AbstractRule(action, that.toRate(action.lhs))
+    }
+
+    /** Prepend an abstract agent to this partial abstract pattern.  */
+    @inline def +:(that: AbstractAgent): AbstractAction =
+      AbstractAction(that +: lhs, rhs)
+
+    /** Prepend an abstract agent to this partial abstract pattern.  */
+    @inline def ::(that: AbstractAgent): AbstractAction =
+      that +: this
+
+    /**
+     * Build a rule that follows mass-action kinetics.
+     *
+     * @param rate stochastic kinetic rate constant
+     */
+    def :@(rate: => Double)(implicit ab: ActionBuilder): AbstractRule = {
+      val action = toAction
+      new AbstractRule(action, () => action.lhs.inMix * rate)
+    }
+
+    /**
+     * Build a rule that follow an arbitrary rate law.
+     *
+     * @param law kinetic law expression
+     */
+    def !@(law: => Double)(implicit ab: ActionBuilder): AbstractRule =
+      new AbstractRule(toAction, () => law)
+
+    /** Convert this abstract action into an action. */
+    @inline def toAction()(implicit ab: ActionBuilder): Action =
+      ab(lhs.toPattern, rhs.toPattern)
+  }
+
+  /** A class representing tails of rules. */
+  sealed abstract class AbstractRuleTail extends PartialAbstractRule {
+
+    /** The right-hand side of the rule of which this is the tail. */
+    def rhs: AbstractPattern
+
+    /** Prepend an agent to the right-hand side of this tail. */
+    def +:(that: AbstractAgent): AbstractRuleTail
+
+    /** Prepend an abstract pattern to the right-hand side of this tail. */
+    def prependAbstractPattern(that: AbstractPattern): AbstractRuleTail
+
+    /** Build a final rate law expression given a left-hand side. */
+    def toRate(lhs: Pattern): () => Double
+
+    /** Prepend an agent to the right-hand side of this tail. */
+    @inline def ::(that: AbstractAgent): AbstractRuleTail = that +: this
+  }
+
+  /** A class representing tails of rules that follow mass-action kinetics. */
+  final case class AbstractMassActionRuleTail(
+    rhs: AbstractPattern, rate: () => Double) extends AbstractRuleTail {
+
+    /** Prepend an agent to the right-hand side of this tail. */
+    @inline def +:(that: AbstractAgent): AbstractRuleTail =
+      AbstractMassActionRuleTail(that +: rhs, rate)
+
+    /** Prepend an abstract pattern to the right-hand side of this tail. */
+    def prependAbstractPattern(that: AbstractPattern): AbstractRuleTail =
+      AbstractMassActionRuleTail(that ++ rhs, rate)
+
+    /** Build a final rate law expression given a left-hand side. */
+    @inline def toRate(lhs: Pattern): () => Double = () => lhs.inMix * rate()
+  }
+
+  /** A class representing tails of rules that follow arbitrary rate laws. */
+  final case class AbstractRateLawRuleTail(
+    rhs: AbstractPattern, law: () => Double) extends AbstractRuleTail {
+
+    /** Prepend an agent to the right-hand side of this tail. */
+    @inline def +:(that: AbstractAgent): AbstractRuleTail =
+      AbstractRateLawRuleTail(that +: rhs, law)
+
+    /** Prepend an abstract pattern to the right-hand side of this tail. */
+    def prependAbstractPattern(that: AbstractPattern): AbstractRuleTail =
+      AbstractRateLawRuleTail(that ++ rhs, law)
+
+    /** Build a final rate law expression given a left-hand side. */
+    @inline def toRate(lhs: Pattern): () => Double = law
+  }
+
+  /** A class representing abstract Rules. */
+  final case class AbstractRule(action: Action, rate: () => Double)
+      extends PartialAbstractRule {
+    def toRule: Rule = new Rule(action, rate)
+  }
 
   // -- Sugar for pattern and mixture construction. --
 
@@ -322,11 +494,13 @@ trait AbstractSyntax {
   implicit def partialAbstractPatternToPattern(
     p: PartialAbstractPattern): Pattern = p.toPattern
 
+
   // FIXME: These should become redundant once the Parser.AST has been
   // replaced by Abstract* classes.
   def agentStateNameToAbstractAgentState(n: AgentStateName): AbstractAgentState
   def siteStateNameToAbstractSiteState(n: SiteStateName): AbstractSiteState
   def linkStateNameToAbstractLinkState(n: LinkStateName): AbstractLinkState
+
 
   /**
    * Build a pattern from a string.
@@ -393,6 +567,71 @@ trait AbstractSyntax {
   final class Interpolator(sc: StringContext) {
     def p(args: Any*): Pattern = stringToPattern( sc.s(args :_*) )
     def m(args: Any*): Mixture = stringToMixture( sc.s(args :_*) )
+  }
+
+
+  // -- Sugar for action and rule construction. --
+
+  /** Convert abstract actions into actions. */
+  implicit def abstractActionToAction(a: AbstractAction)(
+    implicit ab: ActionBuilder): Action = a.toAction
+
+  /** Convert abstract rules into rules. */
+  implicit def abstractRuleToRule(r: AbstractRule): Rule = r.toRule
+
+  /** Convert an abstract rule to a rule and register it. */
+  def registerRule(r: AbstractRule) { registerRule(r.toRule) }
+
+  /**
+   * Convert a sequence of partial abstract rules into a sequence of
+   * rules.
+   */
+  def partialAbstractRulesToRules(prs: Seq[PartialAbstractRule])(
+    implicit ab: ActionBuilder): Seq[Rule] = {
+
+    def failIncomplete(pr: PartialAbstractRule) {
+      val msg = pr match {
+        case _: PartialAbstractPattern => "missing right-hand side (\"-> ...\")"
+        case _: AbstractAction         => "missing rate expression (\":@ ...\")"
+        case _: AbstractRuleTail       => "missing left-hand side (\"... ->\")"
+        case _                         => "unknown error"
+      }
+      throw new IllegalArgumentException(
+        "error while constructing rule: " + msg)
+    }
+
+    // Iterate over all the partial rules and try to build total rules.
+    val rs = new mutable.ArrayBuffer[Rule]()
+    var pr: Option[PartialAbstractRule] = None
+    prs foreach {
+      case p: PartialAbstractPattern => pr match {
+        case None                             => pr = Some(p)
+        case Some(p1: PartialAbstractPattern) =>
+          pr = Some(p1 ++ p.toAbstractPattern)
+        case Some(a:  AbstractAction)         =>
+          pr = Some(a ++ p.toAbstractPattern)
+        case _ => failIncomplete(pr.get)
+      }
+      case a: AbstractAction         => pr match {
+        case None                             => pr = Some(a)
+        case Some(p:  PartialAbstractPattern) => pr = Some(p ++ a)
+        case _ => failIncomplete(pr.get)
+      }
+      case t: AbstractRuleTail       => pr match {
+        case None                    => pr = Some(t)
+        case Some(a: AbstractAction) => {
+          rs += (a ++ t).toRule
+          pr = None
+        }
+        case _ => failIncomplete(pr.get)
+      }
+      case r: AbstractRule => {
+        if (!pr.isEmpty) failIncomplete(pr.get)
+        else rs += r.toRule
+      }
+    }
+    if (!pr.isEmpty) failIncomplete(pr.get)
+    rs
   }
 }
 

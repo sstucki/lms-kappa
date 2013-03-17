@@ -22,6 +22,7 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
       with Patterns
       with KaSpaceActions
       with Mixtures
+      with Rules
       with KaSpaceParser =>
 
 

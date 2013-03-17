@@ -22,6 +22,7 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
       with Patterns
       with Mixtures
       with KappaActions
+      with Rules
       with KappaParser =>
 
 

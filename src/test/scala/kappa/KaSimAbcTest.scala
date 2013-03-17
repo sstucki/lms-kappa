@@ -31,22 +31,22 @@ class KaSimAbcTest extends KappaModel with FlatSpec {
   // #### Rules
 
   // 'a.b' A(x),B(x) <-> A(x!1),B(x!1) @ 'on_rate','off_rate' # A binds B
-  val r0f = "A(x), B(x)" -> "A(x!1), B(x!1)" :@ on_rate
+  val r0f = withRule { "A(x), B(x)" -> "A(x!1), B(x!1)" :@ on_rate }
 
   // #'a..b' A(x!1),B(x!1) -> A(x),B(x) @ 'off_rate' # AB dissociation
-  val r0r = "A(x!1), B(x!1)" -> "A(x), B(x)" :@ off_rate
+  val r0r = withRule { "A(x!1), B(x!1)" -> "A(x), B(x)" :@ off_rate }
 
   // 'ab.c' A(x!_,c),C(x1~u) -> A(x!_,c!2),C(x1~u!2) @ 'on_rate' # AB binds C
-  val r1 = "A(x!_,c), C(x1:u)" -> "A(x!_,c!2), C(x1:u!2)" :@ on_rate
+  val r1 = withRule { "A(x!_,c), C(x1:u)" -> "A(x!_,c!2), C(x1:u!2)" :@ on_rate }
 
   // 'mod x1' C(x1~u!1),A(c!1) -> C(x1~p),A(c) @ 'mod_rate' # AB modifies x1
-  val r2 = "C(x1:u!1), A(c!1)" -> "C(x1:p), A(c)" :@ mod_rate
+  val r2 = withRule { "C(x1:u!1), A(c!1)" -> "C(x1:p), A(c)" :@ mod_rate }
 
   // 'a.c' A(x,c),C(x1~p,x2~u) -> A(x,c!1),C(x1~p,x2~u!1) @ 'on_rate' # A binds C on x2
-  val r3 = "A(x,c), C(x1:p,x2:u)" -> "A(x,c!1), C(x1:p,x2:u!1)" :@ on_rate
+  val r3 = withRule { "A(x,c), C(x1:p,x2:u)" -> "A(x,c!1), C(x1:p,x2:u!1)" :@ on_rate }
 
   // 'mod x2' A(x,c!1),C(x1~p,x2~u!1) -> A(x,c),C(x1~p,x2~p) @ 'mod_rate' # A modifies x2
-  val r4 = "A(x,c!1), C(x1:p,x2:u!1)" -> "A(x,c), C(x1:p,x2:p)" :@ mod_rate
+  val r4 = withRule { "A(x,c!1), C(x1:p,x2:u!1)" -> "A(x,c), C(x1:p,x2:p)" :@ mod_rate }
 
 
   // #### Observables
