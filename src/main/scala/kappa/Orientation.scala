@@ -133,10 +133,10 @@ object Orientation {
    * @param m a sequence representing a 3x3 rotation matrix in
    *        row-major order.
    */
-  def apply(m: Seq[Double]): Orientation = {
+  def apply(m: Double*): Orientation = {
     if (m.length != 9) throw new IllegalArgumentException(
       "attempt to create 3x3 rotation matrix from sequence of " +
-        m.length + " values")
+        m.length + " coefficients")
     else Orientation(
       m(0), m(1), m(2),
       m(3), m(4), m(5),
@@ -171,6 +171,32 @@ object Orientation {
 
   /** Factory method for the identity rotation matrix. */
   def apply(): Orientation = Orientation(1, 0, 0, 0, 1, 0, 0, 0, 1)
+
+  /**
+   * Factory method for constructing an [[Orientation]] from a
+   * sequence of three orthonormal basis vectors.
+   *
+   * @param es a sequence containing the orthonormal basis vectors
+   *        of the rotation matrix.
+   */
+  def apply(es: Seq[Position])(implicit e: DummyImplicit): Orientation = {
+    if (es.length != 3) throw new IllegalArgumentException(
+      "attempt to construct 3-d rotation matrix from a sequence of " +
+        es.length + " column vectors: " + es)
+    Orientation(es(0), es(1), es(2))
+  }
+
+  /**
+   * Factory method for constructing an [[Orientation]] from a 3x3
+   * nested sequence of matrix coefficients (in column-major order).
+   *
+   * @param es a 3x3 array containing the coefficients of the
+   *        rotation matrix in column-major order.
+   */
+  def apply(es: Seq[Seq[Double]])(
+    implicit e1: DummyImplicit, e2: DummyImplicit): Orientation = {
+    Orientation(es map (Position(_)))
+  }
 
   /**
    * Factory method for constructing [[Orientation]]s around the

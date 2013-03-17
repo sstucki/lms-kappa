@@ -45,7 +45,23 @@ final case class Position(x1: Double, x2: Double, x3: Double) {
   @inline override def toString = "[" + x1 + ", " + x2 + ", " + x3 + "]"
 }
 
+/** Companion object of the [[Position]] class. */
 object Position {
+
+  /**
+   * Factory method for constructing a [[Position]] vector from a
+   * sequences of three double precision values.
+   *
+   * @param xs a sequence containing the X, Y and Z coordinates of
+   *        the position vector.
+   */
+  def apply(xs: Seq[Double]): Position = {
+    if (xs.length != 3) throw new IllegalArgumentException(
+      "attempt to construct position vector from " + xs.length +
+        "-d sequence : " + xs)
+    Position(xs(0), xs(1), xs(2))
+  }
+
   /** Get a position vector from spherical coordinates.
    *
    * @param theta the zenith angle, ie the angle in the x-y plane.

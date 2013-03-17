@@ -428,11 +428,11 @@ trait Actions {
           "attempt to change state " + ls + " to incomplete state " +
             rs + " in rule: " + lhs + " -> " + rhs)
 
-      def linkState(u: Pattern.Agent, s: SiteIndex): LinkState =
-        u.links(s) match {
+      def linkState(u: Pattern.Agent, j: SiteIndex): LinkState =
+        u.links(j) match {
           case Linked(_, _, l) => l
           case _ => throw new IllegalArgumentException(
-            "expected site " + s + " of agent " + u +
+            "expected site " + j + " of agent " + u +
               " to be linked in RHS of rule " + lhs + " -> " + rhs)
         }
 
@@ -459,13 +459,13 @@ trait Actions {
 
       @inline def linkAddition(
         atoms: mutable.Buffer[Atom],
-        u1: Pattern.Agent, s1: SiteIndex,
-        u2: Pattern.Agent, s2: SiteIndex, l2: LinkState) {
+        u1: Pattern.Agent, j1: SiteIndex, l1: LinkState,
+        u2: Pattern.Agent, j2: SiteIndex) {
         val o1 = rhsAgentOffset(u1)
         val o2 = rhsAgentOffset(u2)
-        val l1 = linkState(u2, s2)
+        val l2 = linkState(u2, j2)
         if (o2 <= o1)
-          atoms += LinkAddition(o1, s1, l1, o2, s2, l2)
+          atoms += LinkAddition(o1, j1, l1, o2, j2, l2)
       }
 
       @inline def checkLinkComplete(l: LinkState) {
@@ -534,17 +534,17 @@ trait Actions {
           case (Undefined | Wildcard(_, _, _), Linked(ru2, rj2, rl)) => {
             atoms += LinkDeletion(lhsAgentOffset(lu), j)
             checkLinkComplete(rl)
-            linkAddition(atoms, ru, j, ru2, rj2, rl)
+            linkAddition(atoms, ru, j, rl, ru2, rj2)
           }
           case (Stub, Linked(ru2, rj2, rl)) => {
             checkLinkComplete(rl)
-            linkAddition(atoms, ru, j, ru2, rj2, rl)
+            linkAddition(atoms, ru, j, rl, ru2, rj2)
           }
           case (Linked(lu2, lj2, ll), Linked(ru2, rj2, rl)) => {
             if (!((lhsAgentOffset(lu2) == rhsAgentOffset(ru2)) &&
               (lj2 == rj2) && findStateChange(ll, rl).isEmpty)) {
               linkDeletion(atoms, lu, j, lu2)
-              linkAddition(atoms, ru, j, ru2, rj2, rl)
+              linkAddition(atoms, ru, j, rl, ru2, rj2)
             }
           }
           case _ => {}
@@ -567,7 +567,7 @@ trait Actions {
                 j + " in rule: " + lhs + " -> " + rhs)
           case Linked(ru2, j2, l) => {
             checkLinkComplete(l)
-            linkAddition(atoms, ru, j, ru2, j2, l)
+            linkAddition(atoms, ru, j, l, ru2, j2)
           }
           case _ => { }
         }

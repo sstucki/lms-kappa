@@ -16,9 +16,8 @@ trait KaSpaceParser extends KappaLikeParser {
       case x ~ y ~ z => Vector(x, y, z) }
 
   lazy val agentLabel: Parser[AgentLabel] = float
-  lazy val  siteLabel: Parser[ SiteLabel] = vector3d(float) ^^ {
-    xs => Position(xs(0), xs(1), xs(2)) }
-  lazy val  linkLabel: Parser[ LinkLabel] = vector3d(vector3d(float)) ^^ {
-    xs => Orientation(xs.flatten) }
+  lazy val  siteLabel: Parser[ SiteLabel] = vector3d(float) ^^ (Position(_))
+  lazy val  linkLabel: Parser[ LinkLabel] =
+    vector3d(vector3d(float)) ^^ (Orientation(_))
 }
 
