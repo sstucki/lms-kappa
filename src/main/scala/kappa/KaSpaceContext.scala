@@ -4,12 +4,18 @@ import scala.reflect.ClassTag
 
 
 trait KaSpaceContext extends KappaLikeContext {
-  this: ContactGraphs with KaSpaceAbstractSyntax with KaSpaceParser =>
+  this: ContactGraphs with KaSpaceAbstractSyntax with KaSpaceParsers =>
+
+  // -- Constituents of site graph state types --
+  type AgentLabel = Double
+  type  SiteLabel = Position
+  type  LinkLabel = Orientation
 
   // -- State types --
   type AgentState = KaSpaceAgentState
   type  SiteState = KaSpaceSiteState
   type  LinkState = KaSpaceLinkState
+
 
   /** An implicit providing a class tag for [[SiteState]]s. */
   implicit val siteStateClassTag = ClassTag[SiteState](classOf[SiteState])

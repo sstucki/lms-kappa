@@ -3,7 +3,7 @@ package kappa
 
 /** Language context for Kappa-like languages. */
 trait KappaLikeContext extends LanguageContext {
-  this: ContactGraphs with KappaLikeAbstractSyntax with KappaLikeParser =>
+  this: ContactGraphs with KappaLikeAbstractSyntax with KappaLikeParsers =>
 
   // -- State set types --
   type AgentStateSet <: KappaLikeAgentStateSet
@@ -60,10 +60,8 @@ trait KappaLikeContext extends LanguageContext {
 
 
   // -- Constituents of site graph state types --
-
   type AgentTypeName = String
   type SiteName = String
-  type LinkName = Int
   type AgentLabel
   type SiteLabel
   type LinkLabel

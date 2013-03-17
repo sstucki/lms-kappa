@@ -10,9 +10,6 @@ import scala.collection.mutable
  * combinators", but they are very different form the generic pattern
  * builder in the [[Patterns]] trait.  In fact they are more like the
  * nodes of a pattern AST, enhanced with combinator-like operators.
- *
- * FIXME: These classes should probably be merged with the
- * [[KappaLikeParser.AST]] classes (or vice-versa) for consistency.
  */
 trait KappaLikeAbstractSyntax extends AbstractSyntax {
   this: KappaLikeContext
@@ -21,7 +18,7 @@ trait KappaLikeAbstractSyntax extends AbstractSyntax {
       with Mixtures
       with Actions
       with Rules
-      with KappaLikeParser =>
+      with KappaLikeParsers =>
 
 
   // -- Nodes of abstract syntax trees and their builders. --

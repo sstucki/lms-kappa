@@ -5,7 +5,10 @@ import scala.reflect.ClassTag
 
 /** Generic language context trait. */
 trait LanguageContext {
-  this: ContactGraphs with Parser =>
+  this: ContactGraphs with Parsers =>
+
+  // FIXME: Refactor parsing of contact graphs and remove dependency
+  // on Parsers
 
   // -- State set types --
   type AgentStateSet <: GenericAgentStateSet

@@ -12,9 +12,6 @@ import scala.language.implicitConversions
  * combinators", but they are very different form the generic pattern
  * builder in the [[Patterns]] trait.  In fact they are more like the
  * nodes of a pattern AST, enhanced with combinator-like operators.
- *
- * FIXME: These classes should probably be merged with the
- * [[KappaParser.AST]] classes (or vice-versa) for consistency.
  */
 trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
   this: KappaContext
@@ -23,7 +20,7 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
       with Mixtures
       with KappaActions
       with Rules
-      with KappaParser =>
+      with KappaParsers =>
 
 
   // -- Nodes of abstract syntax trees and their builders. --
@@ -61,20 +58,16 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
   }
 
   /** A class representing abstract Kappa link states. */
-  class AbstractKappaLinkState(val id: LinkId)
-      extends AbstractLinkState {
+  class AbstractKappaLinkState extends AbstractLinkState {
 
     /** Creates a link state from this abstract link state. */
     @inline final def toLinkState(
       source: SiteStateSet, target: SiteStateSet): LinkState =
-      KappaLinkState(Some(id))
+      KappaLinkState(None) // FIXME: This should return a singleton
   }
 
   /** Companion object of the AbstractKappaLinkState class. */
-  object AbstractKappaLinkState {
-    @inline def apply(id: LinkId): AbstractKappaLinkState =
-      new AbstractKappaLinkState(id)
-  }
+  object AbstractKappaLinkState extends AbstractKappaLinkState
 
 
   /** A class to build abstract Kappa site states. */
@@ -93,6 +86,17 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
   object PartialAbstractKappaSiteState {
     @inline def apply(name: SiteName): PartialAbstractKappaSiteState =
       new PartialAbstractKappaSiteState(name)
+  }
+
+  /** A class representing abstract KappaLike links. */
+  class AbstractKappaLinked(val id: LinkId) extends AbstractLinked {
+    @inline final def state: AbstractLinkState = AbstractKappaLinkState
+  }
+
+  /** Companion object of the PartialAbstractKappaLinkState class. */
+  object AbstractKappaLinked {
+    @inline def apply(id: LinkId): AbstractKappaLinked =
+      new AbstractKappaLinked(id)
   }
 
 
@@ -114,9 +118,9 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
     n: SiteName): PartialAbstractKappaSiteState =
     PartialAbstractKappaSiteState(n)
 
-  /** Convert link IDs into abstract link states. */
-  implicit def linkIdToAbstractLinkState(id: LinkId): AbstractKappaLinkState =
-    AbstractKappaLinkState(id)
+  /** Convert link IDs into abstract links. */
+  implicit def linkIdToAbstractLinkState(id: LinkId): AbstractKappaLinked =
+    AbstractKappaLinked(id)
 
 
   /**
@@ -155,15 +159,5 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
   object Site {
     def apply(n: SiteName) = PartialAbstractKappaSiteState(n)
   }
-
-
-  // FIXME: These should become redundant once the Parser.AST has been
-  // replaced by Abstract* classes.
-  def agentStateNameToAbstractAgentState(n: AgentStateName): AbstractAgentState =
-    AbstractKappaAgentState(n.agentType)
-  def siteStateNameToAbstractSiteState(n: SiteStateName): AbstractSiteState =
-    AbstractKappaSiteState(n.siteName, n.label)
-  def linkStateNameToAbstractLinkState(n: LinkStateName): AbstractLinkState =
-    AbstractKappaLinkState(n.id)
 }
 

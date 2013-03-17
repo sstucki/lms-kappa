@@ -12,9 +12,6 @@ import scala.language.implicitConversions
  * combinators", but they are very different form the generic pattern
  * builder in the [[Patterns]] trait.  In fact they are more like the
  * nodes of a pattern AST, enhanced with combinator-like operators.
- *
- * FIXME: These classes should probably be merged with the
- * [[KaSpaceParser.AST]] classes (or vice-versa) for consistency.
  */
 trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
   this: KaSpaceContext
@@ -23,7 +20,7 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
       with KaSpaceActions
       with Mixtures
       with Rules
-      with KaSpaceParser =>
+      with KaSpaceParsers =>
 
 
   // -- Nodes of abstract syntax trees and their builders. --
@@ -63,8 +60,7 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
   }
 
   /** A class representing abstract KaSpace link states. */
-  class AbstractKaSpaceLinkState(
-    val id: LinkId, val orientation: Option[LinkLabel])
+  class AbstractKaSpaceLinkState(val orientation: Option[LinkLabel])
       extends AbstractLinkState {
 
     /** Creates a link state from this abstract link state. */
@@ -89,9 +85,12 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
 
   /** Companion object of the AbstractKaSpaceLinkState class. */
   object AbstractKaSpaceLinkState {
-    @inline def apply(id: LinkId, orientation: Option[LinkLabel])
-        : AbstractKaSpaceLinkState =
-      new AbstractKaSpaceLinkState(id, orientation)
+    @inline def apply(
+      orientation: Option[LinkLabel]): AbstractKaSpaceLinkState =
+      new AbstractKaSpaceLinkState(orientation)
+
+    /** Empty instance of the AbstractKaSpaceLinkState class. */
+    object Empty extends AbstractKaSpaceLinkState(None)
   }
 
 
@@ -132,23 +131,32 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
       new PartialAbstractKaSpaceSiteState(name)
   }
 
-  /** A class to build abstract KaSpaceLike link states. */
-  class PartialAbstractKaSpaceLinkState(val id: LinkId)
-      extends AbstractLinkState {
-
-    /** Build an abstract link state with a particular label. */
-    @inline final def ~(label: LinkLabel): AbstractLinkState =
-      AbstractKaSpaceLinkState(id, Some(label))
-
-    @inline final def toLinkState(
-      source: SiteStateSet, target: SiteStateSet): LinkState =
-      AbstractKaSpaceLinkState(id, None).toLinkState(source, target)
-  }
+  /** A class representing abstract KaSpaceLike links. */
+  class AbstractKaSpaceLinked(val id: LinkId,
+    val state: AbstractLinkState) extends AbstractLinked
 
   /** Companion object of the PartialAbstractKaSpaceLinkState class. */
-  object PartialAbstractKaSpaceLinkState {
-    @inline def apply(id: LinkId): PartialAbstractKaSpaceLinkState =
-      new PartialAbstractKaSpaceLinkState(id)
+  object AbstractKaSpaceLinked {
+    @inline def apply(
+      id: LinkId, state: AbstractLinkState): AbstractKaSpaceLinked =
+      new AbstractKaSpaceLinked(id, state)
+  }
+
+  /** A class to build abstract KaSpaceLike links. */
+  class PartialAbstractKaSpaceLinked(val id: LinkId)
+      extends AbstractLinked {
+
+    /** Build an abstract link state with a particular label. */
+    @inline final def ~(label: LinkLabel): AbstractLinked =
+      AbstractKaSpaceLinked(id, AbstractKaSpaceLinkState(Some(label)))
+
+    @inline final def state = AbstractKaSpaceLinkState.Empty
+  }
+
+  /** Companion object of the PartialAbstractKaSpaceLinked class. */
+  object PartialAbstractKaSpaceLinked {
+    @inline def apply(id: LinkId): PartialAbstractKaSpaceLinked =
+      new PartialAbstractKaSpaceLinked(id)
   }
 
 
@@ -159,10 +167,10 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
     n: SiteName): PartialAbstractKaSpaceSiteState =
     PartialAbstractKaSpaceSiteState(n)
 
-  /** Convert link IDs into abstract link states. */
-  implicit def linkIdToAbstractLinkState(
-    id: LinkId): PartialAbstractKaSpaceLinkState =
-    PartialAbstractKaSpaceLinkState(id)
+  /** Convert link IDs into abstract links. */
+  implicit def linkIdToAbstractLinked(
+    id: LinkId): PartialAbstractKaSpaceLinked =
+    PartialAbstractKaSpaceLinked(id)
 
 
   /**
@@ -201,15 +209,5 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
   object Site {
     def apply(n: SiteName) = PartialAbstractKaSpaceSiteState(n)
   }
-
-
-  // FIXME: These should become redundant once the Parser.AST has been
-  // replaced by Abstract* classes.
-  def agentStateNameToAbstractAgentState(n: AgentStateName): AbstractAgentState =
-    AbstractKaSpaceAgentState(n.agentType, n.label)
-  def siteStateNameToAbstractSiteState(n: SiteStateName): AbstractSiteState =
-    AbstractKaSpaceSiteState(n.siteName, n.label)
-  def linkStateNameToAbstractLinkState(n: LinkStateName): AbstractLinkState =
-    AbstractKaSpaceLinkState(n.id, n.label)
 }
 

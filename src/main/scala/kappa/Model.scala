@@ -7,7 +7,7 @@ import scala.util.Random
 trait Model extends LanguageContext with ContactGraphs with SiteGraphs
     with Patterns with Mixtures with Embeddings with PartialEmbeddings
     with Actions with Rules with Perturbations with AbstractSyntax
-    with Parser {
+    with Parsers {
 
   var time      : Double               = 0
   var events    : Long                 = 0

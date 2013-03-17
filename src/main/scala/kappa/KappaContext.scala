@@ -4,7 +4,12 @@ import scala.reflect.ClassTag
 
 
 trait KappaContext extends KappaLikeContext {
-  this: ContactGraphs with  KappaAbstractSyntax with KappaParser =>
+  this: ContactGraphs with  KappaAbstractSyntax with KappaParsers =>
+
+  // -- Constituents of site graph state types --
+  type AgentLabel = Unit
+  type  SiteLabel = String
+  type  LinkLabel = Unit
 
   // -- State types --
   type AgentState = KappaAgentState

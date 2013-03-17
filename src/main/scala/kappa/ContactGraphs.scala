@@ -1,7 +1,7 @@
 package kappa
 
 trait ContactGraphs {
-  this: LanguageContext with Parser =>
+  this: LanguageContext with Parsers =>
 
   /** Contact graph.
    *

@@ -12,9 +12,6 @@ import scala.language.implicitConversions
  * combinators", but they are very different form the generic pattern
  * builder in the [[Patterns]] trait.  In fact they are more like the
  * nodes of a pattern AST, enhanced with combinator-like operators.
- *
- * FIXME: These classes should probably be merged with the
- * [[Parser.AST]] classes (or vice-versa) for consistency.
  */
 trait AbstractSyntax {
   this: LanguageContext
@@ -23,7 +20,7 @@ trait AbstractSyntax {
       with Mixtures
       with Actions
       with Rules
-      with Parser =>
+      with Parsers =>
 
   // -- Nodes of abstract syntax trees and their builders. --
 
@@ -177,21 +174,8 @@ trait AbstractSyntax {
       // Convert partial sites into total sites.
       val totalSites: Seq[AbstractSite] = sites map (_.toAbstractSite)
 
-      // Create the concrete agent state from the abstract one and get
-      // its associated agent state set.
-      val as = toAgentState
-      val asSet = as.agentStateSet
-
-      // Create the concrete site states and complete the interface by
-      // filling in undefined sites states.
-      val linkMap = {
-        for (s <- totalSites) yield (s.state.toSiteState(asSet), s.link)
-      }.toMap withDefaultValue AbstractUndefined
-      val allSiteStates = asSet.completeInterface(linkMap.keys)
-      val intf = allSiteStates map { s => (s, linkMap(s)) }
-
       // Then create the agent wrapper
-      AbstractAgent(as, intf)
+      AbstractAgent(this, totalSites)
     }
 
     @inline def toAbstractAgent: AbstractAgent = apply()
@@ -246,7 +230,18 @@ trait AbstractSyntax {
     def toSiteState(agentStateSet: AgentStateSet): SiteState
   }
 
-  
+  /** A class representing abstract link states. */
+  abstract class AbstractLinkState {
+
+    // FIXME: Still storing the source and target of a link in the
+    // state itself, but that information should be stored in the
+    // contact graph (ie as we do with Patterns).
+
+    /** Creates a link state from this abstract link state. */
+    def toLinkState(source: SiteStateSet, target: SiteStateSet): LinkState
+  }
+
+
   /** A class representing abstract links. */
   sealed abstract class AbstractLink
 
@@ -262,23 +257,14 @@ trait AbstractSyntax {
     siteState: Option[AbstractSiteState],
     linkState: Option[AbstractLinkState]) extends AbstractLink
 
-  /**
-   * A class representing abstract link states.
-   *
-   * NOTE: This class plays a dual role as an abstract link as well as
-   * the state of that link.
-   */
-  abstract class AbstractLinkState extends AbstractLink {
-
-    // FIXME: Still storing the source and target of a link in the
-    // state itself, but that information should be stored in the
-    // contact graph (ie as we do with Patterns).
+  /** A class representing abstract links between abstract sites. */
+  abstract class AbstractLinked extends AbstractLink {
 
     /** The link ID of this abstract link. */
     def id: LinkId
 
-    /** Creates a link state from this abstract link state. */
-    def toLinkState(source: SiteStateSet, target: SiteStateSet): LinkState
+    /** The state of this abstract link. */
+    def state: AbstractLinkState
   }
 
 
@@ -291,7 +277,7 @@ trait AbstractSyntax {
 
   /** A class representing abstract agents. */
   final case class AbstractAgent(
-    state: AgentState, sites: Seq[(SiteState, AbstractLink)])
+    state: AbstractAgentState, sites: Seq[AbstractSite])
       extends PartialAbstractAgent {
 
     @inline def toAbstractAgent = this
@@ -329,8 +315,22 @@ trait AbstractSyntax {
 
       // Create agents
       for (u <- agents) {
-        val v = pb += u.state
-        for ((sstate, link) <- u.sites) {
+
+        // Create the concrete agent state from the abstract one and get
+        // its associated agent state set.
+        val as = u.state.toAgentState
+        val asSet = as.agentStateSet
+
+        // Create the concrete site states and complete the interface by
+        // filling in undefined sites states.
+        val intfMap = {
+          for (s <- u.sites) yield (s.state.toSiteState(asSet), s.link)
+        }.toMap withDefaultValue AbstractUndefined
+        val allSiteStates = asSet.completeInterface(intfMap.keys)
+        val intf = allSiteStates map { s => (s, intfMap(s)) }
+
+        val v = pb += as
+        for ((sstate, link) <- intf) {
           val x = v += sstate
           link match {
             case AbstractUndefined         => { }
@@ -345,10 +345,8 @@ trait AbstractSyntax {
                 yield ls.toLinkState(sstate.siteStateSet, ss.siteStateSet)
               x define Pattern.Builder.Wildcard(aso, sso, lso)
             }
-            case l: AbstractLinkState    => {
-              val li = l.id
-              linkMap += ((li, (x, l) :: linkMap(li)))
-            }
+            case l: AbstractLinked         =>
+              linkMap += ((l.id, (x, l.state) :: linkMap(l.id)))
           }
         }
       }
@@ -488,13 +486,6 @@ trait AbstractSyntax {
     p: PartialAbstractPattern): Pattern = p.toPattern
 
 
-  // FIXME: These should become redundant once the Parser.AST has been
-  // replaced by Abstract* classes.
-  def agentStateNameToAbstractAgentState(n: AgentStateName): AbstractAgentState
-  def siteStateNameToAbstractSiteState(n: SiteStateName): AbstractSiteState
-  def linkStateNameToAbstractLinkState(n: LinkStateName): AbstractLinkState
-
-
   /**
    * Build a pattern from a string.
    *
@@ -506,33 +497,8 @@ trait AbstractSyntax {
    * @param expr the string to build the pattern from.
    * @return a pattern corresponding to the expression `expr`.
    */
-  implicit def stringToPattern(expr: String): Pattern = {
-
-    val ast = parseSiteGraph(expr)
-
-    // Add agents to builder
-    var pb = new AbstractPattern(Vector(), expr)
-    for (AST.Agent(state, intf) <- ast) {
-      val astate = agentStateNameToAbstractAgentState(state)
-      val sites = for (s <- intf) yield {
-        val link = s.link match {
-          case AST.Undefined         => AbstractUndefined
-          case AST.Stub              => AbstractStub
-          case AST.Wildcard(a, s, l) => AbstractWildcard(
-            a map agentStateNameToAbstractAgentState,
-            s map siteStateNameToAbstractSiteState,
-            l map linkStateNameToAbstractLinkState)
-          case AST.Linked(lsn)       => linkStateNameToAbstractLinkState(lsn)
-        }
-        new AbstractSite(
-          siteStateNameToAbstractSiteState(s.state), link)
-      }
-      pb = pb :+ astate(sites: _*)
-    }
-
-    // Build
-    pb.toPattern
-  }
+  implicit def stringToPattern(expr: String): Pattern =
+    parseSiteGraph(expr).toPattern
 
   /**
    * Build a KaSpace mixture from a string.

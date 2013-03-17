@@ -2,6 +2,9 @@
 /** Main Kappa package. */
 package object kappa {
 
+  /** Links are identified by integers. */
+  type LinkId = Int
+
   // -- Type aliases for indices. --
 
   /** Index of an [[Patterns#Pattern]] within a [[Model]]. */
