@@ -1,4 +1,4 @@
-package kappa
+package kappa.models
 
 import org.scalatest.FlatSpec
 import scala.math._
