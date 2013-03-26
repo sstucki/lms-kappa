@@ -1,10 +1,10 @@
-package kappa
+package kappa.models
 
 import scala.language.postfixOps
 
-import org.scalatest.FlatSpec
+// import org.scalatest.FlatSpec
 
-class KaSimAbcTest extends KappaModel with FlatSpec {
+class KaSimAbcModel extends KappaModel { // with FlatSpec {
 
   // ####### TEMPLATE MODEL AS DESCRIBED IN THE KASIM MANUAL #############
 
@@ -90,8 +90,8 @@ class KaSimAbcTest extends KappaModel with FlatSpec {
 
   // #### Simulate!
 
-  withMaxEvents(10000)
-  withMaxTime(3000)
+  withMaxEvents(1000000)
+  //withMaxTime(3000)
   run
 }
 
