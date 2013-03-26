@@ -2,8 +2,8 @@ package kappa
 
 import org.scalatest.FlatSpec
 
-class TestModel extends KappaModel with FlatSpec
-{
+class TestModel extends KappaModel with FlatSpec {
+
   //behavior of "Models"
 
   contactGraph = "A(s:{p,q}!{1,1,2}),B(s!{2})"
@@ -31,10 +31,10 @@ class TestModel extends KappaModel with FlatSpec
   val r2 = withRule("A(s:p!A)" -> "A(s:q!1), B(s!1)" :@ 1)
   println(r2.action.atoms)
 
-  withObs(r1.action.lhs, "LHS r1")
-  withObs(r2.action.lhs, "LHS r2")
-  withObs("B()", "B")
-  withObs("A(s:q)", "Aq")
+  withObs("LHS r1", r1.action.lhs)
+  withObs("LHS r2", r2.action.lhs)
+  withObs("B")("B()")
+  withObs("Aq")("A(s:q)")
 
   val r3 = withRule("A(s!1), A(s!1)" -> "A(s), A(s)" :@ 1)
 

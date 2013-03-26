@@ -52,16 +52,16 @@ class KaSimAbcTest extends KappaModel with FlatSpec {
   // #### Observables
 
   // %obs: 'AB' A(x!x.B)
-  withObs("A(x!_)", "AB")
+  withObs("AB")("A(x!_)")
 
   // %obs: 'Cuu' C(x1~u?,x2~u?)
-  withObs("C(x1:u?,x2:u?)", "Cuu")
+  withObs("Cuu")("C(x1:u?,x2:u?)")
 
   // %obs: 'Cpu' C(x1~p?,x2~u?)
-  withObs("C(x1:p?,x2:u?)", "Cpu")
+  withObs("Cpu")("C(x1:p?,x2:u?)")
 
   // %obs: 'Cpp' C(x1~p?,x2~p?)
-  withObs("C(x1:p?,x2:p?)", "Cpp")
+  withObs("Cpp")("C(x1:p?,x2:p?)")
 
 
   // #### Variables
@@ -79,13 +79,13 @@ class KaSimAbcTest extends KappaModel with FlatSpec {
   // #### Initial conditions
 
   // %init: 'n_a' A()
-  withInit(Mixture("A(x, c)") * n_a)
+  withInit(n_a)("A(x, c)")
 
   // %init: 'n_b' B()
-  withInit(Mixture("B(x)") * n_b)
+  withInit(n_b)("B(x)")
 
   // %init: 'n_c' C()
-  withInit(Mixture("C(x1:u,x2:u)") * n_c)
+  withInit(n_c)("C(x1:u,x2:u)")
 
 
   // #### Simulate!

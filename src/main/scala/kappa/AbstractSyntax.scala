@@ -388,7 +388,7 @@ trait AbstractSyntax {
     @inline def ++(that: AbstractRuleTail)(
       implicit ab: ActionBuilder): AbstractRule = {
       val action = AbstractAction(lhs, this.rhs ++ that.rhs).toAction
-      new AbstractRule(action, that.toRate(action.lhs))
+      AbstractRule(action, that.toRate(action.lhs))
     }
 
     /** Prepend an abstract agent to this partial abstract pattern.  */
@@ -406,7 +406,7 @@ trait AbstractSyntax {
      */
     def :@(rate: => Double)(implicit ab: ActionBuilder): AbstractRule = {
       val action = toAction
-      new AbstractRule(action, () => action.lhs.inMix * rate)
+      AbstractRule(action, () => action.lhs.inMix * rate)
     }
 
     /**
@@ -415,7 +415,7 @@ trait AbstractSyntax {
      * @param law kinetic law expression
      */
     def !@(law: => Double)(implicit ab: ActionBuilder): AbstractRule =
-      new AbstractRule(toAction, () => law)
+      AbstractRule(toAction, () => law)
 
     /** Convert this abstract action into an action. */
     @inline def toAction()(implicit ab: ActionBuilder): Action =
@@ -479,12 +479,26 @@ trait AbstractSyntax {
     def toRule: Rule = new Rule(action, rate)
   }
 
+
   // -- Sugar for pattern and mixture construction. --
 
-  /** Convert partial abstract patterns into patterns. */
+  /** Convert a partial abstract pattern into a pattern. */
   implicit def partialAbstractPatternToPattern(
     p: PartialAbstractPattern): Pattern = p.toPattern
 
+  /** Convert a partial abstract pattern into a mixture. */
+  implicit def partialAbstractPatternToMixture(
+    p: PartialAbstractPattern): Mixture = Mixture(p.toPattern)
+
+  /** Convert a sequence of partial abstract patterns into a pattern. */
+  @inline def partialAbstractPatternsToPattern(
+    pps: Seq[PartialAbstractPattern]): Pattern =
+    pps.foldLeft(AbstractPattern())(_ ++ _.toAbstractPattern).toPattern
+
+  /** Convert a sequence of partial abstract patterns into a mixture. */
+  @inline def partialAbstractPatternsToMixture(
+    pps: Seq[PartialAbstractPattern]): Mixture =
+    Mixture(partialAbstractPatternsToPattern(pps))
 
   /**
    * Build a pattern from a string.
@@ -501,7 +515,7 @@ trait AbstractSyntax {
     parseSiteGraph(expr).toPattern
 
   /**
-   * Build a KaSpace mixture from a string.
+   * Build a mixture from a string.
    *
    * This method first builds a [[Patterns#Pattern]] from a string and
    * subsequently converts it into a [[Mixtures#Mixture]].
@@ -510,14 +524,6 @@ trait AbstractSyntax {
    * @return a mixture corresponding to the expression `expr`.
    */
   implicit def stringToMixture(expr: String) = Mixture(stringToPattern(expr))
-
-  /**
-   * Convert a pair `(lhs, rhs)` of site graph expressions into an
-   * action.
-   */
-  implicit def stringPairToKappaAction(lr: (String, String))(
-    implicit ab: ActionBuilder): Action =
-    ab(stringToPattern(lr._1), stringToPattern(lr._2))
 
   implicit def scToInterpolator(sc: StringContext): Interpolator =
     new Interpolator(sc)
@@ -533,6 +539,14 @@ trait AbstractSyntax {
   /** Convert abstract actions into actions. */
   implicit def abstractActionToAction(a: AbstractAction)(
     implicit ab: ActionBuilder): Action = a.toAction
+
+  /**
+   * Convert a pair `(lhs, rhs)` of site graph expressions into an
+   * action.
+   */
+  implicit def stringPairToKappaAction(lr: (String, String))(
+    implicit ab: ActionBuilder): Action =
+    ab(stringToPattern(lr._1), stringToPattern(lr._2))
 
   /** Convert abstract rules into rules. */
   implicit def abstractRuleToRule(r: AbstractRule): Rule = r.toRule

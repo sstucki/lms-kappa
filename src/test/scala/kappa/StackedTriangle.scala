@@ -3,8 +3,8 @@ package kappa
 import org.scalatest.FlatSpec
 import scala.math._
 
-class StackedTriangle extends KaSpaceModel with FlatSpec
-{
+class StackedTriangle extends KaSpaceModel with FlatSpec {
+
   // Agent radius
   val radius = 1
 
@@ -35,13 +35,13 @@ class StackedTriangle extends KaSpaceModel with FlatSpec
   withInit(m"A:$radius (l:$posL, r:$posR, n:$posN)" * 50)
 
   // Observables
-  withObs("A(l!1, r!2), A(l!2, r!3), A(l!3, r!1)", "triangle")
+  withObs("triangle")("A(l!1, r!2), A(l!2, r!3), A(l!3, r!1)")
   // Dimer
-  withObs("A(r!1), A(l!1)", "AA")
+  withObs("AA")("A(r!1), A(l!1)")
   // Trimer
-  withObs("A(r!1), A(l!1, r!2), A(l!2)", "AAA")
+  withObs("AAA")("A(r!1), A(l!1, r!2), A(l!2)")
   // Tetramer
-  withObs("A(r!1), A(l!1, r!2), A(l!2, r!3), A(l!3)", "AAAA")
+  withObs("AAAA")("A(r!1), A(l!1, r!2), A(l!2, r!3), A(l!3)")
 
   // Simulate!
   withMaxEvents(100)

@@ -3,8 +3,8 @@ package kappa
 import org.scalatest.FlatSpec
 import scala.math._
 
-class ProteasomeModel extends KaSpaceModel with FlatSpec
-{
+class ProteasomeModel extends KaSpaceModel with FlatSpec {
+
   // Agent radius
   val radius: Double = 0.8
 
@@ -39,20 +39,20 @@ class ProteasomeModel extends KaSpaceModel with FlatSpec
   withInit(m"A:$radius(l:$posL, r:$posR, bl:$posBL, br:$posBR)" * 50)
 
   // Expected observables
-  withObs("A(r!1, br!2), A(l!1, bl!3), A(br!2, bl!3)", "side triangle")
-  withObs("A(r!1), A(l!1)", "R-L")
-  withObs("A(bl!1), A(bl!1)", "BL-BL")
-  withObs("A(br!1), A(br!1)", "BR-BR")
-  withObs("A(l!1), A(r!1, l!2), A(r!2, l!3), A(r!3, l!4), A(r!4, l!5)," +
-    "A(r!5, l!6), A(r!6)", "7 chain")
-  withObs("A(r!1, l!2), A(r!2, l!3), A(r!3, l!4), A(r!4, l!5), A(r!5, l!6)," +
-    "A(r!6, l!7), A(r!7, l!1)", "7 ring")
+  withObs("side triangle")("A(r!1, br!2), A(l!1, bl!3), A(br!2, bl!3)")
+  withObs("R-L")("A(r!1), A(l!1)")
+  withObs("BL-BL")("A(bl!1), A(bl!1)")
+  withObs("BR-BR")("A(br!1), A(br!1)")
+  withObs("7 chain")("A(l!1), A(r!1, l!2), A(r!2, l!3), A(r!3, l!4), " +
+    "A(r!4, l!5), A(r!5, l!6), A(r!6)")
+  withObs("7 ring")("A(r!1, l!2), A(r!2, l!3), A(r!3, l!4), A(r!4, l!5), " +
+    "A(r!5, l!6), A(r!6, l!7), A(r!7, l!1)")
 
   // Unexpected observables
-  withObs("A(r!1, l!2), A(r!2, l!3), A(r!3, l!1)", "3 ring")
-  withObs("A(r!1, bl!2), A(l!1, br!3), A(bl!2, br!3)", "wrong chirality triangle")
-  withObs("A(l!1), A(r!1, l!2), A(r!2, l!3), A(r!3, l!4), A(r!4, l!5)," +
-    "A(r!5, l!6), A(r!6, l!7), A(r!7)", "8 chain")
+  withObs("3 ring")("A(r!1, l!2), A(r!2, l!3), A(r!3, l!1)")
+  withObs("wrong chirality triangle")("A(r!1, bl!2), A(l!1, br!3), A(bl!2, br!3)")
+  withObs("8 chain")("A(l!1), A(r!1, l!2), A(r!2, l!3), A(r!3, l!4), " +
+    "A(r!4, l!5), A(r!5, l!6), A(r!6, l!7), A(r!7)")
 
   // Simulate!
   withMaxEvents(100)

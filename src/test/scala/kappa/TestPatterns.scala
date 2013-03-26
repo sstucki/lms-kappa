@@ -2,8 +2,8 @@ package kappa
 
 import org.scalatest.FlatSpec
 
-class TestPatterns extends KappaModel with FlatSpec
-{
+class TestPatterns extends KappaModel with FlatSpec {
+
   behavior of "Patterns"
 
   contactGraph = "A(c!{1}, b!{2}), B(a!{2}, c!{3}), C(b!{3}, a!{1})"

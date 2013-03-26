@@ -3,8 +3,8 @@ package kappa
 import org.scalatest.FlatSpec
 import scala.math._
 
-class RingModelCombinators extends KaSpaceModel with FlatSpec
-{
+class RingModelCombinators extends KaSpaceModel with FlatSpec {
+
   // Agent radius
   val radius = 1
 
@@ -86,7 +86,7 @@ class RingModelCombinators extends KaSpaceModel with FlatSpec
 
 
   // -- Mixture --
-  withInit((A~radius)(b~posL, c~posR), nA)
+  withInit(nA)((A~radius)(b~posL, c~posR))
   withInit((B~radius)(a~posR, c~posL) * nB)
   withInit((C~radius)(a~posL, b~posR) * nC)
 
@@ -94,34 +94,35 @@ class RingModelCombinators extends KaSpaceModel with FlatSpec
   // -- Expected observables --
 
   // Monomers
-  withObs(A(b, c), "A")
-  withObs(B(a, c), "B")
-  withObs(C(a, b), "C")
+  withObs("A", A(b, c))
+  withObs("B", B(a, c))
+  withObs("C")(C(a, b))
 
   // Dimers
-  withObs(A(b!1, c) :: B(a!1, c), "AB")
-  withObs(A(c!1, b) :: C(a!1, b), "AC")
-  withObs(B(c!1, a) :: C(b!1, a), "BC")
+  withObs("AB")(A(b!1, c) :: B(a!1, c))
+  withObs("AC")(A(c!1, b), C(a!1, b))
+  withObs("BC")(B(c!1, a), C(b!1, a))
 
   // Trimers
-  withObs(A(b!1, c) :+ B(a!1, c!2) :+ C(a, b!2), "ABC")
-  withObs(B(c!2, a) +: C(b!2, a!1) +: A(b, c!1), "BCA")
-  withObs(C(a!1, b) +: A(c!1, b!2) :+ B(a!2, c), "CAB")
+  withObs("ABC")(A(b!1, c) :+ B(a!1, c!2) :+ C(a, b!2))
+  withObs("BCA")(B(c!2, a) +: C(b!2, a!1) +: A(b, c!1))
+  withObs("CAB")(C(a!1, b) +: A(c!1, b!2) :+ B(a!2, c))
 
   // Triangle
-  withObs(A(c!3, b!1) :: B(a!1, c!2) :: C(b!2, a!3), "triangle")
+  withObs("triangle")(A(c!3, b!1), B(a!1, c!2), C(b!2, a!3))
 
 
   // -- Unexpected observables --
 
   // Hexagon
-  withObs(A(c!6, b!1) :+ B(a!1, c!2) :+ C(b!2, a!3) :+
-          A(c!3, b!4) :+ B(a!4, c!5) :+ C(b!5, a!6), "hexagon")
+  withObs("hexagon")(
+    A(c!6, b!1), B(a!1, c!2), C(b!2, a!3),
+    A(c!3, b!4), B(a!4, c!5), C(b!5, a!6))
 
   // Tetramers
-  withObs(A(b!1) :+ B(a!1, c!2) :+ C(b!2, a!3) :+ A(c!3), "ABCA")
-  withObs(B(c!2) :+ C(b!2, a!3) :+ A(c!3, b!1) :+ B(a!1), "BCAB")
-  withObs(C(a!3) :+ A(c!3, b!1) :+ B(a!1, c!2) :+ C(b!2), "CABC")
+  withObs("ABCA")(A(b!1), B(a!1, c!2), C(b!2, a!3), A(c!3))
+  withObs("BCAB")(B(c!2), C(b!2, a!3), A(c!3, b!1), B(a!1))
+  withObs("CABC")(C(a!3), A(c!3, b!1), B(a!1, c!2), C(b!2))
 
 
   // Simulate!

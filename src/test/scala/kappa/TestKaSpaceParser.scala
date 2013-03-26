@@ -2,8 +2,8 @@ package kappa
 
 import org.scalatest.FlatSpec
 
-class TestKaSpaceParser extends KaSpaceModel with FlatSpec
-{
+class TestKaSpaceParser extends KaSpaceModel with FlatSpec {
+
   behavior of "KaSpace parser"
 
   contactGraph = "A:{1}(s:{[2,0,0]})"

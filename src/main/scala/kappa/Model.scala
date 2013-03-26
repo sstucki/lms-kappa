@@ -18,22 +18,47 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
   var obsNames  : Vector[String]       = Vector()
 
   def withInit(mix: Mixture): Model             = { this.mix ++= mix; this }
-  def withInit(mix: Mixture, count: Int): Model = withInit(mix * count)
+  def withInit(count: Int, mix: Mixture): Model = withInit(mix * count)
   def withInit(mix: Pattern): Model             = withInit(Mixture(mix))
-  def withInit(mix: Pattern, count: Int): Model = withInit(Mixture(mix) * count)
+  def withInit(count: Int, mix: Pattern): Model = withInit(Mixture(mix) * count)
   def withInit(mix: AbstractPattern): Model     = withInit(Mixture(mix.toPattern))
-  def withInit(mix: AbstractPattern, count: Int): Model =
+  def withInit(count: Int, mix: AbstractPattern): Model =
     withInit(Mixture(mix.toPattern) * count)
+  def withInit(mix: PartialAbstractPattern*): Model =
+    withInit(partialAbstractPatternsToMixture(mix))
+  def withInit(count: Int, mix: PartialAbstractPattern*): Model =
+    withInit(partialAbstractPatternsToMixture(mix) * count)
 
-  def withObs(obs: Pattern, description: String = ""): Model = {
+  // "Curried" version of `withInit`.
+  final class WithInit(count: Int) {
+    def apply(mix: Mixture): Model = withInit(count, mix)
+    def apply(mix: Pattern): Model = withInit(count, mix)
+    def apply(mix: PartialAbstractPattern*): Model = withInit(count, mix: _*)
+  }
+  def withInit(count: Int) = new WithInit(count)
+
+  def withObs(description: String, obs: Pattern): Model = {
     val name = if (description == "") obs.toString else description
     this.obs = this.obs :+ obs
     this.obsNames = this.obsNames :+ name
     this
   }
-  def withObs(obs: AbstractPattern, description: String): Model =
-    withObs(obs.toPattern, description)
-  def withObs(obs: AbstractPattern): Model = withObs(obs.toPattern, "")
+  def withObs(obs: Pattern): Model = withObs("", obs)
+  def withObs(description: String, obs: AbstractPattern): Model =
+    withObs(description, obs.toPattern)
+  def withObs(obs: AbstractPattern): Model = withObs("", obs)
+  def withObs(description: String, obs: PartialAbstractPattern*): Model =
+    withObs(description, partialAbstractPatternsToPattern(obs))
+  def withObs(obs: PartialAbstractPattern*): Model = withObs("", obs: _*)
+
+  // "Curried" version of `withObs`.
+  final class WithObs(description: String) {
+    def apply(obs: Pattern): Model = withObs(description, obs)
+    def apply(obs: PartialAbstractPattern*): Model =
+      withObs(description, obs: _*)
+  }
+  def withObs(description: String) = new WithObs(description)
+
 
   def withMaxTime(t: Double) = { maxTime = Some(t); this }
   def withMaxEvents(e: Long) = { maxEvents = Some(e); this }

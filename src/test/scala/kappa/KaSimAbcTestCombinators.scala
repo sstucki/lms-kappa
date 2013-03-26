@@ -74,13 +74,13 @@ class KaSimAbcTestCombinators extends KappaModel with FlatSpec {
 
   // #### Variables (cont)
   // %obs: 'AB' A(x!x.B)
-  withObs(A(x!(Some(B), Some(x), None)), "AB")
+  withObs("AB", A(x!(Some(B), Some(x), None)))
   // %obs: 'Cuu' C(x1~u?,x2~u?)
-  withObs(C(x1~u?, x2~u?), "Cuu")
+  withObs("Cuu")(C(x1~u?, x2~u?))
   // %obs: 'Cpu' C(x1~p?,x2~u?)
-  withObs(C(x1~p?, x2~u?), "Cpu")
+  withObs("Cpu")(C(x1~p?, x2~u?))
   // %obs: 'Cpp' C(x1~p?,x2~p?)
-  withObs(C(x1~p?, x2~p?), "Cpp")
+  withObs("Cpp")(C(x1~p?, x2~p?))
 
   // %var: 'n_a' 1000
   val n_a = 100
@@ -92,11 +92,11 @@ class KaSimAbcTestCombinators extends KappaModel with FlatSpec {
 
   // #### Initial conditions
   // %init: 'n_a' A()
-  withInit(A(x, c), n_a)
+  withInit(n_a, A(x, c))
   // %init: 'n_b' B()
-  withInit(B(x), n_b)
+  withInit(n_b)(B(x))
   // %init: 'n_c' C()
-  withInit(C(x1~u, x2~u), n_c)
+  withInit(C(x1~u, x2~u) * n_c)
 
 
   withMaxEvents(10000)
