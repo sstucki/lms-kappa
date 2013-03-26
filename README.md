@@ -12,8 +12,8 @@ First of all, since LMS-Kappa is written in Scala and Scala runs on the JVM, you
 2. Clone the repo: `git clone https://github.com/sstucki/lms-kappa.git`
 3. [Install virtualization-lms-core](https://github.com/TiarkRompf/virtualization-lms-core)
 
-    $ git clone https://github.com/TiarkRompf/virtualization-lms-core
-    $ sbt compile publish-local
+        $ git clone https://github.com/TiarkRompf/virtualization-lms-core
+        $ sbt compile publish-local
 
 4. Go into the root directory and compile the source code using sbt: `cd lms-kappa && sbt compile`
 
@@ -28,6 +28,6 @@ If instead you want to start your own project, then follow these steps:
 2. Create a [sbt project](http://www.scala-sbt.org/release/docs/Getting-Started/Hello.html).
 3. Make sure you include `"EPFL" %% "lms" % "0.3-SNAPSHOT"` and `"EPFL" %% "lms-kappa" % "0.1-SNAPSHOT"` as `libraryDependencies` in your project's `build.sbt`.
 
-Tip: To program in Scala, you can use any Java IDE ([Eclipse](http://scala-ide.org/), [IntelliJ](http://confluence.jetbrains.com/display/SCA/Getting+Started+with+IntelliJ+IDEA+Scala+Plugin), [NetBeans](https://github.com/dcaoyuan/nbscala), etc) or text editor. We use **[Emacs](http://www.gnu.org/software/emacs/)**. If you use Emacs 24, install [scala-mode2](https://github.com/hvesalai/scala-mode2). It will make your life much easier.
+Tip: To program in Scala, you can use any Java IDE ([Eclipse](http://scala-ide.org/), [IntelliJ](http://confluence.jetbrains.com/display/SCA/Getting+Started+with+IntelliJ+IDEA+Scala+Plugin), [NetBeans](https://github.com/dcaoyuan/nbscala), etc) or text editor. We use **[Emacs](http://www.gnu.org/software/emacs/)**. If you use Emacs 24, install [scala-mode2](https://github.com/hvesalai/scala-mode2). It will make your life much easier.
 
 
