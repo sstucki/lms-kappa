@@ -4,6 +4,9 @@ import scala.language.postfixOps
 
 import org.scalatest.FlatSpec
 
+import kappa.KappaModel
+
+
 class KaSimAbcModelCombinators extends KappaModel with FlatSpec {
 
   // ####### TEMPLATE MODEL AS DESCRIBED IN THE KASIM MANUAL #############

@@ -3,6 +3,9 @@ package kappa.models
 import org.scalatest.FlatSpec
 import scala.math._
 
+import kappa.{ KaSpaceModel, Orientation, Position }
+
+
 class SnakeModel extends KaSpaceModel with FlatSpec {
 
   // Agent radius
