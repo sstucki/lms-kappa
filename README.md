@@ -28,4 +28,6 @@ If instead you want to start your own project, then follow these steps:
 2. Create a [sbt project](http://www.scala-sbt.org/release/docs/Getting-Started/Hello.html).
 3. Make sure you include `"EPFL" %% "lms" % "0.3-SNAPSHOT"` and `"EPFL" %% "lms-kappa" % "0.1-SNAPSHOT"` as `libraryDependencies` in your project's `build.sbt`.
 
+Tip: To program in Scala, you can use any Java IDE ([Eclipse](http://scala-ide.org/), [IntelliJ](http://confluence.jetbrains.com/display/SCA/Getting+Started+with+IntelliJ+IDEA+Scala+Plugin), [NetBeans](https://github.com/dcaoyuan/nbscala), etc) or text editor. We use **[Emacs](http://www.gnu.org/software/emacs/)**. If you use Emacs 24, install [scala-mode2](https://github.com/hvesalai/scala-mode2). It will make your life much easier.
+
 
