@@ -9,14 +9,15 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
     with Actions with Rules with Perturbations with AbstractSyntax
     with Parsers {
 
-  var time      : Double               = 0
-  var events    : Long                 = 0
-  var nullEvents : Long                = 0
-  var maxTime   : Option[Double]       = None
-  var maxEvents : Option[Long]         = None
-  var obs       : Vector[Pattern]      = Vector()
-  var obsNames  : Vector[String]       = Vector()
+  var time       : Double               = 0
+  var events     : Long                 = 0
+  var nullEvents : Long                 = 0
+  var maxTime    : Option[Double]       = None
+  var maxEvents  : Option[Long]         = None
+  var obs        : Vector[Pattern]      = Vector()
+  var obsNames   : Vector[String]       = Vector()
 
+  /** Declare a mixture as part of the initial state. */
   def withInit(mix: Mixture): Model             = { this.mix ++= mix; this }
   def withInit(count: Int, mix: Mixture): Model = withInit(mix * count)
   def withInit(mix: Pattern): Model             = withInit(Mixture(mix))
@@ -37,6 +38,7 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
   }
   def withInit(count: Int) = new WithInit(count)
 
+  /** Declare an observable. */
   def withObs(description: String, obs: Pattern): Model = {
     val name = if (description == "") obs.toString else description
     this.obs = this.obs :+ obs
@@ -46,7 +48,7 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
   def withObs(obs: Pattern): Model = withObs("", obs)
   def withObs(description: String, obs: AbstractPattern): Model =
     withObs(description, obs.toPattern)
-  def withObs(obs: AbstractPattern): Model = withObs("", obs)
+  def withObs(obs: AbstractPattern): Model = withObs("", obs.toPattern)
   def withObs(description: String, obs: PartialAbstractPattern*): Model =
     withObs(description, partialAbstractPatternsToPattern(obs))
   def withObs(obs: PartialAbstractPattern*): Model = withObs("", obs: _*)
@@ -59,8 +61,10 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
   }
   def withObs(description: String) = new WithObs(description)
 
-
+  /** Set the maximum time for the simulation. */
   def withMaxTime(t: Double) = { maxTime = Some(t); this }
+
+  /** Set the maximum number of events for the simulation. */
   def withMaxEvents(e: Long) = { maxEvents = Some(e); this }
 
 
@@ -112,12 +116,101 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
    */
   case class SimulatorException(msg: String) extends Exception(msg)
 
+  object Deadlock extends SimulatorException("no more events")
+  object EmptyRuleSet extends SimulatorException("no rules")
 
+  def run() {
+
+    if (rules.length == 0) {
+      throw EmptyRuleSet
+    }
+
+    // Create a new random number generator
+    val rand = new util.Random
+
+    // (Re-)compute all component embeddings.  This is necessary as
+    // some components might have been registered before the mixture
+    // was initialized (i.e. the LHS' of the rules).
+    //
+    // TODO: To not compute twice we should not compute them when
+    // registering patterns.
+    for (c <- patternComponents) {
+      c.initEmbeddings
+    }
+
+    println("# === Start of simulation ===")
+
+    println("" + events + "\t" + time + "\t" +
+      (obs map (_.inMix)).mkString("\t"))
+
+    while ((events < (maxEvents getOrElse (events + 1))) &&
+      (time < (maxTime getOrElse Double.PositiveInfinity))) {
+
+      // Compute all rule weights.
+      val weights = for (r <- rules) yield r.law()
+
+      // Build the activity tree
+      val tree = RandomTree(weights, rand)
+      val totalActivity = tree.totalWeight
+
+      if ((totalActivity == 0) || (totalActivity.isNaN)) {
+        throw Deadlock
+      }
+
+      // Advance time
+      val dt = -math.log(rand.nextDouble) / totalActivity
+      time += dt
+
+      // Pick a rule and event at random
+      val r = rules(tree.nextRandom._1)
+      val e = r.action.lhs.randomEmbedding(rand)
+
+      // Apply the rule/event
+      if (r.action(e, mix)) {
+        events += 1 // Productive event
+
+        // Print the event number, time and the observable counts.
+        println("" + events + "\t" + time + "\t" +
+          (obs map (_.inMix)).mkString("\t"))
+      } else {
+        nullEvents += 1 // Null event
+      }
+
+      // Apply perturbations
+      for (mod <- mods) mod()
+    }
+
+    println("# === End of simulation ===")
+    println
+
+    val totalEvents: Double = events + nullEvents
+    println("# == Statistics:")
+    println("#    Productive events : " + events)
+    println("#    Null events       : " + nullEvents)
+    println("#    Efficiency        : " + events / totalEvents)
+    println("#    Total time        : " + time)
+    println
+
+    println("# == K THX BYE!")
+  }
+
+  def runUntilDeadlock() {
+    try {
+      run()
+    } catch {
+      case Deadlock => ()
+    }
+  }
+
+  /*
   def runNormal(rand: Random) {
 
     // (Re-)compute all component embeddings.  This is necessary as
     // some components might have been registered before the mixture
     // was initialized (i.e. the LHS' of the rules).
+    //
+    // TODO: To not compute twice we should not compute them when
+    // registering patterns.
     for (c <- patternComponents) {
       c.initEmbeddings
     }
@@ -133,7 +226,7 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
         (time < (maxTime getOrElse Double.PositiveInfinity))) {
 
         if (rules.length == 0) {
-          throw SimulatorException("no rules")
+          throw EmptyRuleSet
         }
 
         // Compute all rule weights.
@@ -144,7 +237,7 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
         val totalActivity = tree.totalWeight
 
         if ((totalActivity == 0) || (totalActivity.isNaN)) {
-          throw SimulatorException("no more events")
+          throw Deadlock
         }
 
         // Advance time
@@ -173,6 +266,7 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
     }
   }
 
+  // RHZ: Shouldn't we get rid of this at some point?
   def runNaive(rand: Random) {
 
     // Print the initial event number, time and the observable counts.
@@ -264,5 +358,6 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
 
     println("# == K THX BYE!")
   }
+  */
 }
 

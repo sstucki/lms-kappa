@@ -597,7 +597,7 @@ trait Mixtures {
         extends AgentIntf with Markable {
 
       protected[Mixture] var _mixture: Mixture = null
-      protected[Mixture] var next: Agent = null
+      /*protected[Mixture]*/ var next: Agent = null
       protected[Mixture] var prev: Agent = null
 
       /** A reference to a copy of this agent (used by [[Mixture]]`.copy`). */
