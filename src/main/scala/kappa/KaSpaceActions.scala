@@ -4,9 +4,25 @@ import scala.language.implicitConversions
 
 import scala.collection.mutable
 
-trait KaSpaceActions extends Actions {
+trait KaSpaceActions extends KappaLikeActions {
   this: KaSpaceContext with SiteGraphs with Patterns with Mixtures
       with Embeddings with PartialEmbeddings with Rules =>
+
+  /** Factory object for building bidirectional KaSpace actions.  */
+  implicit object KaSpaceBiActionBuilder extends BiActionBuilder {
+    def apply(lhs: Pattern, rhs: Pattern): BiAction = {
+
+      val (fwdPe, rhsAgentOffsets) =
+        KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
+
+      val (bwdPe, lhsAgentOffsets) =
+        KappaLikeActionBuilder.commonLongestPrefix(rhs, lhs)
+
+      new BiAction(lhs, rhs, fwdPe, bwdPe, lhsAgentOffsets,
+        rhsAgentOffsets, None, Some(
+        KaSpaceActionBuilder.checkGeometricSoundnessPostCondition))
+    }
+  }
 
   /** Factory object for building KaSpace actions.  */
   implicit object KaSpaceActionBuilder extends ActionBuilder {
@@ -20,67 +36,35 @@ trait KaSpaceActions extends Actions {
      */
     def apply(lhs: Pattern, rhs: Pattern): Action = {
 
-      // Compute the offsets of the first agents of each component of
-      // the LHS in the agents array passed to an action application.
-      val ceOffsets: Array[Int] =
-        lhs.components.scanLeft(0) { (i, ce) => i + ce.length }
-
-      @inline def lhsAgentOffset(a: Pattern.Agent) =
-        ceOffsets(a.component.index) + a.index
-
-      // Find the longest common prefix, i.e. longest prefix in the
-      // sequences of agents making up the LHS and RHS, for which the
-      // number of sites and the agent states match up.
-      val zipped = (lhs zip rhs)
-      val firstDiffIndex = zipped indexWhere {
-        case (la, ra) =>
-          !((la.length == ra.length) &&
-            (la.state matchesInLongestCommonPrefix ra.state))
-      }
-      val commonPrefixLength =
-        if (firstDiffIndex > 0) firstDiffIndex else zipped.length
-      val longestCommonPrefix = zipped take commonPrefixLength
-
-      // Construct the partial embedding corresponding to this action
-      val pe = PartialEmbedding(
-        lhs take commonPrefixLength, rhs take commonPrefixLength)
-
-      // Compute the RHS agent offsets
-      val rhsPrefixAgentOffsets =
-        for (i <- 0 until commonPrefixLength)
-        yield (rhs(i), lhsAgentOffset(lhs(i)))
-      val rhsSuffixAgentOffsets =
-        for (i <- commonPrefixLength until rhs.length)
-        yield (rhs(i), lhs.length + i - commonPrefixLength)
-      val rhsAgentOffsets =
-        (rhsPrefixAgentOffsets ++ rhsSuffixAgentOffsets).toMap
-
-      def checkGeometricSoundnessPostCondition(
-        action: Action, agents: Action.Agents): Boolean =
-        if (agents.isEmpty) true
-        else {
-
-          // println("# post-condition after action = " + action.lhs +
-          //   " -> " + action.rhs + " (" + action + ")")
-
-          // Get target mixture
-          val mix = agents.head.mixture
-
-          // Find all agents that have been updated _and_ that are
-          // part of the RHS of the rule (other agents can not
-          // possibly affect soundness).
-          val toCheck = for {
-            i <- action.rhsAgentOffsets.values
-            if (agents(i) hasMark Updated) // all marked agents have been updated
-          } yield agents(i)
-
-          checkGeometricSoundness(toCheck)
-        }
+      val (pe, rhsAgentOffsets) =
+        KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
 
       // Build the action
       new Action(lhs, rhs, pe, rhsAgentOffsets, None,
         Some(checkGeometricSoundnessPostCondition))
     }
+
+    def checkGeometricSoundnessPostCondition(
+      action: Action, agents: Action.Agents): Boolean =
+      if (agents.isEmpty) true
+      else {
+
+        // println("# post-condition after action = " + action.lhs +
+        //   " -> " + action.rhs + " (" + action + ")")
+
+        // Get target mixture
+        val mix = agents.head.mixture
+
+        // Find all agents that have been updated _and_ that are
+        // part of the RHS of the rule (other agents can not
+        // possibly affect soundness).
+        val toCheck = for {
+          i <- action.rhsAgentOffsets.values
+          if (agents(i) hasMark Updated) // all marked agents have been updated
+            } yield agents(i)
+
+        checkGeometricSoundness(toCheck)
+      }
 
     /**
      * Check the geometric soundness of the smallest set of components
@@ -166,10 +150,5 @@ trait KaSpaceActions extends Actions {
       }
     }
   }
-
-  // FIXME: Remove
-  // /** Convert a pair `(lhs, rhs)` of patterns into a KaSpace action. */
-  // implicit def patternPairToKaSpaceAction(lr: (Pattern, Pattern)): Action =
-  //   KaSpaceAction(lr._1, lr._2)
 }
 

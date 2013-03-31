@@ -2,9 +2,24 @@ package kappa
 
 import scala.language.implicitConversions
 
-trait KappaActions extends Actions {
+trait KappaActions extends KappaLikeActions {
   this: KappaContext with SiteGraphs with Patterns with Mixtures
       with Embeddings with PartialEmbeddings with Rules =>
+
+  /** Factory object for building bidirectional Kappa actions.  */
+  implicit object KappaBiActionBuilder extends BiActionBuilder {
+    def apply(lhs: Pattern, rhs: Pattern): BiAction = {
+
+      val (fwdPe, rhsAgentOffsets) =
+        KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
+
+      val (bwdPe, lhsAgentOffsets) =
+        KappaLikeActionBuilder.commonLongestPrefix(rhs, lhs)
+
+      new BiAction(lhs, rhs, fwdPe, bwdPe, lhsAgentOffsets,
+        rhsAgentOffsets, None, None)
+    }
+  }
 
   /** Factory object for building Kappa actions.  */
   implicit object KappaActionBuilder extends ActionBuilder {
@@ -18,40 +33,8 @@ trait KappaActions extends Actions {
      */
     def apply(lhs: Pattern, rhs: Pattern): Action = {
 
-      // Compute the offsets of the first agents of each component of
-      // the LHS in the agents array passed to an action application.
-      val ceOffsets: Array[Int] =
-        lhs.components.scanLeft(0) { (i, ce) => i + ce.length }
-
-      @inline def lhsAgentOffset(a: Pattern.Agent) =
-        ceOffsets(a.component.index) + a.index
-
-      // Find the longest common prefix, i.e. longest prefix in the
-      // sequences of agents making up the LHS and RHS, for which the
-      // number of sites and the agent states match up.
-      val zipped = (lhs zip rhs)
-      val firstDiffIndex = zipped indexWhere {
-        case (la, ra) =>
-          !((la.indices == ra.indices) &&
-            (la.state matchesInLongestCommonPrefix ra.state))
-      }
-      val commonPrefixLength =
-        if (firstDiffIndex > 0) firstDiffIndex else zipped.length
-      val longestCommonPrefix = zipped take commonPrefixLength
-
-      // Construct the partial embedding corresponding to this action
-      val pe = PartialEmbedding(
-        lhs take commonPrefixLength, rhs take commonPrefixLength)
-
-      // Compute the RHS agent offsets
-      val rhsPrefixAgentOffsets =
-        for (i <- 0 until commonPrefixLength)
-        yield (rhs(i), lhsAgentOffset(lhs(i)))
-      val rhsSuffixAgentOffsets =
-        for (i <- commonPrefixLength until rhs.length)
-        yield (rhs(i), lhs.length + i - commonPrefixLength)
-      val rhsAgentOffsets =
-        (rhsPrefixAgentOffsets ++ rhsSuffixAgentOffsets).toMap
+      val (pe, rhsAgentOffsets) =
+        KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
 
       // Build the action
       new Action(lhs, rhs, pe, rhsAgentOffsets, None, None)

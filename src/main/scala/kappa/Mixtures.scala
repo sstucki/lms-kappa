@@ -589,6 +589,7 @@ trait Mixtures {
 
     def initialiseLinkIds {
       var freshId: LinkId = 0
+      // NOTE For this to work we might need to define equals in AgentImpl
       val visited: mutable.Set[(Agent, SiteIndex)] = mutable.Set()
       for (u <- mix; (Linked(v, j, l1), i) <- u.links.zipWithIndex) {
         if (!(visited contains (v, j))) {

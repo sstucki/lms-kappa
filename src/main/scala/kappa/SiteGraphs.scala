@@ -466,16 +466,14 @@ trait SiteGraphs {
       }
 
       // -- Any API --
-      // FIXME!
       override def toString = this match {
         case Undefined => "?"
         case Wildcard(a, s, l) =>
           "!" + (a getOrElse "_") + "." + (s getOrElse "_") +
           "." + (l getOrElse "_")
         case Stub => ""
-        case l: SiteGraph#Linked =>
-          "!" + l.agent.state + "." + l.agent.siteStates(l.site) +
-          "." + l.state
+        case l: SiteGraph#Linked => "!" + l.state
+          //"!" + l.agent.state + "." + l.agent.siteStates(l.site) + "." + l.state
       }
     }
 

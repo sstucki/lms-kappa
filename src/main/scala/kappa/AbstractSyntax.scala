@@ -95,6 +95,24 @@ trait AbstractSyntax {
      * Build an action from this partial abstract pattern and the
      * empty pattern.
      */
+    @inline def ->()(implicit bab: BiActionBuilder): BiAction =
+      bab(this.toPattern, AbstractPattern().toPattern)
+
+    /**
+     * Build an abstract action from this partial abstract pattern and
+     * an abstract agent.
+     */
+    @inline def <->(that: AbstractAgent): AbstractBiAction =
+      AbstractBiAction(this.toAbstractPattern, that.toAbstractPattern)
+
+    /** Build a bidirectional action from this partial abstract pattern and a pattern. */
+    @inline def <->(that: Pattern)(implicit bab: BiActionBuilder): BiAction =
+      bab(this.toPattern, that)
+
+    /**
+     * Build a bidirectional action from this partial abstract pattern
+     * and the empty pattern.
+     */
     @inline def ->()(implicit ab: ActionBuilder): Action =
       ab(this.toPattern, AbstractPattern().toPattern)
 
@@ -422,6 +440,59 @@ trait AbstractSyntax {
       ab(lhs.toPattern, rhs.toPattern)
   }
 
+  /** A class representing abstract actions. */
+  final case class AbstractBiAction(
+    lhs: AbstractPattern, rhs: AbstractPattern) extends PartialAbstractRule {
+
+    /** Append an abstract agent to this abstract action.  */
+    @inline def :+(that: AbstractAgent): AbstractAction =
+      AbstractAction(lhs, rhs :+ that)
+
+    /** Append an abstract pattern to this abstract action.  */
+    @inline def ++(that: AbstractPattern): AbstractAction =
+      AbstractAction(lhs, rhs ++ that)
+
+    /** Append an abstract rule tail to this abstract action.  */
+    @inline def ++(that: AbstractRuleTail)(
+      implicit ab: ActionBuilder): AbstractRule = {
+      val action = AbstractAction(lhs, this.rhs ++ that.rhs).toAction
+      AbstractRule(action, that.toRate(action.lhs))
+    }
+
+    /** Prepend an abstract agent to this partial abstract pattern.  */
+    @inline def +:(that: AbstractAgent): AbstractAction =
+      AbstractAction(that +: lhs, rhs)
+
+    /** Prepend an abstract agent to this partial abstract pattern.  */
+    @inline def ::(that: AbstractAgent): AbstractAction =
+      that +: this
+
+    /**
+     * Build a rule that follows mass-action kinetics.
+     *
+     * @param rate stochastic kinetic rate constant
+     */
+    def :@(fwdRate: => Double, bwdRate: => Double)(
+      implicit bab: BiActionBuilder): AbstractBiRule = {
+      val biaction = toBiAction
+      AbstractBiRule(biaction, () => biaction.lhs.inMix * fwdRate,
+        () => biaction.rhs.inMix * bwdRate)
+    }
+
+    /**
+     * Build a rule that follow an arbitrary rate law.
+     *
+     * @param law kinetic law expression
+     */
+    def !@(fwdLaw: => Double, bwdLaw: => Double)(
+      implicit bab: BiActionBuilder): AbstractBiRule =
+      AbstractBiRule(toBiAction, () => fwdLaw, () => bwdLaw)
+
+    /** Convert this abstract action into an action. */
+    @inline def toBiAction()(implicit bab: BiActionBuilder): BiAction =
+      bab(lhs.toPattern, rhs.toPattern)
+  }
+
   /** A class representing tails of rules. */
   sealed abstract class AbstractRuleTail extends PartialAbstractRule {
 
@@ -474,9 +545,16 @@ trait AbstractSyntax {
   }
 
   /** A class representing abstract Rules. */
-  final case class AbstractRule(action: Action, rate: () => Double)
+  final case class AbstractRule(action: Action, law: () => Double)
       extends PartialAbstractRule {
-    def toRule: Rule = new Rule(action, rate)
+    def toRule: Rule = Rule(action, law)
+  }
+
+  /** A class representing abstract Rules. */
+  final case class AbstractBiRule(biaction: BiAction,
+    fwdLaw: () => Double, bwdLaw: () => Double)
+      extends PartialAbstractRule {
+    def toRule: BiRule = BiRule(biaction, fwdLaw, bwdLaw)
   }
 
 

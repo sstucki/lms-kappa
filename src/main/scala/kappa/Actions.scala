@@ -69,8 +69,6 @@ trait Actions {
     /**
      * Constructor for rules that follow an arbitrary rate law.
      *
-     * See https://github.com/jkrivine/KaSim/issues/9
-     *
      * @param law kinetic law
      */
     def !@(law: => Double) = new Rule(this, () => law)
@@ -272,9 +270,8 @@ trait Actions {
 
       val sideAffected = mix.markedAgents(SideEffect)
 
-      // We now need to check them against all
-      // remaining registered components to make sure we have found
-      // every embedding.
+      // We now need to check them against all remaining registered
+      // components to make sure we have found every embedding.
       //
       // TODO: Is there a more efficient way to handle side effects?
       //var sideEffects = 0
@@ -338,6 +335,9 @@ trait Actions {
   /** Companion object of the [[Actions#Action]] class. */
   object Action {
 
+    // RHZ: Since this array is indexed by the agent ids of the lhs
+    // I find quite confusing the name Agents. Perhaps Injection
+    // would be better?
     type Agents = Array[Mixture.Agent]
 
     sealed abstract class Atom {
@@ -593,5 +593,59 @@ trait Actions {
   implicit def patternPairToAction(lr: (Pattern, Pattern))(
     implicit ab: ActionBuilder): Action =
     ab(lr._1, lr._2)
+
+
+  // -- BiActions --
+
+  // RHZ: What is rhsAgentOffsets for?
+  final class BiAction(
+    val lhs: Pattern,
+    val rhs: Pattern,
+    val fwdPe: PartialEmbedding,
+    val bwdPe: PartialEmbedding,
+    val lhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
+    val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
+    val preCondition:  Option[(Action, Action.Agents) => Boolean] = None,
+    val postCondition: Option[(Action, Action.Agents) => Boolean] = None) {
+
+    def actions = (
+      new Action(lhs, rhs, fwdPe, rhsAgentOffsets, preCondition, postCondition),
+      new Action(rhs, lhs, bwdPe, lhsAgentOffsets, preCondition, postCondition))
+
+
+    // -- BiRule construction operators --
+
+    // FIXME Problem with laws: How can we make them language-specific?
+    // TKappa needs only one number but Kappa and KaSpace need two.
+
+    /**
+     * Constructor for bidirectional rules that follow mass-action kinetics.
+     *
+     * @param rate stochastic kinetic rate constant
+     */
+    def :@(fwdRate: => Double, bwdRate: => Double) = new BiRule(this,
+      () => lhs.inMix * fwdRate, () => rhs.inMix * bwdRate)
+
+    /**
+     * Constructor for bidirectional rules that follow an arbitrary rate law.
+     *
+     * @param law kinetic law
+     */
+    def !@(fwdLaw: => Double, bwdLaw: => Double) = new BiRule(this,
+      () => fwdLaw, () => bwdLaw)
+  }
+
+
+  /** Base class for factory objects used to build actions. */
+  abstract class BiActionBuilder {
+
+    /**
+     * Construct an action from a LHS and RHS pattern.
+     *
+     * @param lhs the left-hand side of the resulting action.
+     * @param rhs the right-hand side of the resulting action.
+     */
+    def apply(lhs: Pattern, rhs: Pattern): BiAction
+  }
 }
 

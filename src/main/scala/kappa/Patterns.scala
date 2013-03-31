@@ -4,8 +4,9 @@ import scala.collection.mutable
 
 
 trait Patterns {
-  this: LanguageContext with ContactGraphs with SiteGraphs with Mixtures
-      with Actions with Rules with ComponentEmbeddings with Embeddings =>
+  this: LanguageContext with ContactGraphs with SiteGraphs
+      with Mixtures with Actions with Rules with ComponentEmbeddings
+      with Embeddings with AbstractSyntax =>
 
   /**
    * A class representing patterns in [[Model]]s (i.e. site graphs).
@@ -69,6 +70,17 @@ trait Patterns {
     override def toString =
       if (!siteGraphString.isEmpty) siteGraphString
       else iterator.mkString("", ",", "")
+
+
+    // -- BiAction construction --
+
+    /** Bidirectional action (BiAction) construction. */
+    def <->(that: Pattern)(implicit bab: BiActionBuilder): BiAction =
+      bab(this, that)
+
+    /** Bidirectional action (BiAction) construction. */
+    def <->(that: AbstractPattern)(implicit bab: BiActionBuilder): BiAction =
+      bab(this, that.toPattern)
 
 
     // -- Core Seq[Pattern.Agent] API --
