@@ -104,7 +104,14 @@ trait KappaContext extends KappaLikeContext {
   /** Kappa link state. */
   final case class KappaLinkState(linkName: Option[LinkId])
       extends KappaLikeLinkState[KappaLinkState] {
+
     // -- GenericLinkState[KappaLinkState] API --
+
+    @inline def id: LinkId = linkName getOrElse (
+      throw new IllegalStateException("no link id"))
+
+    @inline def withLinkId(linkId: LinkId): KappaLinkState =
+      KappaLinkState(Some(linkId))
 
     @inline def linkStateSet: KappaLinkStateSet = KappaLinkStateSet
 

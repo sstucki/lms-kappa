@@ -421,8 +421,10 @@ trait Mixtures {
       checkpointAgent(u1)
       checkpointAgent(u2)
 
-      u1._links(i1) = Linked(u2, i2, l1)
-      u2._links(i2) = Linked(u1, i1, l2)
+      val freshId = Mixture.getFreshLinkId
+
+      u1._links(i1) = Linked(u2, i2, l1 withLinkId freshId)
+      u2._links(i2) = Linked(u1, i1, l2 withLinkId freshId)
 
       // TODO Shouldn't these marks be set by the action?
       mark(u1, Updated)
@@ -434,13 +436,14 @@ trait Mixtures {
     /** Disconnect a site in this mixture. */
     def disconnect(u: Agent, i: SiteIndex): Mixture = {
       u._links(i) match {
-        case Linked(u2, i2, _) => {
+        case Linked(u2, i2, l1) => {
           checkpointAgent(u2)
           u2._links(i2) = Stub
           mark(u2, Updated)
           mark(u2, SideEffect) // FIXME for perfomance, see above.
+          Mixture.recycleLinkId(l1.id)
         }
-        case _ => { }
+        case _ => ()
       }
       checkpointAgent(u)
       u._links(i) = Stub
@@ -563,6 +566,46 @@ trait Mixtures {
 
     /** The type of agents in [[Mixture]]s. */
     type Agent = Mixture.AgentImpl
+
+    // -- Manage LinkIds in mix --
+    // This is a little hack. Even when a more elegant solution is
+    // desirable, it's not clear that one can easily achieved while
+    // making toString work nicely.
+
+    val recycledIds: mutable.Queue[LinkId] = mutable.Queue()
+    var freshId: LinkId = -1
+
+    def getFreshLinkId: LinkId =
+      if (recycledIds.isEmpty) {
+        freshId += 1
+        freshId - 1
+      } else {
+        recycledIds.dequeue
+      }
+
+    def recycleLinkId(id: LinkId) {
+      recycledIds.enqueue(id)
+    }
+
+    def initialiseLinkIds {
+      var freshId: LinkId = 0
+      val visited: mutable.Set[(Agent, SiteIndex)] = mutable.Set()
+      for (u <- mix; (Linked(v, j, l1), i) <- u.links.zipWithIndex) {
+        if (!(visited contains (v, j))) {
+          val l2 = v.links(j) match {
+            case Linked(_, _, l2) => l2
+            case _ => throw new IllegalStateException(
+              "dangling link in mixture")
+          }
+          u._links(i) = Linked(v, j, l1 withLinkId freshId)
+          v._links(j) = Linked(u, i, l2 withLinkId freshId)
+          freshId += 1
+          visited += (u -> i)
+        }
+      }
+      this.freshId = freshId
+    }
+
 
     /**
      * A class representing agents in [[Mixture]]s.
@@ -724,3 +767,4 @@ trait Mixtures {
   /** Default Mixture of the enclosing model. */
   val mix = Mixture()
 }
+

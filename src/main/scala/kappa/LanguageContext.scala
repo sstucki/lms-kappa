@@ -120,6 +120,12 @@ trait LanguageContext {
   trait GenericLinkState[T] extends Matchable[T] {
     this: T =>
 
+    /** Returns the link id. */
+    def id: LinkId
+
+    /** Returns a link state with a different link id. */
+    def withLinkId(linkId: LinkId): T
+
     /** Returns the link state set this agent state belongs to. */
     def linkStateSet: LinkStateSet
   }

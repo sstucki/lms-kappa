@@ -113,6 +113,7 @@ trait KaSpaceContext extends KappaLikeContext {
       siteStateSet.siteName + (position map (":" + _) getOrElse "")
   }
 
+  // TODO Add LinkId to KaSpaceLinkState
   /** KaSpace link state. */
   final case class KaSpaceLinkState(
     linkStateSet: LinkStateSet,
@@ -121,6 +122,10 @@ trait KaSpaceContext extends KappaLikeContext {
     // TODO Use label symbols
 
     // -- KappaLikeLinkState[KaSpaceLinkState] API --
+
+    @inline def id: LinkId = 0 // dummy
+
+    @inline def withLinkId(linkId: LinkId): KaSpaceLinkState = this
 
     @inline def label = orientation
 
