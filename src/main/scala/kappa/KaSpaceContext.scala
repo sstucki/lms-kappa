@@ -75,7 +75,8 @@ trait KaSpaceContext extends KappaLikeContext {
     siteStateSet: KaSpaceSiteStateSet,
     position: Option[SiteLabel])
       extends KappaLikeSiteState[KaSpaceSiteState] {
-    // TODO Use label symbols
+
+    val positionSym = position map siteStateSet.getLabelSym
 
     // -- KappaLikeSiteState[KaSpaceSiteState] API --
 
@@ -87,19 +88,19 @@ trait KaSpaceContext extends KappaLikeContext {
 
     @inline def matches(that: KaSpaceSiteState) =
       (this.siteStateSet == that.siteStateSet) &&
-      Matchable.optionMatches(this.position, that.position)(_==_)
+      Matchable.optionMatches(this.positionSym, that.positionSym)(_==_)
 
     @inline override def isEquivTo[U <: KaSpaceSiteState](that: U): Boolean =
-      (this.siteStateSet == that.siteStateSet) && (this.position == that.position)
+      (this.siteStateSet == that.siteStateSet) && (this.positionSym == that.positionSym)
 
     @inline def join(that: KaSpaceSiteState) =
-      if (this.siteStateSet == that.siteStateSet) (this.position, that.position) match {
+      if (this.siteStateSet == that.siteStateSet) (this.positionSym, that.positionSym) match {
         case (Some(s1), Some(s2)) if s1 == s2 => Some(this)
         case _ => Some(KaSpaceSiteState(siteStateSet, None))
       } else None
 
     @inline def meet(that: KaSpaceSiteState) =
-      if (this.siteStateSet == that.siteStateSet) (this.position, that.position) match {
+      if (this.siteStateSet == that.siteStateSet) (this.positionSym, that.positionSym) match {
         case (None, _) => Some(that)
         case (_, None) => Some(this)
         case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
@@ -116,34 +117,38 @@ trait KaSpaceContext extends KappaLikeContext {
   // TODO Add LinkId to KaSpaceLinkState
   /** KaSpace link state. */
   final case class KaSpaceLinkState(
+    linkId: Option[LinkId],
     linkStateSet: LinkStateSet,
     orientation: Option[LinkLabel])
       extends KappaLikeLinkState[KaSpaceLinkState] {
-    // TODO Use label symbols
+
+    val orientationSym = orientation map linkStateSet.getLabelSym
 
     // -- KappaLikeLinkState[KaSpaceLinkState] API --
 
-    @inline def id: LinkId = 0 // dummy
+    @inline def id: LinkId = linkId getOrElse (
+      throw new IllegalStateException("no link id"))
 
-    @inline def withLinkId(linkId: LinkId): KaSpaceLinkState = this
+    @inline def withLinkId(linkId: LinkId): KaSpaceLinkState =
+      KaSpaceLinkState(Some(linkId), linkStateSet, orientation)
 
     @inline def label = orientation
 
     // -- Matchable[KaSpaceLinkState] API --
     @inline def matches(that: KaSpaceLinkState) =
-      Matchable.optionMatches(this.orientation, that.orientation)(_==_)
+      Matchable.optionMatches(this.orientationSym, that.orientationSym)(_==_)
 
     @inline override def isEquivTo[U <: KaSpaceLinkState](that: U): Boolean =
-      this.orientation == that.orientation
+      this.orientationSym == that.orientationSym
 
     @inline def join(that: KaSpaceLinkState) =
-      (this.orientation, that.orientation) match {
+      (this.orientationSym, that.orientationSym) match {
         case (Some(s1), Some(s2)) if s1 == s2 => Some(this)
-        case _ => Some(KaSpaceLinkState(linkStateSet, None))
+        case _ => Some(KaSpaceLinkState(None, linkStateSet, None))
       }
 
     @inline def meet(that: KaSpaceLinkState) =
-      (this.orientation, that.orientation) match {
+      (this.orientationSym, that.orientationSym) match {
         case (None, _) => Some(that)
         case (_, None) => Some(this)
         case (Some(s1), Some(s2)) => if (s1 == s2) Some(this) else None
@@ -152,7 +157,12 @@ trait KaSpaceContext extends KappaLikeContext {
     @inline def isComplete = linkStateSet.isEmpty || !orientation.isEmpty
 
     // -- Any API --
-    @inline override def toString = orientation map (_.toString) getOrElse ""
+    @inline override def toString = (linkId, orientation) match {
+      case (Some(id), Some(w)) => id + ":" + w
+      case (Some(id), None) => id.toString
+      case (None, Some(w)) => w.toString
+      case (None, None) => ""
+    }
   }
 
 
@@ -218,6 +228,7 @@ trait KaSpaceContext extends KappaLikeContext {
     target: SiteStateSet,
     orientations: List[LinkLabel])
       extends KappaLikeLinkStateSet {
+
     // Link label symbols
     type LinkLabelSym = Int
     private val labelSyms: Map[LinkLabel, LinkLabelSym] = orientations.zipWithIndex.toMap

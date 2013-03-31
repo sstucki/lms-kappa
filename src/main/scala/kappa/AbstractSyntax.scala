@@ -238,7 +238,7 @@ trait AbstractSyntax {
     // contact graph (ie as we do with Patterns).
 
     /** Creates a link state from this abstract link state. */
-    def toLinkState(source: SiteStateSet, target: SiteStateSet): LinkState
+    def toLinkState(linkId: Option[LinkId], source: SiteStateSet, target: SiteStateSet): LinkState
   }
 
 
@@ -342,7 +342,7 @@ trait AbstractSyntax {
                 yield ss.toSiteState(as.agentStateSet)
               val lso =
                 for (ss <- sso; ls <- l)
-                yield ls.toLinkState(sstate.siteStateSet, ss.siteStateSet)
+                yield ls.toLinkState(None, sstate.siteStateSet, ss.siteStateSet)
               x define Pattern.Builder.Wildcard(aso, sso, lso)
             }
             case l: AbstractLinked         =>
@@ -353,11 +353,11 @@ trait AbstractSyntax {
 
       // Connect links
       for (l <- linkMap) l match {
-        case (_, List((s1, l1), (s2, l2))) => {
+        case (id, List((s1, l1), (s2, l2))) => {
           val t1 = s1.state.siteStateSet
           val t2 = s2.state.siteStateSet
-          val ls1 = l1.toLinkState(t1, t2)
-          val ls2 = l2.toLinkState(t2, t1)
+          val ls1 = l1.toLinkState(Some(id), t1, t2)
+          val ls2 = l2.toLinkState(Some(id), t2, t1)
           s1 connect (s2, ls1, ls2)
         }
         case (_, Nil) => {}

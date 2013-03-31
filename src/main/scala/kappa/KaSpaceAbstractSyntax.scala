@@ -64,7 +64,7 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
       extends AbstractLinkState {
 
     /** Creates a link state from this abstract link state. */
-    @inline final def toLinkState(
+    @inline final def toLinkState(linkId: Option[LinkId],
       source: SiteStateSet, target: SiteStateSet): LinkState = {
 
       // Find a link state set in the contact graph.
@@ -79,7 +79,7 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
           "couldn't find link state set from " + source +
             " to " + target + " with orientation " + orientation)
       }
-      KaSpaceLinkState(lss, orientation)
+      KaSpaceLinkState(linkId, lss, orientation)
     }
   }
 

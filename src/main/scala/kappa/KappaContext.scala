@@ -64,7 +64,6 @@ trait KappaContext extends KappaLikeContext {
 
     val labelSym = internalState map siteStateSet.getLabelSym
 
-
     // -- KappaLikeAgentState[KappaAgentState] API --
 
     @inline def siteName = siteStateSet.siteName

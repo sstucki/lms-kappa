@@ -99,11 +99,11 @@ trait KaSpaceActions extends Actions {
         u.indices forall { i =>
           (u.siteStates(i).position, u.links(i)) match {
             case (Some(sp), Mixture.Linked(
-              v, j, KaSpaceLinkState(_, Some(lo)))) => {
+              v, j, KaSpaceLinkState(_, _, Some(lo)))) => {
 
+              // (v: u.LinkTarget).siteStates(j).position match {
+              // (v: KaSpaceActions.this.Mixture.Agent).siteStates(j).position match {
               v.siteStates(j).position match {
-              //(v: u.LinkTarget).siteStates(j).position match {
-              //(v: KaSpaceActions.this.Mixture.Agent).siteStates(j).position match {
                 case Some(tp) => {
                   val vo = lo * uo
                   val vp = up + uo * sp - vo * tp
