@@ -93,8 +93,7 @@ class KaSimAbcModel extends KappaModel { // with FlatSpec {
 
   // #### Simulate!
 
-  withMaxEvents(1000000)
-  //withMaxTime(3000)
+  maxEvents = 1000000
   run
 }
 

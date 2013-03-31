@@ -47,7 +47,7 @@ class StackedTriangle extends KaSpaceModel with FlatSpec {
   withObs("AAAA")("A(r!1), A(l!1, r!2), A(l!2, r!3), A(l!3)")
 
   // Simulate!
-  withMaxEvents(100)
+  maxEvents = 100
   run
 }
 

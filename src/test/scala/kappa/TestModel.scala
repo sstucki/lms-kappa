@@ -1,5 +1,7 @@
 package kappa
 
+import scala.language.postfixOps
+
 import org.scalatest.FlatSpec
 
 class TestModel extends KappaModel with FlatSpec {
@@ -8,53 +10,36 @@ class TestModel extends KappaModel with FlatSpec {
 
   contactGraph = "A(s:{p,q}!{1,1,2}),B(s!{2})"
 
-  // Manual setup of Symbol table
-  //
-  // FIXME: This is a hack! It's just here to make the test work. Once
-  // parsing the contact graph of a model works, this should probably
-  // be removed, and the various tables in Symbols should be made
-  // immutable.  Unless, of course, we want to reserve the option to
-  // add symbols to the symbol table manually...
-  //
-  // RHZ: It's not possible with the current strategy to make the various
-  // tables in Symbols immutable, because initSymbols has to make
-  // assignments
-
   var k = 5
-  val r1 = "A(s), A(s)" -> "A(s!1), A(s!1)" :@ k * 1E-4
+  val r1 = ("A(s), A(s)" <-> "A(s!1), A(s!1)") :@ (k * 1E-4, 1)
   withRule(r1)
-  println(r1.action.atoms)
   println(r1)
   k = 6
   println(r1)
 
-  val r2 = withRule("A(s:p!A)" -> "A(s:q!1), B(s!1)" :@ 1)
+  val r2 = "A(s:p!A)" -> "A(s:q!1), B(s!1)" :@ 1
+  withRule(r2)
   println(r2.action.atoms)
 
-  withObs("LHS r1", r1.action.lhs)
-  withObs("LHS r2", r2.action.lhs)
-  withObs("B")("B()")
-  withObs("Aq")("A(s:q)")
-
-  val r3 = withRule("A(s!1), A(s!1)" -> "A(s), A(s)" :@ 1)
+  obs (r1.biaction.lhs) named "LHS r1"
+  obs (r2.action.lhs) named "LHS r2"
+  obs ("B()") named "B"
+  obs ("A(s:q)") named "Aq"
 
   // Quasi-steady-state approximation
   val vmax = 1
   val kM = 1
-  val r4 = withRule("A(s:p)" -> "A(s:q)" :@ (vmax / (kM + "A(s:p)".inMix)))
+  val r3 = withRule("A(s:p)" -> "A(s:q)" :@ (vmax / (kM + "A(s:p)".inMix)))
 
-  withInit(Mixture("A(s:p)") * 100)
+  init (100 of "A(s:p)")
   println("Mixture: " + mix)
 
-  val m1 = when ("A(s)".inMix < 10) set (k = 7)
-  val m2 = when (10 > "A(s)".inMix) set println("k = 7")
+  when ("A(s)".inMix < 50) exec (k = 7)
+  when (10 > "A(s)".inMix) exec { println("k = 8"); k = 8; }
+  when (this.time >= 10) add 50 of "A(s:p)"
+  when (this.events == 1000) del 50 of "A(s:p)"
+  every (35.3 timeUnits) add 30 of "A(s:p)"
 
-  val m3 = when (_.time >= 10) add 50 of "A(s)"
-  // RHZ: since the perturbation condition is an opaque function, we will probably
-  //      have this problem: https://github.com/jkrivine/KaSim/issues/21
-
-  val m4 = when (_.events == 1000) del 50 of "A(s)"
-
-  withMaxEvents(100)
+  maxEvents = 5
   run
 }

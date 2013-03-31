@@ -1,7 +1,9 @@
 package kappa
 
 import scala.language.implicitConversions
+
 import scala.util.Random
+
 
 /** A class representing generic models. */
 trait Model extends LanguageContext with ContactGraphs with SiteGraphs
@@ -9,15 +11,26 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
     with Actions with Rules with Perturbations with AbstractSyntax
     with Parsers {
 
-  var time       : Double               = 0
-  var events     : Long                 = 0
-  var nullEvents : Long                 = 0
-  var maxTime    : Option[Double]       = None
-  var maxEvents  : Option[Long]         = None
-  var obs        : Vector[Pattern]      = Vector()
-  var obsNames   : Vector[String]       = Vector()
+  var time        : Double               = 0
+  var events      : Long                 = 0
+  var nullEvents  : Long                 = 0
+  var _maxTime    : Option[Double]       = None
+  var _maxEvents  : Option[Long]         = None
+  var observables : Vector[Pattern]      = Vector()
+  var obsNames    : Vector[String]       = Vector()
 
-  /** Declare a mixture as part of the initial state. */
+
+  /** Set the maximum time for the simulation. */
+  def maxTime_=(t: Double) = { _maxTime = Some(t) }
+  @inline def maxTime = _maxTime
+
+  /** Set the maximum number of events for the simulation. */
+  def maxEvents_=(e: Long) = { _maxEvents = Some(e) }
+  @inline def maxEvents = _maxEvents
+
+
+  // -- Initial state --
+
   def withInit(mix: Mixture): Model             = { this.mix ++= mix; this }
   def withInit(count: Int, mix: Mixture): Model = withInit(mix * count)
   def withInit(mix: Pattern): Model             = withInit(Mixture(mix))
@@ -38,10 +51,53 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
   }
   def withInit(count: Int) = new WithInit(count)
 
+
+  final class Count(count: Int) {
+    def of(mix: Mixture) = mix * count
+    def of(mix: Pattern) = Mixture(mix) * count
+    def of(mix: AbstractPattern) =
+      Mixture(mix.toPattern) * count
+    def of(mix: PartialAbstractPattern*) =
+      partialAbstractPatternsToMixture(mix) * count
+
+    def *(mix: Mixture) = of(mix)
+    def *(mix: Pattern) = of(mix)
+    def *(mix: AbstractPattern) = of(mix)
+    def *(mix: PartialAbstractPattern*) = of(mix: _*)
+  }
+
+  implicit def intToCount(n: Int) = new Count(n)
+
+  /** Declare a mixture as part of the initial state. */
+  def init(mix: Mixture) { this.mix ++= mix }
+  def init(mix: Pattern) { init(Mixture(mix)) }
+  def init(mix: AbstractPattern) { init(Mixture(mix.toPattern)) }
+  def init(mix: PartialAbstractPattern*) {
+    init(partialAbstractPatternsToMixture(mix))
+  }
+
+
+  // -- Observables --
+
+  final class Obs(obs: Pattern) {
+    def named(name: String) {
+      obsNames = obsNames.dropRight(1) :+ name
+    }
+
+    observables = observables :+ obs
+    obsNames = obsNames :+ (obs.toString)
+  }
+
   /** Declare an observable. */
+  def obs(obs: Pattern) = new Obs(obs)
+  def obs(obs: AbstractPattern) = new Obs(obs.toPattern)
+  def obs(obs: PartialAbstractPattern*) =
+    new Obs(partialAbstractPatternsToPattern(obs))
+
+
   def withObs(description: String, obs: Pattern): Model = {
     val name = if (description == "") obs.toString else description
-    this.obs = this.obs :+ obs
+    this.observables = this.observables :+ obs
     this.obsNames = this.obsNames :+ name
     this
   }
@@ -61,18 +117,14 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
   }
   def withObs(description: String) = new WithObs(description)
 
-  /** Set the maximum time for the simulation. */
-  def withMaxTime(t: Double) = { maxTime = Some(t); this }
 
-  /** Set the maximum number of events for the simulation. */
-  def withMaxEvents(e: Long) = { maxEvents = Some(e); this }
-
+  // -- Rules --
 
   /** Register a single rule in the model. */
-  def withRule(r: Rule): Rule = { registerRule(r); r }
+  def withRule(r: RuleBox): RuleBox = { registerRule(r); r }
 
   /** Register a sequence of rules in the model. */
-  def withRules(rs: Rule*): Seq[Rule] = {
+  def withRules(rs: RuleBox*): Seq[RuleBox] = {
     rs map registerRule
     rs.toList
   }
@@ -125,6 +177,8 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
       throw EmptyRuleSet
     }
 
+    Mixture.initialiseLinkIds
+
     // Create a new random number generator
     val rand = new util.Random
 
@@ -141,7 +195,7 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
     println("# === Start of simulation ===")
 
     println("" + events + "\t" + time + "\t" +
-      (obs map (_.inMix)).mkString("\t"))
+      (observables map (_.inMix)).mkString("\t"))
 
     while ((events < (maxEvents getOrElse (events + 1))) &&
       (time < (maxTime getOrElse Double.PositiveInfinity))) {
@@ -171,7 +225,7 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
 
         // Print the event number, time and the observable counts.
         println("" + events + "\t" + time + "\t" +
-          (obs map (_.inMix)).mkString("\t"))
+          (observables map (_.inMix)).mkString("\t"))
       } else {
         nullEvents += 1 // Null event
       }

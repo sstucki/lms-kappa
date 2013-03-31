@@ -77,7 +77,7 @@ class KaSimAbcModelCombinators extends KappaModel with FlatSpec {
 
   // #### Variables (cont)
   // %obs: 'AB' A(x!x.B)
-  withObs("AB", A(x!(Some(B), Some(x), None)))
+  withObs("AB")(A(x!(Some(B), Some(x), None)))
   // %obs: 'Cuu' C(x1~u?,x2~u?)
   withObs("Cuu")(C(x1~u?, x2~u?))
   // %obs: 'Cpu' C(x1~p?,x2~u?)
@@ -102,8 +102,8 @@ class KaSimAbcModelCombinators extends KappaModel with FlatSpec {
   withInit(C(x1~u, x2~u) * n_c)
 
 
-  withMaxEvents(10000)
-  withMaxTime(3000)
+  maxEvents = 10000
+  maxTime = 3000
   run
 }
 

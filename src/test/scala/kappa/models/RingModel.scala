@@ -105,7 +105,7 @@ class RingModel extends KaSpaceModel with FlatSpec {
   withObs("CAB")("C(a!1, b), A(c!1, b!2), B(a!2, c)")
 
   // Triangle
-  withObs("triangle", "A(c!3, b!1), B(a!1, c!2), C(b!2, a!3)")
+  withObs("triangle")("A(c!3, b!1), B(a!1, c!2), C(b!2, a!3)")
 
 
   // -- Unexpected observables --
@@ -121,8 +121,7 @@ class RingModel extends KaSpaceModel with FlatSpec {
 
 
   // Simulate!
-  withMaxTime(1E6)
-  //withMaxTime(1E8)
+  maxTime = 1E6
   run
 }
 

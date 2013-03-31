@@ -37,7 +37,7 @@ class SnakeModel extends KaSpaceModel with FlatSpec {
   withInit(m"A:$radius(l:$posL, r:$posR)" * 2)
 
   // Simulate!
-  withMaxEvents(500)
-  run()
+  maxEvents = 500
+  //run()
 }
 

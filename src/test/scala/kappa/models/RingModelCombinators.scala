@@ -129,8 +129,7 @@ class RingModelCombinators extends KaSpaceModel with FlatSpec {
 
 
   // Simulate!
-  withMaxTime(1E6)
-  //withMaxTime(1E8)
+  maxTime = 1E6
   run
 }
 

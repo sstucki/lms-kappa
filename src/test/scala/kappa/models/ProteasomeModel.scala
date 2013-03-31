@@ -58,7 +58,7 @@ class ProteasomeModel extends KaSpaceModel with FlatSpec {
     "A(r!4, l!5), A(r!5, l!6), A(r!6, l!7), A(r!7)")
 
   // Simulate!
-  withMaxEvents(100)
+  maxEvents = 100
   run
 }
 
