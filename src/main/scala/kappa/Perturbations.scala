@@ -2,6 +2,9 @@ package kappa
 
 import scala.language.implicitConversions
 
+import java.io._
+
+
 trait Perturbations {
   self: LanguageContext with Mixtures with Patterns with Model =>
 
@@ -97,8 +100,38 @@ trait Perturbations {
     def del(n: Int) = Del(p => Perturbation(this, () => removeNEmbeddings(n, p)))
     def del(n: Int, p: Pattern) = Perturbation(this, () => removeNEmbeddings(n, p))
 
-    // def snapshot(baseFilename: String) = Perturbation(this, ...)
-    // def snapshot = Perturbation(this, () => emit(...))
+    // RHZ: I find this a bit useless. WDYT?
+    def snapshot(baseFilename: String) = {
+      var n = 1
+      Perturbation(this, () => {
+        val p = stringToPattern(mix.toString)
+        val outputStream = new BufferedWriter(new FileWriter(
+          baseFilename + "-" + n + ".snap"))
+
+        def count(c: Pattern.Component, cs: Seq[Pattern.Component],
+          rem: Seq[Pattern.Component], sum: Int):
+            (Seq[Pattern.Component], Int) = cs match {
+          case hd +: tl => if (c isEquivTo hd) count(c, tl, rem, sum+1)
+                           else count(c, tl, hd +: rem, sum)
+          case Nil => (rem, sum)
+        }
+
+        def hist(cs: Seq[Pattern.Component]):
+            Seq[(Pattern.Component, Int)] = cs match {
+          case hd +: tl => {
+            val (rem, sum) = count(hd, tl, List(), 1)
+            (hd, sum) +: hist(rem)
+          }
+          case Nil => List()
+        }
+
+        for ((c, count) <- hist(p.components)) {
+          outputStream.write(count + " * (" + c + ")")
+          outputStream.newLine
+        }
+        outputStream.close
+      })
+    }
 
     def stop = Perturbation(this,
       () => throw StopPerturbationException)
