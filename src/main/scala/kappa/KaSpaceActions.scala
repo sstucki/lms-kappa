@@ -8,22 +8,6 @@ trait KaSpaceActions extends KappaLikeActions {
   this: KaSpaceContext with SiteGraphs with Patterns with Mixtures
       with Embeddings with PartialEmbeddings with Rules =>
 
-  /** Factory object for building bidirectional KaSpace actions.  */
-  implicit object KaSpaceBiActionBuilder extends BiActionBuilder {
-    def apply(lhs: Pattern, rhs: Pattern): BiAction = {
-
-      val (fwdPe, rhsAgentOffsets) =
-        KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
-
-      val (bwdPe, lhsAgentOffsets) =
-        KappaLikeActionBuilder.commonLongestPrefix(rhs, lhs)
-
-      new BiAction(lhs, rhs, fwdPe, bwdPe, lhsAgentOffsets,
-        rhsAgentOffsets, None, Some(
-        KaSpaceActionBuilder.checkGeometricSoundnessPostCondition))
-    }
-  }
-
   /** Factory object for building KaSpace actions.  */
   implicit object KaSpaceActionBuilder extends ActionBuilder {
 
@@ -34,16 +18,35 @@ trait KaSpaceActions extends KappaLikeActions {
      * @param lhs the left-hand side of this action.
      * @param rhs the right-hand side of this action.
      */
-    def apply(lhs: Pattern, rhs: Pattern): Action = {
+    def apply(lhs: Pattern, rhs: Pattern): RuleBuilder = {
 
       val (pe, rhsAgentOffsets) =
         KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
 
       // Build the action
-      new Action(lhs, rhs, pe, rhsAgentOffsets, None,
-        Some(checkGeometricSoundnessPostCondition))
+      new KappaLikeRuleBuilder(new Action(lhs, rhs, pe,
+        rhsAgentOffsets, None,
+        Some(Geometry.checkGeometricSoundnessPostCondition)))
     }
+  }
 
+  /** Factory object for building bidirectional KaSpace actions.  */
+  implicit object KaSpaceBiActionBuilder extends BiActionBuilder {
+    def apply(lhs: Pattern, rhs: Pattern): BiRuleBuilder = {
+
+      val (fwdPe, rhsAgentOffsets) =
+        KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
+
+      val (bwdPe, lhsAgentOffsets) =
+        KappaLikeActionBuilder.commonLongestPrefix(rhs, lhs)
+
+      new KappaLikeBiRuleBuilder(new BiAction(lhs, rhs, fwdPe, bwdPe,
+        lhsAgentOffsets, rhsAgentOffsets, None,
+        Some(Geometry.checkGeometricSoundnessPostCondition)))
+    }
+  }
+
+  object Geometry {
     def checkGeometricSoundnessPostCondition(
       action: Action, agents: Action.Agents): Boolean =
       if (agents.isEmpty) true
@@ -72,62 +75,6 @@ trait KaSpaceActions extends KappaLikeActions {
      */
     def checkGeometricSoundness(toCheck: Iterable[Mixture.Agent]): Boolean = {
 
-      // Check the soundness of a connected component recursively
-      // through a depth-first traversal starting at a given agent.
-      def checkGeometry(
-        u: Mixture.Agent, as: mutable.Buffer[Mixture.Agent]): Boolean = {
-        mix.mark(u, Visited)
-        as += u
-        val up = u.state.position
-        val uo = u.state.orientation
-        u.indices forall { i =>
-          (u.siteStates(i).position, u.links(i)) match {
-            case (Some(sp), Mixture.Linked(
-              v, j, KaSpaceLinkState(_, _, Some(lo)))) => {
-
-              // (v: u.LinkTarget).siteStates(j).position match {
-              // (v: KaSpaceActions.this.Mixture.Agent).siteStates(j).position match {
-              v.siteStates(j).position match {
-                case Some(tp) => {
-                  val vo = lo * uo
-                  val vp = up + uo * sp - vo * tp
-                  if (v hasMark Visited) {
-                    // Check previously computed position and orientation
-                    (v.state.position ~= vp) && (v.state.orientation ~= vo)
-                  } else {
-                    // Assign new position and orientation
-                    v.state = v.state.copy(position = vp, orientation = vo)
-                    checkGeometry(v, as)
-                  }
-                }
-                case None => true
-              }
-            }
-            case _ => true
-          }
-        }
-      }
-
-      // Check the agents in `as` for collisions. FIXME: Naive quadratic
-      // collision detection algorithm...
-      def checkCollisions(as: Array[Mixture.Agent]): Boolean = {
-        as.indices forall { i =>
-          (i + 1) until as.size forall { j =>
-            val u = as(i)
-            val v = as(j)
-              (u.state.radius, v.state.radius) match {
-              case (Some(ru), Some(rv)) => {
-                val d1 = ru + rv
-                val d2 = u.state.position - v.state.position
-                //println("d1^2: " + (d1 * d1) + ", d2^2: " + (d2 * d2))
-                d1 * d1 <= d2 * d2
-              }
-              case _ => true
-            }
-          }
-        }
-      }
-
       // Clear the marked agents so we can use the mark/unmark
       // mechanism to keep track of agents that have already been
       // updated.
@@ -146,6 +93,67 @@ trait KaSpaceActions extends KappaLikeActions {
           // println("# coll soundness = " + cc)
           // cg && cc
           checkGeometry(u, as) && checkCollisions(as.toArray)
+        }
+      }
+    }
+
+    /**
+     * Check the soundness of a connected component recursively
+     * through a depth-first traversal starting at a given agent.
+     */
+    def checkGeometry(
+      u: Mixture.Agent, as: mutable.Buffer[Mixture.Agent]): Boolean = {
+      mix.mark(u, Visited)
+      as += u
+      val up = u.state.position
+      val uo = u.state.orientation
+      u.indices forall { i =>
+        (u.siteStates(i).position, u.links(i)) match {
+          case (Some(sp), Mixture.Linked(
+            v, j, KaSpaceLinkState(_, _, Some(lo)))) => {
+
+            // (v: u.LinkTarget).siteStates(j).position match {
+            // (v: KaSpaceActions.this.Mixture.Agent).siteStates(j).position match {
+            v.siteStates(j).position match {
+              case Some(tp) => {
+                val vo = lo * uo
+                val vp = up + uo * sp - vo * tp
+                if (v hasMark Visited) {
+                  // Check previously computed position and orientation
+                  (v.state.position ~= vp) && (v.state.orientation ~= vo)
+                } else {
+                  // Assign new position and orientation
+                  v.state = v.state.copy(position = vp, orientation = vo)
+                  checkGeometry(v, as)
+                }
+              }
+              case None => true
+            }
+          }
+          case _ => true
+        }
+      }
+    }
+
+    /**
+     * Check the agents in `as` for collisions.
+     *
+     * FIXME: Naive quadratic collision detection algorithm...
+     */
+    def checkCollisions(as: Array[Mixture.Agent]): Boolean = {
+      as.indices forall { i =>
+        (i + 1) until as.size forall { j =>
+          val u = as(i)
+          val v = as(j)
+            (u.state.radius, v.state.radius) match {
+            case (Some(ru), Some(rv)) => {
+              val d1 = ru + rv
+              val d2 = u.state.position - v.state.position
+              //println("d1^2: " + (d1 * d1) + ", d2^2: " + (d2 * d2))
+              d1 * d1 <= d2 * d2
+            }
+            case _ => true
+          }
         }
       }
     }

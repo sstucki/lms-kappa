@@ -8,6 +8,7 @@ trait Rules {
   var rules: Vector[Rule] = Vector()
 
   trait RuleBox {
+    def unpack: Either[Rule, BiRule]
     def register: Unit
   }
 
@@ -18,6 +19,8 @@ trait Rules {
   // Rules
   case class Rule(val action: Action, val law: () => Double)
       extends RuleBox {
+
+    def unpack = Left(this)
 
     /** Register this rule in the model. */
     def register {
@@ -50,6 +53,8 @@ trait Rules {
   case class BiRule(biaction: BiAction, fwdLaw: () => Double, bwdLaw: () => Double)
       extends RuleBox {
 
+    def unpack = Right(this)
+
     /** Register this bidirectional rule in the model. */
     def register {
 
@@ -59,7 +64,8 @@ trait Rules {
       // Register the components of RHS pattern
       biaction.rhs.registerComponents
 
-      val (fwdAction, bwdAction) = biaction.actions
+      val fwdAction = biaction.fwdAction
+      val bwdAction = biaction.bwdAction
 
       // Find positive influence of this rule on every registered
       // component and initialize the positive influence map

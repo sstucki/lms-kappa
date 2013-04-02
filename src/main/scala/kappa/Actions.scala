@@ -9,6 +9,8 @@ trait Actions {
   this: LanguageContext with SiteGraphs with Patterns with Mixtures
       with Embeddings with PartialEmbeddings with Rules =>
 
+  // --- Actions ---
+
   /**
    * A class representing actions.
    *
@@ -55,23 +57,6 @@ trait Actions {
     /** Activation map. */
     val activationMap =
       mutable.HashMap[ComponentIndex, ActivationEntry]()
-
-
-    // -- Rule construction operators --
-
-    /**
-     * Constructor for rules that follow mass-action kinetics.
-     *
-     * @param rate stochastic kinetic rate constant
-     */
-    def :@(rate: => Double) = new Rule(this, () => lhs.inMix * rate)
-
-    /**
-     * Constructor for rules that follow an arbitrary rate law.
-     *
-     * @param law kinetic law
-     */
-    def !@(law: => Double) = new Rule(this, () => law)
 
 
     /**
@@ -576,6 +561,14 @@ trait Actions {
       atoms.toList
     }
   }
+  // End of Action companion object
+
+
+  /** Convert a pair `(lhs, rhs)` of patterns into an action. */
+  implicit def patternPairToAction(lr: (Pattern, Pattern))(
+    implicit ab: ActionBuilder): RuleBuilder =
+    ab(lr._1, lr._2)
+
 
   /** Base class for factory objects used to build actions. */
   abstract class ActionBuilder {
@@ -586,18 +579,28 @@ trait Actions {
      * @param lhs the left-hand side of the resulting action.
      * @param rhs the right-hand side of the resulting action.
      */
-    def apply(lhs: Pattern, rhs: Pattern): Action
+    def apply(lhs: Pattern, rhs: Pattern): RuleBuilder
   }
 
-  /** Convert a pair `(lhs, rhs)` of patterns into an action. */
-  implicit def patternPairToAction(lr: (Pattern, Pattern))(
-    implicit ab: ActionBuilder): Action =
-    ab(lr._1, lr._2)
+
+  /** A trait for Rule builders. */
+  trait RuleBuilder {
+
+    def getAction: Action
+
+    /**
+     * Constructor for rules that follow an arbitrary rate law.
+     *
+     * @param law kinetic law
+     */
+    def withRateLaw(law: () => Double): Rule
+  }
 
 
-  // -- BiActions --
+  // --- BiActions ---
 
-  // RHZ: What is rhsAgentOffsets for?
+  // RHZ: What is rhsAgentOffsets for? is it redundant to also have
+  // lhsAgentOffsets? Same question is valid for bwdPe
   final class BiAction(
     val lhs: Pattern,
     val rhs: Pattern,
@@ -605,34 +608,14 @@ trait Actions {
     val bwdPe: PartialEmbedding,
     val lhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
     val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
-    val preCondition:  Option[(Action, Action.Agents) => Boolean] = None,
-    val postCondition: Option[(Action, Action.Agents) => Boolean] = None) {
+    val preCondition:  Option[(Action, Action.Agents) => Boolean],
+    val postCondition: Option[(Action, Action.Agents) => Boolean]) {
 
-    def actions = (
-      new Action(lhs, rhs, fwdPe, rhsAgentOffsets, preCondition, postCondition),
-      new Action(rhs, lhs, bwdPe, lhsAgentOffsets, preCondition, postCondition))
+    @inline def fwdAction = new Action(lhs, rhs, fwdPe,
+      rhsAgentOffsets, preCondition, postCondition)
 
-
-    // -- BiRule construction operators --
-
-    // FIXME Problem with laws: How can we make them language-specific?
-    // TKappa needs only one number but Kappa and KaSpace need two.
-
-    /**
-     * Constructor for bidirectional rules that follow mass-action kinetics.
-     *
-     * @param rate stochastic kinetic rate constant
-     */
-    def :@(fwdRate: => Double, bwdRate: => Double) = new BiRule(this,
-      () => lhs.inMix * fwdRate, () => rhs.inMix * bwdRate)
-
-    /**
-     * Constructor for bidirectional rules that follow an arbitrary rate law.
-     *
-     * @param law kinetic law
-     */
-    def !@(fwdLaw: => Double, bwdLaw: => Double) = new BiRule(this,
-      () => fwdLaw, () => bwdLaw)
+    @inline def bwdAction = new Action(rhs, lhs, bwdPe,
+      lhsAgentOffsets, preCondition, postCondition)
   }
 
 
@@ -645,7 +628,22 @@ trait Actions {
      * @param lhs the left-hand side of the resulting action.
      * @param rhs the right-hand side of the resulting action.
      */
-    def apply(lhs: Pattern, rhs: Pattern): BiAction
+    def apply(lhs: Pattern, rhs: Pattern): BiRuleBuilder
+  }
+
+
+  /** A trait for BiRule builders. */
+  trait BiRuleBuilder {
+
+    def getBiAction: BiAction
+
+    /**
+     * Constructor for rules that follow arbitrary rate laws.
+     *
+     * @param fwdLaw kinetic law of forward rule
+     * @param bwdLaw kinetic law of backward rule
+     */
+    def withRateLaws(fwdLaw: () => Double, bwdLaw: () => Double): BiRule
   }
 }
 

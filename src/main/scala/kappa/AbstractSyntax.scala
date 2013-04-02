@@ -88,14 +88,14 @@ trait AbstractSyntax {
       AbstractAction(this.toAbstractPattern, that.toAbstractPattern)
 
     /** Build an action from this partial abstract pattern and a pattern. */
-    @inline def ->(that: Pattern)(implicit ab: ActionBuilder): Action =
-      ab(this.toPattern, that)
+    @inline def ->(that: Pattern)(implicit ab: ActionBuilder)
+        : RuleBuilder = ab(this.toPattern, that)
 
     /**
      * Build an action from this partial abstract pattern and the
      * empty pattern.
      */
-    @inline def ->()(implicit bab: BiActionBuilder): BiAction =
+    @inline def ->()(implicit bab: BiActionBuilder): BiRuleBuilder =
       bab(this.toPattern, AbstractPattern().toPattern)
 
     /**
@@ -106,14 +106,14 @@ trait AbstractSyntax {
       AbstractBiAction(this.toAbstractPattern, that.toAbstractPattern)
 
     /** Build a bidirectional action from this partial abstract pattern and a pattern. */
-    @inline def <->(that: Pattern)(implicit bab: BiActionBuilder): BiAction =
-      bab(this.toPattern, that)
+    @inline def <->(that: Pattern)(implicit bab: BiActionBuilder)
+        : BiRuleBuilder = bab(this.toPattern, that)
 
     /**
      * Build a bidirectional action from this partial abstract pattern
      * and the empty pattern.
      */
-    @inline def ->()(implicit ab: ActionBuilder): Action =
+    @inline def ->()(implicit ab: ActionBuilder): RuleBuilder =
       ab(this.toPattern, AbstractPattern().toPattern)
 
     /**
@@ -437,7 +437,7 @@ trait AbstractSyntax {
 
     /** Convert this abstract action into an action. */
     @inline def toAction()(implicit ab: ActionBuilder): Action =
-      ab(lhs.toPattern, rhs.toPattern)
+      ab(lhs.toPattern, rhs.toPattern).getAction
   }
 
   /** A class representing abstract actions. */
@@ -490,7 +490,7 @@ trait AbstractSyntax {
 
     /** Convert this abstract action into an action. */
     @inline def toBiAction()(implicit bab: BiActionBuilder): BiAction =
-      bab(lhs.toPattern, rhs.toPattern)
+      bab(lhs.toPattern, rhs.toPattern).getBiAction
   }
 
   /** A class representing tails of rules. */
@@ -623,7 +623,7 @@ trait AbstractSyntax {
    * action.
    */
   implicit def stringPairToKappaAction(lr: (String, String))(
-    implicit ab: ActionBuilder): Action =
+    implicit ab: ActionBuilder): RuleBuilder =
     ab(stringToPattern(lr._1), stringToPattern(lr._2))
 
   /** Convert abstract rules into rules. */

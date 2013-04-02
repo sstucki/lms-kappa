@@ -6,9 +6,30 @@ trait KappaActions extends KappaLikeActions {
   this: KappaContext with SiteGraphs with Patterns with Mixtures
       with Embeddings with PartialEmbeddings with Rules =>
 
+  /** Factory object for building Kappa actions.  */
+  implicit object KappaActionBuilder extends ActionBuilder {
+
+    /**
+     * Construct a Kappa action from a LHS and RHS pattern
+     * using the longest-common-prefix rule.
+     *
+     * @param lhs the left-hand side of this action.
+     * @param rhs the right-hand side of this action.
+     */
+    def apply(lhs: Pattern, rhs: Pattern): RuleBuilder = {
+
+      val (pe, rhsAgentOffsets) =
+        KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
+
+      // Build the action
+      new KappaLikeRuleBuilder(new Action(lhs, rhs, pe,
+        rhsAgentOffsets, None, None))
+    }
+  }
+
   /** Factory object for building bidirectional Kappa actions.  */
   implicit object KappaBiActionBuilder extends BiActionBuilder {
-    def apply(lhs: Pattern, rhs: Pattern): BiAction = {
+    def apply(lhs: Pattern, rhs: Pattern): BiRuleBuilder = {
 
       val (fwdPe, rhsAgentOffsets) =
         KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
@@ -16,28 +37,8 @@ trait KappaActions extends KappaLikeActions {
       val (bwdPe, lhsAgentOffsets) =
         KappaLikeActionBuilder.commonLongestPrefix(rhs, lhs)
 
-      new BiAction(lhs, rhs, fwdPe, bwdPe, lhsAgentOffsets,
-        rhsAgentOffsets, None, None)
-    }
-  }
-
-  /** Factory object for building Kappa actions.  */
-  implicit object KappaActionBuilder extends ActionBuilder {
-
-    /**
-     * Construct a Kappa action from a LHS and RHS pattern using the
-     * longest-common-prefix rule.
-     *
-     * @param lhs the left-hand side of this action.
-     * @param rhs the right-hand side of this action.
-     */
-    def apply(lhs: Pattern, rhs: Pattern): Action = {
-
-      val (pe, rhsAgentOffsets) =
-        KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
-
-      // Build the action
-      new Action(lhs, rhs, pe, rhsAgentOffsets, None, None)
+      new KappaLikeBiRuleBuilder(new BiAction(lhs, rhs, fwdPe, bwdPe,
+        lhsAgentOffsets, rhsAgentOffsets, None, None))
     }
   }
 }

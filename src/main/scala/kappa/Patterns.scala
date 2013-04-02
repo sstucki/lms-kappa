@@ -74,13 +74,14 @@ trait Patterns {
 
     // -- BiAction construction --
 
+    // FIXME Operator precedence problem with :@ and !@
     /** Bidirectional action (BiAction) construction. */
-    def <->(that: Pattern)(implicit bab: BiActionBuilder): BiAction =
-      bab(this, that)
+    def <->(that: Pattern)(implicit bab: BiActionBuilder)
+        : BiRuleBuilder = bab(this, that)
 
     /** Bidirectional action (BiAction) construction. */
-    def <->(that: AbstractPattern)(implicit bab: BiActionBuilder): BiAction =
-      bab(this, that.toPattern)
+    def <->(that: AbstractPattern)(implicit bab: BiActionBuilder)
+        : BiRuleBuilder = bab(this, that.toPattern)
 
 
     // -- Core Seq[Pattern.Agent] API --

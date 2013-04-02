@@ -47,5 +47,68 @@ trait KappaLikeActions extends Actions {
       (pe, rhsAgentOffsets)
     }
   }
+
+  final class KappaLikeRuleBuilder(action: Action)
+      extends RuleBuilder {
+
+    def getAction: Action = action
+
+    /**
+     * Constructor for rules that follow an arbitrary rate law.
+     *
+     * @param law kinetic law
+     */
+    def withRateLaw(law: () => Double): Rule = Rule(action, law)
+
+    /**
+     * Constructor for rules that follow mass-action kinetics.
+     *
+     * @param rate stochastic kinetic rate constant
+     */
+    def :@(rate: => Double) = withRateLaw(() => action.lhs.inMix * rate)
+
+    /**
+     * Constructor for rules that follow an arbitrary rate law.
+     *
+     * @param law kinetic law
+     */
+    def !@(law: => Double) = withRateLaw(() => law)
+  }
+
+
+  final class KappaLikeBiRuleBuilder(biaction: BiAction)
+      extends BiRuleBuilder {
+
+    def getBiAction: BiAction = biaction
+
+    /**
+     * Constructor for rules that follow arbitrary rate laws.
+     *
+     * @param fwdLaw kinetic law of forward rule
+     * @param bwdLaw kinetic law of backward rule
+     */
+    def withRateLaws(fwdLaw: () => Double, bwdLaw: () => Double) =
+      BiRule(biaction, fwdLaw, bwdLaw)
+
+    /**
+     * Constructor for rules that follow mass-action kinetics.
+     *
+     * @param rate stochastic kinetic rate constant
+     * @param fwdLaw kinetic law of forward rule
+     * @param bwdLaw kinetic law of backward rule
+     */
+    def :@(fwdRate: => Double, bwdRate: => Double) = withRateLaws(
+      () => biaction.lhs.inMix * fwdRate,
+      () => biaction.rhs.inMix * bwdRate)
+
+    /**
+     * Constructor for rules that follow an arbitrary rate law.
+     *
+     * @param fwdLaw kinetic law of forward rule
+     * @param bwdLaw kinetic law of backward rule
+     */
+    def !@(fwdLaw: => Double, bwdLaw: => Double) =
+      withRateLaws(() => fwdLaw, () => bwdLaw)
+  }
 }
 

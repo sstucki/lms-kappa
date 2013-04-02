@@ -9,12 +9,12 @@ Installation
 First of all, since LMS-Kappa is written in Scala and Scala runs on the JVM, you will need a [Java Development Kit](http://openjdk.java.net/).
 
 1. [Install sbt](http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html#installing-sbt)
-2. Clone the repo: `git clone https://github.com/sstucki/lms-kappa.git`
 3. [Install virtualization-lms-core](https://github.com/TiarkRompf/virtualization-lms-core)
 
         $ git clone https://github.com/TiarkRompf/virtualization-lms-core
         $ sbt compile publish-local
 
+2. Clone the repo: `git clone https://github.com/sstucki/lms-kappa.git`
 4. Go into the root directory and compile the source code using sbt: `cd lms-kappa && sbt compile`
 
 Usage
