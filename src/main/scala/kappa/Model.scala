@@ -258,19 +258,6 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
         println("" + events + "\t" + time + "\t" +
           (observables map (_.inMix)).mkString("\t"))
 
-        // Debug
-        // val agents = new Array[Mixture.Agent](mix.length)
-        // println("Embeddings:")
-        // for (r <- rules) {
-        //   println("  " + r)
-        //   for (c <- r.action.lhs.components) {
-        //     println("    " + c + " -> " + c.embeddings)
-        //     for (emb <- c.embeddings)
-        //       r.action.checkConsistency(
-        //         new Embedding[Mixture.Agent](Array(emb), r.action.lhs), agents)
-        //   }
-        // }
-
         consecutiveClashes = 0
 
       } else {

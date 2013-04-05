@@ -1,0 +1,58 @@
+package kappa
+
+/** A class representing Kappa models. */
+class TKappaModel extends Model
+    with KappaContext
+    with KappaParsers
+    with KappaAbstractSyntax
+    with TKappaActions {
+
+  var temperature: Double = 298.15 // room temperature
+
+  // We actually only store the (only) connected component of
+  // the energy pattern.  TODO Should I use a Map instead?
+  var energyPatterns: Array[(Pattern.Component, Double)] = Array()
+
+
+  /** Compute the current energy of the system. */
+  def mixtureEnergy: Double =
+    (for ((p, c) <- energyPatterns) yield (c * p.inMix)).sum
+
+  /** Declare an energy pattern. */
+  def energy(energyCost: Double, pattern: Pattern) {
+
+    if (pattern.components.length > 1)
+      throw new IllegalArgumentException("energy pattern is disconnected")
+
+    val cc = pattern.components(0)
+    val epIndex = energyPatterns indexWhere {
+      case (p, c) => p isEquivTo cc }
+
+    if (epIndex < 0) { // no iso found
+      cc.register
+      energyPatterns = energyPatterns :+ (cc, energyCost)
+    } else {
+      val (p, c) = energyPatterns(epIndex)
+      println("Found isomorphic energy pattern: " + p)
+      println("  Updating its energy value from " + c + " to " +
+        (c + energyCost))
+      energyPatterns(epIndex) = (p, c + energyCost)
+    }
+  }
+
+  /** Declare an energy pattern. */
+  def energy(energyCost: Double, pattern: AbstractPattern) {
+    energy(energyCost, pattern.toPattern)
+  }
+
+  /** Declare an energy pattern. */
+  def energy(energyCost: Double, pattern: PartialAbstractPattern*) {
+    energy(energyCost, partialAbstractPatternsToPattern(pattern))
+  }
+
+  override def initialise {
+    super.initialise
+    Thermodynamics.lastEnergy = mixtureEnergy
+  }
+}
+
