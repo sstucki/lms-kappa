@@ -4,12 +4,15 @@ import scala.language.implicitConversions
 
 import scala.collection.mutable
 
+
 trait KaSpaceActions extends KappaLikeActions {
   this: KaSpaceContext with SiteGraphs with Patterns with Mixtures
       with Embeddings with PartialEmbeddings with Rules =>
 
   /** Factory object for building KaSpace actions.  */
   implicit object KaSpaceActionBuilder extends ActionBuilder {
+
+    type B = KappaLikeRuleBuilder
 
     /**
      * Construct a KaSpace action from a LHS and RHS pattern using the
@@ -18,7 +21,7 @@ trait KaSpaceActions extends KappaLikeActions {
      * @param lhs the left-hand side of this action.
      * @param rhs the right-hand side of this action.
      */
-    def apply(lhs: Pattern, rhs: Pattern): RuleBuilder = {
+    def apply(lhs: Pattern, rhs: Pattern): B = {
 
       val (pe, rhsAgentOffsets) =
         KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
@@ -32,7 +35,10 @@ trait KaSpaceActions extends KappaLikeActions {
 
   /** Factory object for building bidirectional KaSpace actions.  */
   implicit object KaSpaceBiActionBuilder extends BiActionBuilder {
-    def apply(lhs: Pattern, rhs: Pattern): BiRuleBuilder = {
+
+    type B = KappaLikeBiRuleBuilder
+
+    def apply(lhs: Pattern, rhs: Pattern): B = {
 
       val (fwdPe, rhsAgentOffsets) =
         KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)

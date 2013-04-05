@@ -18,7 +18,7 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
       with ContactGraphs
       with Patterns
       with Mixtures
-      with KappaActions
+      with Actions
       with Rules
       with KappaParsers =>
 

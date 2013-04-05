@@ -145,7 +145,7 @@ trait Actions {
         } else {
           // Roll back to the state of the mixture prior to the action
           // application.
-          //println("# post-condition = false.")
+          println("# post-condition = false.")
           mix.rollback
           false
         }
@@ -184,11 +184,13 @@ trait Actions {
       for (ce <- embedding) {
 
         // Check embedding consistency
-        val consistent = ce.indices forall { k =>
+        // val consistent = ce.indices forall { k =>
+        for (k <- ce.indices) {
 
           // Add agent
           val v = ce(k)
-          agents(i) = v; i += 1
+          agents(i) = v
+          i += 1
 
           // Check for clashes
           if (v hasMark Visited) {
@@ -197,20 +199,24 @@ trait Actions {
             mix.mark(v, Visited)
           }
 
-          // Check agent consistency
-          val u = ce.component(k)
-          (u matches v) && (u.indices forall {
-            j => (u.neighbour(j), v.neighbour(j)) match {
-              case (None, _) => true
-              case (Some(w1), Some(w2)) => ce(w1.index) == w2
-              case _ => false
-            }
-          })
+          // TODO: This should not be neccesary anymore since
+          // pruneLifts does it.
+
+          // Check agent consistency, ie check if the domain and
+          // image of the embedding have the same neighbours
+          // val u = ce.component(k)
+          // (u matches v) && (u.indices forall {
+          //   j => (u.neighbour(j), v.neighbour(j)) match {
+          //     case (None, _) => true
+          //     case (Some(w1), Some(w2)) => ce(w1.index) == w2
+          //     case _ => false
+          //   }
+          // })
         }
-        if (!consistent) {
-          ce.component.removeEmbedding(ce)
-          garbage += 1
-        }
+        // if (!consistent) {
+        //   ce.component.removeEmbedding(ce)
+        //   garbage += 1
+        // }
       }
       (clash, garbage)
     }
@@ -437,9 +443,8 @@ trait Actions {
         j1: SiteIndex, u2: Pattern.Agent) {
         val o1 = lhsAgentOffset(u1)
         val o2 = lhsAgentOffset(u2)
-        if (o2 <= o1) {
+        if (o2 <= o1)
           atoms += LinkDeletion(o1, j1)
-        }
       }
 
       @inline def linkAddition(
@@ -494,47 +499,58 @@ trait Actions {
         atoms += SiteStateChange(lhsAgentOffset(lu), j, s)
       }
 
+      val linkAtoms = new mutable.ArrayBuffer[Atom]()
+
       // Find all the link changes (in the common context)
       for ((lu, ru) <- pe; j <- lu.indices) {
         (lu.links(j), ru.links(j)) match {
           case (Stub | Wildcard(_, _, _) | Linked(_, _, _), Undefined) =>
             throw new IllegalArgumentException(
               "attempt to undefine site " + j + " of agent " + lu +
-                " in rule: " + lhs + " -> " + rhs)
-          case (Undefined | Wildcard(_, _, _), Stub) => {
-            atoms += LinkDeletion(lhsAgentOffset(lu), j)
-          }
+              " in rule: " + lhs + " -> " + rhs)
+          case (Undefined | Wildcard(_, _, _), Stub) =>
+            linkAtoms += LinkDeletion(lhsAgentOffset(lu), j)
           case (Linked(lu2, _, _), Stub) =>
-            linkDeletion(atoms, lu, j, lu2)
+            linkDeletion(linkAtoms, lu, j, lu2)
           case (Undefined | Stub | Linked(_, _, _), Wildcard(_, _, _)) =>
             throw new IllegalArgumentException(
               "attempt to add wildcard link to site " + j + " of agent " +
-                lu + " in rule: " + lhs + " -> " + rhs)
+              lu + " in rule: " + lhs + " -> " + rhs)
           case (Wildcard(la, ls2, ll), Wildcard(ra, rs2, rl)) =>
             // FIXME: Should we allow link state changes in wildcards?
+            // RHZ: What is this check for?
             if (!(la matches ra) && (ls2 matches rs2) && (ll matches rl))
               throw new IllegalArgumentException(
                 "attempt to modify wildcard link at site " + j +
-                  " of agent " + lu + " in rule: " + lhs + " -> " + rhs)
+                " of agent " + lu + " in rule: " + lhs + " -> " + rhs)
           case (Undefined | Wildcard(_, _, _), Linked(ru2, rj2, rl)) => {
-            atoms += LinkDeletion(lhsAgentOffset(lu), j)
+            linkAtoms += LinkDeletion(lhsAgentOffset(lu), j)
             checkLinkComplete(rl)
-            linkAddition(atoms, ru, j, rl, ru2, rj2)
+            linkAddition(linkAtoms, ru, j, rl, ru2, rj2)
           }
           case (Stub, Linked(ru2, rj2, rl)) => {
             checkLinkComplete(rl)
-            linkAddition(atoms, ru, j, rl, ru2, rj2)
+            linkAddition(linkAtoms, ru, j, rl, ru2, rj2)
           }
-          case (Linked(lu2, lj2, ll), Linked(ru2, rj2, rl)) => {
+          case (Linked(lu2, lj2, ll), Linked(ru2, rj2, rl)) =>
+            // Is there any change in the link?
+            // Possibilities: the neighboring site is
+            // different or there's a link state change
             if (!((lhsAgentOffset(lu2) == rhsAgentOffset(ru2)) &&
-              (lj2 == rj2) && findStateChange(ll, rl).isEmpty)) {
-              linkDeletion(atoms, lu, j, lu2)
-              linkAddition(atoms, ru, j, rl, ru2, rj2)
+                  (lj2 == rj2) && findStateChange(ll, rl).isEmpty)) {
+              linkDeletion(linkAtoms, lu, j, lu2)
+              linkAddition(linkAtoms, ru, j, rl, ru2, rj2)
             }
-          }
           case _ => {}
         }
       }
+
+      def atomOrd(a: Atom) = a match {
+        case _:LinkAddition => 1
+        case _:LinkDeletion => 0
+      }
+
+      atoms ++= linkAtoms.sortBy(atomOrd)
 
       // Find all remaining link additions (between newly added agents)
       for {
@@ -573,13 +589,16 @@ trait Actions {
   /** Base class for factory objects used to build actions. */
   abstract class ActionBuilder {
 
+    // FIXME Find a better name for B
+    type B <: RuleBuilder
+
     /**
      * Construct an action from a LHS and RHS pattern.
      *
      * @param lhs the left-hand side of the resulting action.
      * @param rhs the right-hand side of the resulting action.
      */
-    def apply(lhs: Pattern, rhs: Pattern): RuleBuilder
+    def apply(lhs: Pattern, rhs: Pattern): B
   }
 
 
@@ -622,13 +641,16 @@ trait Actions {
   /** Base class for factory objects used to build actions. */
   abstract class BiActionBuilder {
 
+    // FIXME Find a better name for B
+    type B <: BiRuleBuilder
+
     /**
      * Construct an action from a LHS and RHS pattern.
      *
      * @param lhs the left-hand side of the resulting action.
      * @param rhs the right-hand side of the resulting action.
      */
-    def apply(lhs: Pattern, rhs: Pattern): BiRuleBuilder
+    def apply(lhs: Pattern, rhs: Pattern): B
   }
 
 

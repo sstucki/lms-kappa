@@ -171,16 +171,20 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
   object Deadlock extends SimulatorException("no more events")
   object EmptyRuleSet extends SimulatorException("no rules")
 
-  def run() {
+  // Create a new random number generator
+  val rand = new util.Random
+
+  // To handle the case when the apparent total activity is > 0 but
+  // the real total activity is 0 (due to the square approximation)
+  var maxConsecutiveClashes: Int = 100
+
+  def initialise {
 
     if (rules.length == 0) {
       throw EmptyRuleSet
     }
 
     Mixture.initialiseLinkIds
-
-    // Create a new random number generator
-    val rand = new util.Random
 
     // (Re-)compute all component embeddings.  This is necessary as
     // some components might have been registered before the mixture
@@ -191,14 +195,40 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
     for (c <- patternComponents) {
       c.initEmbeddings
     }
+  }
+
+  def run {
+
+    initialise
+
+    // Print model info
+    println("# == Rules:")
+    for (r <- rules) {
+      println("#    " + r)
+      println("#      " +  r.action.atoms)
+    }
+    println
+    println("# == Observables:")
+    for ((n, o) <- obsNames zip observables)
+      println("#    " + n + ": " + o)
+    println
 
     println("# === Start of simulation ===")
+    println("Event\tTime\t" + obsNames.mkString("\"", "\"\t\"", "\""))
 
     println("" + events + "\t" + time + "\t" +
       (observables map (_.inMix)).mkString("\t"))
 
+    var consecutiveClashes: Int = 0
+
     while ((events < (maxEvents getOrElse (events + 1))) &&
-      (time < (maxTime getOrElse Double.PositiveInfinity))) {
+           (time < (maxTime getOrElse Double.PositiveInfinity))) {
+
+      // TODO Perhaps we should even distinguish between "hard" and
+      // "soft" deadlock... or perhaps we should abandon the square
+      // approximation here and only return throw hard deadlocks
+      if (consecutiveClashes >= maxConsecutiveClashes)
+        throw Deadlock
 
       // Compute all rule weights.
       val weights = for (r <- rules) yield r.law()
@@ -221,13 +251,35 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
 
       // Apply the rule/event
       if (r.action(e, mix)) {
+
         events += 1 // Productive event
 
         // Print the event number, time and the observable counts.
         println("" + events + "\t" + time + "\t" +
           (observables map (_.inMix)).mkString("\t"))
+
+        // Debug
+        // val agents = new Array[Mixture.Agent](mix.length)
+        // println("Embeddings:")
+        // for (r <- rules) {
+        //   println("  " + r)
+        //   for (c <- r.action.lhs.components) {
+        //     println("    " + c + " -> " + c.embeddings)
+        //     for (emb <- c.embeddings)
+        //       r.action.checkConsistency(
+        //         new Embedding[Mixture.Agent](Array(emb), r.action.lhs), agents)
+        //   }
+        // }
+
+        consecutiveClashes = 0
+
       } else {
         nullEvents += 1 // Null event
+
+        // FIXME We are not distinguishing if the null event is
+        // caused by a clash or a false pre- or post-condition,
+        // that's why I set the value of maxConsecutiveClashes so high
+        consecutiveClashes += 1
       }
 
       // Apply perturbations
@@ -248,13 +300,13 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
     println("# == K THX BYE!")
   }
 
-  def runUntilDeadlock() {
-    try {
-      run()
-    } catch {
-      case Deadlock => ()
-    }
-  }
+  // def runUntilDeadlock() {
+  //   try {
+  //     run
+  //   } catch {
+  //     case Deadlock => ()
+  //   }
+  // }
 
   /*
   def runNormal(rand: Random) {

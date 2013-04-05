@@ -89,13 +89,13 @@ trait AbstractSyntax {
 
     /** Build an action from this partial abstract pattern and a pattern. */
     @inline def ->(that: Pattern)(implicit ab: ActionBuilder)
-        : RuleBuilder = ab(this.toPattern, that)
+        : ab.B = ab(this.toPattern, that)
 
     /**
      * Build an action from this partial abstract pattern and the
      * empty pattern.
      */
-    @inline def ->()(implicit bab: BiActionBuilder): BiRuleBuilder =
+    @inline def ->()(implicit bab: BiActionBuilder): bab.B =
       bab(this.toPattern, AbstractPattern().toPattern)
 
     /**
@@ -107,13 +107,13 @@ trait AbstractSyntax {
 
     /** Build a bidirectional action from this partial abstract pattern and a pattern. */
     @inline def <->(that: Pattern)(implicit bab: BiActionBuilder)
-        : BiRuleBuilder = bab(this.toPattern, that)
+        : bab.B = bab(this.toPattern, that)
 
     /**
      * Build a bidirectional action from this partial abstract pattern
      * and the empty pattern.
      */
-    @inline def ->()(implicit ab: ActionBuilder): RuleBuilder =
+    @inline def ->()(implicit ab: ActionBuilder): ab.B =
       ab(this.toPattern, AbstractPattern().toPattern)
 
     /**
@@ -618,12 +618,13 @@ trait AbstractSyntax {
   implicit def abstractActionToAction(a: AbstractAction)(
     implicit ab: ActionBuilder): Action = a.toAction
 
+  // TODO Implicits defs are too fragile
   /**
    * Convert a pair `(lhs, rhs)` of site graph expressions into an
    * action.
    */
-  implicit def stringPairToKappaAction(lr: (String, String))(
-    implicit ab: ActionBuilder): RuleBuilder =
+  implicit def stringPairToAction(lr: (String, String))(
+    implicit ab: ActionBuilder): ab.B =
     ab(stringToPattern(lr._1), stringToPattern(lr._2))
 
   /** Convert abstract rules into rules. */

@@ -9,6 +9,8 @@ trait KappaActions extends KappaLikeActions {
   /** Factory object for building Kappa actions.  */
   implicit object KappaActionBuilder extends ActionBuilder {
 
+    type B = KappaLikeRuleBuilder
+
     /**
      * Construct a Kappa action from a LHS and RHS pattern
      * using the longest-common-prefix rule.
@@ -16,7 +18,7 @@ trait KappaActions extends KappaLikeActions {
      * @param lhs the left-hand side of this action.
      * @param rhs the right-hand side of this action.
      */
-    def apply(lhs: Pattern, rhs: Pattern): RuleBuilder = {
+    def apply(lhs: Pattern, rhs: Pattern): B = {
 
       val (pe, rhsAgentOffsets) =
         KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
@@ -29,7 +31,10 @@ trait KappaActions extends KappaLikeActions {
 
   /** Factory object for building bidirectional Kappa actions.  */
   implicit object KappaBiActionBuilder extends BiActionBuilder {
-    def apply(lhs: Pattern, rhs: Pattern): BiRuleBuilder = {
+
+    type B = KappaLikeBiRuleBuilder
+
+    def apply(lhs: Pattern, rhs: Pattern): B = {
 
       val (fwdPe, rhsAgentOffsets) =
         KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)

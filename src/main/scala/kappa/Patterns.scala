@@ -77,11 +77,20 @@ trait Patterns {
     // FIXME Operator precedence problem with :@ and !@
     /** Bidirectional action (BiAction) construction. */
     def <->(that: Pattern)(implicit bab: BiActionBuilder)
-        : BiRuleBuilder = bab(this, that)
+        : bab.B = bab(this, that)
 
     /** Bidirectional action (BiAction) construction. */
     def <->(that: AbstractPattern)(implicit bab: BiActionBuilder)
-        : BiRuleBuilder = bab(this, that.toPattern)
+        : bab.B = bab(this, that.toPattern)
+
+    // TODO Implicits defs are too fragile (see AbstractSyntax)
+    /** Action construction. */
+    def ->(that: Pattern)(implicit ab: ActionBuilder)
+        : ab.B = ab(this, that)
+
+    /** Action construction. */
+    def ->(that: AbstractPattern)(implicit ab: ActionBuilder)
+        : ab.B = ab(this, that.toPattern)
 
 
     // -- Core Seq[Pattern.Agent] API --
@@ -385,6 +394,8 @@ trait Patterns {
 
             // Initialize the embedding set
             initEmbeddings
+            // TODO: Should we initialise here? We are anyway
+            // initialising in Model.initialise
 
             println("# Registered component # " + _modelIndex + ": CC " +
               _index + " of pattern " + _pattern)

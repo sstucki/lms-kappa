@@ -694,7 +694,15 @@ trait Mixtures {
        * consistency and remove those that are no longer valid.
        */
       def pruneLifts {
-        val invalidLifts = liftMap filterNot (_._1 matches this)
+        val invalidLifts = liftMap filterNot { case (u, ce) =>
+            (u matches this) && (u.indices forall {
+            j => (u.neighbour(j), this.neighbour(j)) match {
+              case (None, _) => true
+              case (Some(w1), Some(w2)) => ce(w1.index) == w2
+              case _ => false
+            }
+          })
+        }
         for (ce <- invalidLifts.values) {
           ce.component.removeEmbedding(ce)
         }
