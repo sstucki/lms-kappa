@@ -45,7 +45,7 @@ trait Actions {
     val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
     val preCondition:  Option[(Action, Action.Agents) => Boolean] = None,
     val postCondition: Option[(Action, Action.Agents) => Boolean] = None)
-      extends Function2[Embedding[Mixture.Agent], Mixture, Boolean]
+      extends Function2[Embedding[Mixture.Agent], Mixture, (Boolean, Boolean)]
   {
     import Action._
 
@@ -102,7 +102,7 @@ trait Actions {
      */
     def apply(
       embedding: Embedding[Mixture.Agent],
-      mixture: Mixture = mix): Boolean = {
+      mixture: Mixture = mix): (Boolean, Boolean) = {
 
       // Check consistency and populate the agents array.
       val additions = rhs.length - pe.length
@@ -115,10 +115,10 @@ trait Actions {
           " garbage component embeddings.")
       } else if (clash) {
         println("# clash!")
-        false
+        (false, true)
       } else if (!(preCondition map { f => f(this, agents) } getOrElse true)) {
         println("# pre-condition = false.")
-        false
+        (false, false)
       } else {
 
         // If the post-condition is defined, checkpoint the mixture so
@@ -140,14 +140,17 @@ trait Actions {
           // Discard pre-application checkpoint and perform
           // negative/positive updates.
           if (!postCondition.isEmpty) mix.discardCheckpoint
+
+          // FIXME: performUpdates should be executed before the post-condition
           performUpdates(agents, mas)
-          true
+
+          (true, false)
         } else {
           // Roll back to the state of the mixture prior to the action
           // application.
           println("# post-condition = false.")
           mix.rollback
-          false
+          (false, false)
         }
       }
     }

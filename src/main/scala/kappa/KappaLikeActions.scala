@@ -48,6 +48,18 @@ trait KappaLikeActions extends Actions {
     }
   }
 
+  // NOTE: This prevents the multiplication of lhs.inMix by
+  // PositiveInfinity to produce NaN in most cases. However, if rate
+  // evaluates to PositiveInfinity when lhs.inMix is 0 but not at the
+  // onset of the simulation we will have the problem again.
+  @inline final protected
+  def mkRateLawFromRate(rate: => Double, lhs: Pattern) =
+    if (rate == Double.PositiveInfinity) {
+      () => if (lhs.inMix == 0) 0 else rate
+    } else {
+      () => lhs.inMix * rate
+    }
+
   final class KappaLikeRuleBuilder(action: Action)
       extends RuleBuilder {
 
@@ -65,7 +77,8 @@ trait KappaLikeActions extends Actions {
      *
      * @param rate stochastic kinetic rate constant
      */
-    def :@(rate: => Double) = withRateLaw(() => action.lhs.inMix * rate)
+    def :@(rate: => Double) =
+      withRateLaw(mkRateLawFromRate(rate, action.lhs))
 
     /**
      * Constructor for rules that follow an arbitrary rate law.
@@ -98,8 +111,8 @@ trait KappaLikeActions extends Actions {
      * @param bwdLaw kinetic law of backward rule
      */
     def :@(fwdRate: => Double, bwdRate: => Double) = withRateLaws(
-      () => biaction.lhs.inMix * fwdRate,
-      () => biaction.rhs.inMix * bwdRate)
+      mkRateLawFromRate(fwdRate, biaction.lhs),
+      mkRateLawFromRate(bwdRate, biaction.rhs))
 
     /**
      * Constructor for rules that follow an arbitrary rate law.

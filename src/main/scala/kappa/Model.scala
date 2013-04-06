@@ -135,7 +135,7 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
    */
   def withRule(
     rh: PartialAbstractRule, rt: PartialAbstractRule*)(
-    implicit ab: ActionBuilder): Rule = {
+    implicit ab: ActionBuilder): RuleBox = {
     val rs = partialAbstractRulesToRules(rh :: rt.toList)
     if (rs.length != 1) {
       throw new IllegalArgumentException(
@@ -153,7 +153,7 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
    */
   def withRules(
     rh: PartialAbstractRule, rt: PartialAbstractRule*)(
-    implicit ab: ActionBuilder): Seq[Rule] = {
+    implicit ab: ActionBuilder): Seq[RuleBox] = {
     val rs = partialAbstractRulesToRules(rh :: rt.toList)
     rs map registerRule
     rs
@@ -176,7 +176,7 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
 
   // To handle the case when the apparent total activity is > 0 but
   // the real total activity is 0 (due to the square approximation)
-  var maxConsecutiveClashes: Int = 100
+  var maxConsecutiveClashes: Int = 20
 
   def initialise {
 
@@ -250,7 +250,9 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
       val e = r.action.lhs.randomEmbedding(rand)
 
       // Apply the rule/event
-      if (r.action(e, mix)) {
+      // FIXME: We should handle this more elegantly
+      val (productive, clash) = r.action(e, mix)
+      if (productive) {
 
         events += 1 // Productive event
 
@@ -263,10 +265,8 @@ trait Model extends LanguageContext with ContactGraphs with SiteGraphs
       } else {
         nullEvents += 1 // Null event
 
-        // FIXME We are not distinguishing if the null event is
-        // caused by a clash or a false pre- or post-condition,
-        // that's why I set the value of maxConsecutiveClashes so high
-        consecutiveClashes += 1
+        if (clash)
+          consecutiveClashes += 1
       }
 
       // Apply perturbations

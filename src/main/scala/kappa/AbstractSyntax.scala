@@ -60,6 +60,10 @@ trait AbstractSyntax {
     @inline def ++(that: AbstractAction): AbstractAction =
       AbstractAction(this ++ that.lhs, that.rhs)
 
+    /** Append an abstract action to this partial abstract pattern.  */
+    @inline def ++(that: AbstractBiAction): AbstractBiAction =
+      AbstractBiAction(this ++ that.lhs, that.rhs)
+
     /** Append an abstract rule tail to this partial abstract pattern.  */
     @inline def ++(that: AbstractRuleTail): AbstractRuleTail =
       that.prependAbstractPattern(this.toAbstractPattern)
@@ -638,7 +642,7 @@ trait AbstractSyntax {
    * rules.
    */
   def partialAbstractRulesToRules(prs: Seq[PartialAbstractRule])(
-    implicit ab: ActionBuilder): Seq[Rule] = {
+    implicit ab: ActionBuilder): Seq[RuleBox] = {
 
     def failIncomplete(pr: PartialAbstractRule) {
       val msg = pr match {
@@ -652,7 +656,7 @@ trait AbstractSyntax {
     }
 
     // Iterate over all the partial rules and try to build total rules.
-    val rs = new mutable.ArrayBuffer[Rule]()
+    val rs = new mutable.ArrayBuffer[RuleBox]()
     var pr: Option[PartialAbstractRule] = None
     prs foreach {
       case p: PartialAbstractPattern => pr match {
@@ -668,6 +672,11 @@ trait AbstractSyntax {
         case Some(p:  PartialAbstractPattern) => pr = Some(p ++ a)
         case _ => failIncomplete(pr.get)
       }
+      case a: AbstractBiAction => pr match {
+        case None => pr = Some(a)
+        case Some(p:  PartialAbstractPattern) => pr = Some(p ++ a)
+        case _ => failIncomplete(pr.get)
+      }
       case t: AbstractRuleTail       => pr match {
         case None                    => pr = Some(t)
         case Some(a: AbstractAction) => {
@@ -677,6 +686,10 @@ trait AbstractSyntax {
         case _ => failIncomplete(pr.get)
       }
       case r: AbstractRule => {
+        if (!pr.isEmpty) failIncomplete(pr.get)
+        else rs += r.toRule
+      }
+      case r: AbstractBiRule => {
         if (!pr.isEmpty) failIncomplete(pr.get)
         else rs += r.toRule
       }

@@ -37,7 +37,7 @@ trait Patterns {
      * Return the (overestimated) number of matchings of this pattern
      * in the target mixture.
      */
-    def inMix: Double = (components map (_.inMix)).product
+    def inMix: Int = (components map (_.inMix)).product
 
     /**
      * Pick one of the embeddings candidates from this pattern to the
