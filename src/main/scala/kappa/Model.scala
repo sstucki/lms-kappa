@@ -6,9 +6,18 @@ import scala.util.Random
 
 
 /** A class representing generic models. */
-trait Model extends LanguageContext with ContactGraphs with SiteGraphs
-    with Patterns with Mixtures with Embeddings with PartialEmbeddings
-    with Actions with Rules with Perturbations with AbstractSyntax
+trait Model extends LanguageContext
+    with ContactGraphs
+    with SiteGraphs
+    with Patterns
+    with Mixtures
+    with RollbackMachines
+    with Embeddings
+    with PartialEmbeddings
+    with Actions
+    with Rules
+    with Perturbations
+    with AbstractSyntax
     with Parsers {
 
   var time        : Double               = 0

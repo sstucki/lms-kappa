@@ -320,6 +320,7 @@ trait SiteGraphs {
      *        this link.
      * @param state the state of the link from source to target.
      */
+    // RHZ: Why is Linked here and Link in the companion object?
     final case class Linked(
       agent: Agent, site: SiteIndex, state: LinkState) extends Link
   }

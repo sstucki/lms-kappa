@@ -1,11 +1,17 @@
 package kappa
 
-import scala.collection.mutable
-
 import scala.language.implicitConversions
 
+import scala.collection.mutable
+import scala.collection.LinearSeq
+
+
 trait Mixtures {
-  this: LanguageContext with SiteGraphs with Patterns with Embeddings =>
+  this: LanguageContext
+      with SiteGraphs
+      with Patterns
+      with Embeddings
+      with RollbackMachines =>
 
   import SiteGraph.{Link, Stub}
 
@@ -79,253 +85,100 @@ trait Mixtures {
    *
    * @constructor create an empty Mixture.
    */
-  final class Mixture extends Seq[Mixture.Agent] with Marks {
-    // Finally, there are two more advantages of this design over
-    // using a standard class from the collections library:
-    //
-    //  1) This class is close to the "heap" data structures used in
-    //     KaSim.  A KaSim "heap" is what is otherwise often called a
-    //     "memory pool" data structure (I think the term "heap"
-    //     refers to the concept as used in runtime environments
-    //     rather than the "heap" data-structure from algorithmics).
-    //     The point of a memory pool is to manage memory
-    //     explicitly. In the KaSim case it's used to avoid garbage
-    //     collection of agents: instead of being collected by the GC,
-    //     the agent is marked "free" so that the memory allocated for
-    //     it can be reused later.  See
-    //     [[http://en.wikipedia.org/wiki/Memory_pool]] for more
-    //     information.
-    //
-    //     If we decide to use a memory pool later on, we might
-    //     consider pre-allocating agents in an array, and use indices
-    //     instead of pointers for next, prev, etc.  See
-    //     [[http://en.wikipedia.org/wiki/Linked_list#Linked_lists_using_arrays_of_nodes]]
-    //     for the benefits of this approach.
-    //
-    //  2) This class could easily be ported to e.g. C/C++ in case we
-    //     want to target other target languages in an LMS-based
-    //     implementation.
+  // Finally, there are two more advantages of this design over
+  // using a standard class from the collections library:
+  //
+  //  1) This class is close to the "heap" data structures used in
+  //     KaSim.  A KaSim "heap" is what is otherwise often called a
+  //     "memory pool" data structure (I think the term "heap"
+  //     refers to the concept as used in runtime environments
+  //     rather than the "heap" data-structure from algorithmics).
+  //     The point of a memory pool is to manage memory
+  //     explicitly. In the KaSim case it's used to avoid garbage
+  //     collection of agents: instead of being collected by the GC,
+  //     the agent is marked "free" so that the memory allocated for
+  //     it can be reused later.  See
+  //     [[http://en.wikipedia.org/wiki/Memory_pool]] for more
+  //     information.
+  //
+  //     If we decide to use a memory pool later on, we might
+  //     consider pre-allocating agents in an array, and use indices
+  //     instead of pointers for next, prev, etc.  See
+  //     [[http://en.wikipedia.org/wiki/Linked_list#Linked_lists_using_arrays_of_nodes]]
+  //     for the benefits of this approach.
+  //
+  //  2) This class could easily be ported to e.g. C/C++ in case we
+  //     want to target other target languages in an LMS-based
+  //     implementation.
+  final class Mixture
+      extends LinearSeq[Mixture.Agent]
+         with DoublyLinkedList[Mixture.Agent, Mixture]
+         with RollbackMachine
+         with Marks {
 
     import Mixture.{Agent, Linked}
 
     /** The [[Markable]] instances in this mixture are [[Agent]]s. */
     type T = Mixture.Agent
 
-    /** First agent in the doubly-linked list representing the mixture. */
-    private var _head: Agent = null
 
-    /** First agent in the doubly-linked list representing the mixture. */
-    override def head: Agent =
-      if (_head == null) throw new NoSuchElementException(
-        "attempt to reference head element in empty mixture")
-      else _head
+    override def newBuilder = new MixtureBuilder
 
-    /** The number of agents in this mixture. */
-    private var _length: Int = 0
+    class MixtureBuilder extends mutable.Builder[Agent, Mixture] {
 
-    private class MixtureIterator extends Iterator[Agent] {
-      private var nextAgent: Agent = _head
+      val m = Mixture()
 
-      def next = {
-        val n = nextAgent
-        if (n != null) nextAgent = n.next
-        n
+      def +=(agent: Agent): this.type = {
+        agent._mixture = m
+        m += agent
+        this
       }
 
-      def hasNext = nextAgent != null
-    }
+      def result: Mixture = {
 
-    /**
-     * A class representing a single mixture checkpoint.
-     *
-     * FIXME: Should we use [[Mixture]] for this?
-     */
-    final class Checkpoint(
-      val head: Agent, val length: Int,
-      var agents: List[Agent])
-
-    /** The stack of mixture checkpoints. */
-    private var _checkpoints: List[Checkpoint] = Nil
-
-    /**
-     * Make a checkpoint of this mixture.
-     *
-     * After a call to this method, every update to an agent of this
-     * mixture through the any of the [[Mixture]]'s methods will cause
-     * the corresponding agent to be backed up.  The mixture may be
-     * reset to its state prior to the call to this method by calling
-     * [[Mixture.rollback]].
-     *
-     * Mixture checkpoints are stored on a stack, i.e. in FIFO order.
-     * Hence one may chose to call this method multiple times before
-     * calling [[Mixture.rollback]].  Each such call will result in a
-     * new checkpoint.
-     *
-     * NOTE: this method will not copy the agent, site and link state
-     * types (represented by [[LanguageContext#AgentState]],
-     * [[LanguageContext#SiteState]] and
-     * [[LanguageContext#LinkState]]) when creating a checkpoint.
-     * Instead, the checkpoint will just contain references to such
-     * classes.  If these classes contain mutable state, updates to
-     * that state will be reflected in the checkpoint and can not be
-     * reverted through a call to [[Mixture.rollback]].
-     *
-     * NOTE 2: The lift maps of an agents are not checkpointed.
-     *
-     * @return this mixture.
-     */
-    def checkpoint: Mixture = {
-      _checkpoints = (new Checkpoint(_head, _length, Nil)) :: _checkpoints
-      this
-    }
-
-    /**
-     * Restore the state of this mixture to the last checkpoint.
-     *
-     * See [[Mixture.checkpoint]] for details.
-     *
-     * @return this mixture.
-     */
-    def rollback: Mixture = {
-      if (_checkpoints.isEmpty) throw new IllegalStateException(
-        "attempt to roll back mixture with empty checkpoint stack")
-
-      // Roll back all the agents in the checkpoint.
-      val cp = _checkpoints.head
-      for (v <- cp.agents) {
-        val u = v.copy
-
-        // Restore the state of `u` to that of `v`.
-        u.state = v.state
-        for (i <- v.indices) {
-          u._siteStates(i) = v._siteStates(i)
-          u._links(i) = v._links(i)
-        }
-        u.prev = v.prev
-        u.next = v.next
-        if (u.prev != null) u.prev.next = u
-        if (u.next != null) u.next.prev = u
-        //mark(u, Updated)
-      }
-
-      // Restore the head and length fields of the mixture.
-      _head = cp.head
-      _length = cp.length
-
-      // Remove the checkpoint from the top of the stack.
-      _checkpoints = _checkpoints.tail
-      this
-    }
-
-    /**
-     * Discard the latest checkpoint of this mixture.
-     *
-     * See [[Mixture.checkpoint]] for details.
-     *
-     * @return this mixture with its last checkpoint discarded.
-     */
-    def discardCheckpoint: Mixture = {
-      _checkpoints = _checkpoints match {
-        case _ :: cps => cps
-        case Nil => throw new IllegalStateException(
-          "attempt to discard checkpoint of mixture with empty " +
-            "checkpoint stack")
-      }
-      this
-    }
-
-    /**
-     * Make a copy of this agent and add it to the current checkpoint.
-     *
-     * If the checkpoint stack is empty or if the agent is marked, no
-     * copy will be created.  If a copy is created, its `copy` field
-     * will point to the original agent `u`.
-     *
-     * @param u the agent to add to the current checkpoint.
-     */
-    @inline private def checkpointAgent(u: Agent) {
-      if (!_checkpoints.isEmpty && !(u hasMark Updated)) {
-        val v = u.checkpointCopy
-        val cp = _checkpoints.head
-        cp.agents = v :: cp.agents
-      }
-    }
-
-    /**
-     * Make a copy of this mixture.
-     *
-     * The resulting mixture is completely independent of the original
-     * and can hence be operated on without the fear of destroying the
-     * original.
-     *
-     * @return a copy of this mixture.
-     */
-    def copy: Mixture = {
-
-      var u = _head
-      val that = new Mixture
-      that._length = this._length
-
-      // First allocate unconnected agents for `that`
-      var p: Agent = null
-      while(u != null) {
-        val ss = u._siteStates.clone
-        val ls = new Array[Link](u.length)
-        val v = new Agent(u.state, ss, ls)
-        v._mixture = that
-        v.prev = p
-        if (p == null) { that._head = v } else { p.next = v }
-        u.copy = v
-        p = v
-        u = u.next
-      }
-
-      // Now setup the interfaces of the agents in `that`
-      u = _head
-      while(u != null) {
-        val v = u.copy
-        for (i <- u.indices) {
-          val l = u._links(i) match {
-            case Linked(a, j, l) => Linked(a.copy, j, l)
-            case Stub            => Stub
-            case _ => throw new IllegalStateException(
-              "encountered mixture with an undefined or wildcard link")
+        // Now setup the interfaces of the agents in `that`
+        for (v <- m) {
+          val u = v._copy
+          for (i <- u.indices) {
+            v._links(i) = u._links(i) match {
+              case Linked(a, j, l) => Linked(a._copy, j, l)
+              case Stub => Stub
+              case _ => throw new IllegalStateException(
+                "encountered mixture with an undefined or wildcard link")
+            }
           }
-          v._links(i) = l
         }
-        u = u.next
+
+        // Reset `copy` references in the agents of `this` to avoid
+        // memory leaks.
+        for (v <- m)
+          v._copy = null
+
+        m
       }
 
-      // Reset `copy` references in the agents of `this` to avoid
-      // memory leaks.
-      u = _head
-      while(u != null) {
-        u.copy = null
-        u = u.next
-      }
-      that
+      def clear { m.clear }
     }
+
 
     /** Add a single agent to this mixture. */
-    private[Mixture] def +=(agent: Agent): Mixture = {
+    override def +=(agent: Agent): this.type = {
+
       agent._mixture = this
-      agent.prev = null
-      agent.next = _head
-      if (_head != null) _head.prev = agent
-      _head = agent
-      _length += 1
 
       // Clear all marks from agent because it comes from
       // another mixture where it can have been marked
       unmark(agent)
+
       // TODO Why not add the mark in AddAgent action?
       mark(agent, Updated)
 
+      super.+=(agent)
       this
     }
 
     /** Create a [[Mixture.Agent]] and add it to this mixture. */
-    def +=(state: AgentState, siteStates: Seq[SiteState]): Mixture = {
+    def +=(state: AgentState, siteStates: Seq[SiteState]): this.type = {
 
       // Create and initialize sites
       val ss = siteStates.toArray
@@ -335,35 +188,49 @@ trait Mixtures {
       this += (new Agent(state, ss, ls))
     }
 
-    /** Remove a single agent from this mixture. */
-    def -=(agent: Agent): Mixture = {
+    /**
+     * Append another mixture to this one.
+     *
+     * The doubly-linked list representing the mixture `that` will be
+     * appended to this mixture.  After this concatenation `that`
+     * becomes invalid and should not be operated on any longer.
+     *
+     * @param that the mixture to append to `this`.
+     * @return this mixture with `that` appended to it.
+     */
+    def ++=(that: Mixture): this.type = {
 
+      for (a <- that) {
+        a._mixture = this
+        // TODO: Again, this should be in the action
+        unmark(a)
+        mark(a, Updated)
+      }
+
+      super.++=(that)
+    }
+
+    /** Remove a single agent from this mixture. */
+    override def -=(agent: Agent): this.type = {
+
+      // TODO: All of this could be in the action too right?
       checkpointAgent(agent)
 
       // Disconnect agent
       for (l <- agent._links) {
-        // RHZ: Why not use disconnect here?
-        // sstucki: It's a bit more expensive, but maybe not too much ...?
         l match {
           case Linked(u, i, _) => {
             checkpointAgent(u)
             u._links(i) = Stub
             mark(u, SideEffect) // FIXME for perfomance
-            // We should manage this in the action, since we know there
-            // what is actually side-effected and what's not
+            // We should manage this in the action, since we know
+            // there what is actually side-effected and what's not
           }
-          case _ => { }
+          case _ => ()
         }
       }
 
-      // Remove agent
-      val ap = agent.prev
-      val an = agent.next
-      if (ap != null) ap.next = an
-      if (an != null) an.prev = ap
-      if (_head == agent) _head = an
-      _length -= 1
-      this
+      super.-=(agent)
     }
 
     // RHZ These two methods should belong to Site
@@ -483,89 +350,13 @@ trait Mixtures {
       this
     }
 
-    /**
-     * Append another mixture to this one.
-     *
-     * The doubly-linked list representing the mixture `that` will be
-     * appended to this mixture.  After this concatenation `that`
-     * becomes invalid and should not be operated on any longer.
-     *
-     * @param that the mixture to append to `this`.
-     * @return this mixture with `that` appended to it.
-     */
-    def ++=(that: Mixture): Mixture = {
-      var a = that._head
-      var last: Agent = null
-      while (a != null) {
-        a._mixture = this
-        unmark(a)
-        mark(a, Updated)
-        last = a
-        a = a.next
-      }
-      if (last != null) {
-        if (this._head != null) this._head.prev = last
-        last.next = this._head
-        this._head = that._head
-      }
-      _length += that._length
-      this
-    }
-
-    /**
-     * Generates and appends `x - 1` copies of this mixture to this
-     * mixture.
-     */
-    def *=(x: Int): Mixture =
-      if (x <= 0) throw new IllegalArgumentException(
-        "attempt to create a negative number of copies of a mixture")
-      else {
-        val m = Mixture()
-        for (i <- 1 until x) {
-          m ++= this.copy
-        }
-        this ++= m
-      }
-
-    /**
-     * Generates `x` concatenated copies of this mixture and returns
-     * the result.
-     */
-    def *(x: Int): Mixture =
-      if (x == 0) Mixture()
-      else if (x < 0) throw new IllegalArgumentException(
-        "attempt to create a negative number of copies of a mixture")
-      else {
-        val m = this.copy
-        m *= x
-      }
-
-
-    // -- Core Seq[Mixture.Agent] API --
-    @inline def apply(idx: Int): Agent = {
-      if (idx >= _length) throw new IndexOutOfBoundsException
-      (iterator drop idx).next
-    }
-    @inline def iterator: Iterator[Agent] = new MixtureIterator
-    @inline override def length: Int = _length
-
-
-    // -- Extra Seq[Mixture.Agent] API --
-    @inline override def foreach[U](f: Agent => U): Unit = {
-      var u = _head
-      while (u != null) {
-        f(u)
-        u = u.next
-      }
-    }
-
     override def toString = iterator.mkString("", ",", "")
   }
 
   object Mixture extends SiteGraph {
 
     /** The type of agents in [[Mixture]]s. */
-    type Agent = Mixture.AgentImpl
+    // type Agent = AgentImpl
 
     // -- Manage LinkIds in mix --
     // This is a little hack. Even when a more elegant solution is
@@ -589,7 +380,7 @@ trait Mixtures {
 
     def initialiseLinkIds {
       var freshId: LinkId = 0
-      // NOTE For this to work we might need to define equals in AgentImpl
+      // NOTE For this to work we might need to define equals in Agent
       val visited: mutable.Set[(Agent, SiteIndex)] = mutable.Set()
       for (u <- mix; (Linked(v, j, l1), i) <- u.links.zipWithIndex) {
         if (!(visited contains (v, j))) {
@@ -632,20 +423,23 @@ trait Mixtures {
      * @param prev a reference to the previous agent in the [[Mixture]]
      *        this agent belongs to.
      */
-    final class AgentImpl protected[Mixture] (
+    final class Agent protected[kappa/*Mixture*/] (
       var state: AgentState,
-      protected[Mixture] val _siteStates: Array[SiteState],
-      protected[Mixture] val _links: Array[Link],
-      val liftMap: mutable.HashMap[Pattern.Agent, ComponentEmbedding[Agent]] =
-        new mutable.HashMap())
-        extends AgentIntf with Markable {
+      protected[kappa/*Mixture*/] val _siteStates: Array[SiteState],
+      protected[kappa/*Mixture*/] val _links: Array[Link],
+      val liftMap: mutable.HashMap[Pattern.Agent,
+        ComponentEmbedding[Agent]] = new mutable.HashMap())
+        extends AgentIntf
+           with DoublyLinkedCell[Agent]
+           with RollbackAgent
+           with Markable {
 
-      protected[Mixture] var _mixture: Mixture = null
-      /*protected[Mixture]*/ var next: Agent = null
-      protected[Mixture] var prev: Agent = null
+      protected[kappa/*Mixture*/] var _mixture: Mixture = null
+      // protected[kappa/*Mixture*/] var next: Agent = null
+      // protected[kappa/*Mixture*/] var prev: Agent = null
 
       /** A reference to a copy of this agent (used by [[Mixture]]`.copy`). */
-      protected[Mixture] var copy: Agent = null
+      // protected[kappa/*Mixture*/] var copy: Agent = null
 
       /** The mixture this agent belongs to. */
       @inline def mixture =
@@ -653,20 +447,11 @@ trait Mixtures {
           "attempt to access parent mixture of orphan agent")
         else _mixture
 
-      /**
-       * Make a checkpoint copy of a given agent.
-       *
-       * @return a copy of this agent (sharing states and links).
-       */
-      protected[Mixture] def checkpointCopy: Agent = {
-        // Allocate an agent `v` tracking `this`.
-        val v = new Agent(
-          this.state, this._siteStates.clone, this._links.clone)
-        v._mixture = this._mixture
-        v.prev = this.prev
-        v.next = this.next
-        v.copy = this
-        v
+      /** Generate a disconnected copy of this agent. */
+      def copy: Agent = {
+        val ss = this._siteStates.clone
+        val ls = new Array[Link](this.length)
+        new Agent(this.state, ss, ls)
       }
 
       /**

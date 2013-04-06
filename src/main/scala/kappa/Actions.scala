@@ -621,8 +621,8 @@ trait Actions {
 
   // --- BiActions ---
 
-  // RHZ: What is rhsAgentOffsets for? is it redundant to also have
-  // lhsAgentOffsets? Same question is valid for bwdPe
+  // RHZ: What is rhsAgentOffsets for?
+  // Is it redundant to also have lhsAgentOffsets?
   final class BiAction(
     val lhs: Pattern,
     val rhs: Pattern,
@@ -636,6 +636,7 @@ trait Actions {
     @inline def fwdAction = new Action(lhs, rhs, fwdPe,
       rhsAgentOffsets, preCondition, postCondition)
 
+    // TODO: We could use fwdPe.inverse here right?
     @inline def bwdAction = new Action(rhs, lhs, bwdPe,
       lhsAgentOffsets, preCondition, postCondition)
   }

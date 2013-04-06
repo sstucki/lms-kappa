@@ -114,6 +114,10 @@ trait KappaLikeActions extends Actions {
       mkRateLawFromRate(fwdRate, biaction.lhs),
       mkRateLawFromRate(bwdRate, biaction.rhs))
 
+    // RHZ: Proposal to solve the operator precedence issue (letters
+    // have the lowest precedence which is exactly what we want)
+    def at(fwdRate: => Double, bwdRate: => Double) = :@(fwdRate, bwdRate)
+
     /**
      * Constructor for rules that follow an arbitrary rate law.
      *
