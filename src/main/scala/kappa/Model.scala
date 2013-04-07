@@ -20,13 +20,14 @@ trait Model extends LanguageContext
     with AbstractSyntax
     with Parsers {
 
-  var time        : Double               = 0
-  var events      : Long                 = 0
-  var nullEvents  : Long                 = 0
-  var _maxTime    : Option[Double]       = None
-  var _maxEvents  : Option[Long]         = None
-  var observables : Vector[Pattern]      = Vector()
-  var obsNames    : Vector[String]       = Vector()
+  var time        : Double                = 0
+  var events      : Long                  = 0
+  var nullEvents  : Long                  = 0
+  var _maxTime    : Option[Double]        = None
+  var _maxEvents  : Option[Long]          = None
+  var observables : Vector[Pattern]       = Vector()
+  var obsNames    : Vector[String]        = Vector()
+  var invariants  : Vector[() => Boolean] = Vector()
 
 
   /** Set the maximum time for the simulation. */
@@ -36,6 +37,13 @@ trait Model extends LanguageContext
   /** Set the maximum number of events for the simulation. */
   def maxEvents_=(e: Long) = { _maxEvents = Some(e) }
   @inline def maxEvents = _maxEvents
+
+
+  // -- Invariants --
+
+  def invariant(f: => Boolean) {
+    this.invariants = this.invariants :+ (() => f)
+  }
 
 
   // -- Initial state --
@@ -69,6 +77,7 @@ trait Model extends LanguageContext
     def of(mix: PartialAbstractPattern*) =
       partialAbstractPatternsToMixture(mix) * count
 
+    // TODO: This doesn't work
     def *(mix: Mixture) = of(mix)
     def *(mix: Pattern) = of(mix)
     def *(mix: AbstractPattern) = of(mix)
@@ -88,14 +97,17 @@ trait Model extends LanguageContext
 
   // -- Observables --
 
-  final class Obs(obs: Pattern) {
-    def named(name: String) {
+  final class Obs(val obs: Pattern) {
+    def named(name: String) = {
       obsNames = obsNames.dropRight(1) :+ name
+      this
     }
 
     observables = observables :+ obs
     obsNames = obsNames :+ (obs.toString)
   }
+
+  implicit def obsToPattern(obs: Obs): Pattern = obs.obs
 
   /** Declare an observable. */
   def obs(obs: Pattern) = new Obs(obs)
@@ -175,10 +187,12 @@ trait Model extends LanguageContext
    * An exception that can be thrown in order to exit the simulator
    * event loop.
    */
-  case class SimulatorException(msg: String) extends Exception(msg)
+  class SimulatorException(val msg: String) extends Exception(msg)
 
-  object Deadlock extends SimulatorException("no more events")
-  object EmptyRuleSet extends SimulatorException("no rules")
+  case object Deadlock extends SimulatorException("no more events")
+  case object EmptyRuleSet extends SimulatorException("no rules")
+  case class InvariantViolation(override val msg: String)
+      extends SimulatorException(msg)
 
   // Create a new random number generator
   val rand = new util.Random
@@ -277,6 +291,10 @@ trait Model extends LanguageContext
         if (clash)
           consecutiveClashes += 1
       }
+
+      // Check invariants
+      if (!invariants.forall(_()))
+        throw new InvariantViolation("rule " + r + " violated invariant")
 
       // Apply perturbations
       for (mod <- mods) mod()
