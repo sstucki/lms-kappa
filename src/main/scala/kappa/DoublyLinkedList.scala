@@ -9,12 +9,6 @@ trait DoublyLinkedCell[Elem >: Null] {
 
   var prev: Elem = null
   var next: Elem = null
-
-  /** A reference to a copy of this agent. */
-  var _copy: Elem = null
-
-  /** Make a copy of this cell. */
-  def copy: Elem
 }
 
 
@@ -66,15 +60,9 @@ trait DoublyLinkedList[Elem >: Null <: DoublyLinkedCell[Elem],
    * @return a copy of this mixture.
    */
   def copy: DoublyLinkedList[Elem, Repr] = {
-
     val b = this.newBuilder
-
-    for (u <- this) {
-      val v = u.copy
-      v._copy = u
-      b += v
-    }
-
+    for (u <- this)
+      b += u
     b.result
   }
 

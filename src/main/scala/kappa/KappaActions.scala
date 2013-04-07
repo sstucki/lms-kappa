@@ -2,9 +2,16 @@ package kappa
 
 import scala.language.implicitConversions
 
+
 trait KappaActions extends KappaLikeActions {
-  this: KappaContext with SiteGraphs with Patterns with Mixtures
-      with Embeddings with PartialEmbeddings with Rules =>
+  this: KappaContext
+      with SiteGraphs
+      with Patterns
+      with Mixtures
+      with RollbackMachines
+      with Embeddings
+      with PartialEmbeddings
+      with Rules =>
 
   /** Factory object for building Kappa actions.  */
   implicit object KappaActionBuilder extends ActionBuilder {

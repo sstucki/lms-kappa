@@ -3,7 +3,10 @@ package kappa
 import scala.collection.mutable
 
 trait Rules {
-  this: LanguageContext with Patterns with Embeddings with Actions =>
+  this: LanguageContext
+      with Patterns
+      with Embeddings
+      with Actions =>
 
   var rules: Vector[Rule] = Vector()
 
@@ -15,7 +18,8 @@ trait Rules {
   def registerRule(r: RuleBox) = r.register
 
 
-  // Rules
+  // -- Rules --
+
   case class Rule(val action: Action, val law: () => Double)
       extends RuleBox {
 
@@ -65,4 +69,9 @@ trait Rules {
       biaction.rhs.toString + " :@ " +
       (fwdLaw(), bwdLaw())
   }
+
+
+  // TODO: Improve contact graphs first
+  // def generateRulesFromContactGraph: Seq[Rule] = {
+  // }
 }

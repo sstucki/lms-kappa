@@ -1,7 +1,11 @@
 package kappa
 
 trait RollbackMachines {
-  this: LanguageContext with SiteGraphs with Patterns with Mixtures =>
+  this: LanguageContext
+      with SiteGraphs
+      with Mixtures
+      with Patterns
+      with ComponentEmbeddings =>
 
   import SiteGraph.{Link, Stub}
   import Mixture.{Agent, Linked}
@@ -14,12 +18,19 @@ trait RollbackMachines {
      *
      * FIXME: Should we use [[Mixture]] for this?
      */
-    final class Checkpoint(
-      val head: Agent, val length: Int,
-      var agents: List[Agent])
+    final class Checkpoint {
+
+      val head: Agent = _head
+      val length: Int = _length
+
+      var agents: List[Agent] = List()
+
+      var removedEmbeddings: List[ComponentEmbedding[Mixture.Agent]] = List()
+      var addedEmbeddings: List[ComponentEmbedding[Mixture.Agent]] = List()
+    }
 
     /** The stack of mixture checkpoints. */
-    private var _checkpoints: List[Checkpoint] = Nil
+    private var _checkpoints: List[Checkpoint] = List()
 
     /**
      * Make a checkpoint of this mixture.
@@ -43,20 +54,15 @@ trait RollbackMachines {
      * classes.  If these classes contain mutable state, updates to
      * that state will be reflected in the checkpoint and can not be
      * reverted through a call to [[Mixture.rollback]].
-     *
-     * NOTE 2: The lift maps of an agents are not checkpointed.
-     *
-     * @return this mixture.
      */
-    def checkpoint: Mixture = {
-      _checkpoints = (new Checkpoint(_head, _length, Nil)) :: _checkpoints
-      this
+    def checkpoint {
+      _checkpoints = (new Checkpoint) :: _checkpoints
     }
 
     /**
      * Restore the state of this mixture to the last checkpoint.
      *
-     * See [[Mixture.checkpoint]] for details.
+     * See [[RollbackMachine.checkpoint]] for details.
      *
      * @return this mixture.
      */
@@ -67,7 +73,7 @@ trait RollbackMachines {
       // Roll back all the agents in the checkpoint.
       val cp = _checkpoints.head
       for (v <- cp.agents) {
-        val u = v.copy
+        val u = v._copy
 
         // Restore the state of `u` to that of `v`.
         u.state = v.state
@@ -82,6 +88,18 @@ trait RollbackMachines {
         //mark(u, Updated)
       }
 
+      for (ce <- cp.removedEmbeddings) {
+        ce.component.addEmbedding(ce)
+        for (i <- ce.indices)
+          ce(i).addLift(ce.component(i), ce)
+      }
+
+      for (ce <- cp.addedEmbeddings) {
+        ce.component.removeEmbedding(ce)
+        for (i <- ce.indices)
+          ce(i).removeLift(ce.component(i))
+      }
+
       // Restore the head and length fields of the mixture.
       _head = cp.head
       _length = cp.length
@@ -94,14 +112,14 @@ trait RollbackMachines {
     /**
      * Discard the latest checkpoint of this mixture.
      *
-     * See [[Mixture.checkpoint]] for details.
+     * See [[RollbackMachine.checkpoint]] for details.
      *
      * @return this mixture with its last checkpoint discarded.
      */
     def discardCheckpoint: Mixture = {
       _checkpoints = _checkpoints match {
         case _ :: cps => cps
-        case Nil => throw new IllegalStateException(
+        case List() => throw new IllegalStateException(
           "attempt to discard checkpoint of mixture with empty " +
             "checkpoint stack")
       }
@@ -118,10 +136,27 @@ trait RollbackMachines {
      * @param u the agent to add to the current checkpoint.
      */
     @inline protected def checkpointAgent(u: Agent) {
+      // RHZ: Why no copy should be created when marked?
       if (!_checkpoints.isEmpty && !(u hasMark Updated)) {
         val v = u.checkpointCopy
         val cp = _checkpoints.head
         cp.agents = v :: cp.agents
+      }
+    }
+
+    def checkpointRemovedEmbedding(ce: ComponentEmbedding[Mixture.Agent]) {
+      _checkpoints match {
+        case cp :: _ => cp.removedEmbeddings = ce :: cp.removedEmbeddings
+        case List() => throw new IllegalStateException(
+          "attempt to add embedding to checkpoint before checkpoint")
+      }
+    }
+
+    def checkpointAddedEmbedding(ce: ComponentEmbedding[Mixture.Agent]) {
+      _checkpoints match {
+        case cp :: _ => cp.addedEmbeddings = ce :: cp.addedEmbeddings
+        case List() => throw new IllegalStateException(
+          "attempt to add embedding to checkpoint before checkpoint")
       }
     }
   }
@@ -136,8 +171,11 @@ trait RollbackMachines {
       */
     protected[kappa/*Mixture*/] def checkpointCopy: Agent = {
       // Allocate an agent `v` tracking `this`.
+      // RHZ: What happens if this.state is modified?
+      // Is the agent state shared with the copy?
       val v = new Agent(
-        this.state, this._siteStates.clone, this._links.clone)
+        this.state, this._siteStates.clone, this._links.clone,
+        this.liftMap.clone)
       v._mixture = this._mixture
       v.prev = this.prev
       v.next = this.next

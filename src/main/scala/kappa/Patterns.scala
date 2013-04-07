@@ -4,9 +4,15 @@ import scala.collection.mutable
 
 
 trait Patterns {
-  this: LanguageContext with ContactGraphs with SiteGraphs
-      with Mixtures with Actions with Rules with ComponentEmbeddings
-      with Embeddings with AbstractSyntax =>
+  this: LanguageContext
+      with ContactGraphs
+      with SiteGraphs
+      with Mixtures
+      with Actions
+      with Rules
+      with ComponentEmbeddings
+      with Embeddings
+      with AbstractSyntax =>
 
   /**
    * A class representing patterns in [[Model]]s (i.e. site graphs).
@@ -255,8 +261,8 @@ trait Patterns {
        *
        * @return all the component embeddings from `this` in `that`.
        */
-      def embeddingsIn(
-        that: Mixture): Seq[ComponentEmbedding[Mixture.Agent]] = {
+      def embeddingsIn(that: Mixture)
+          : Seq[ComponentEmbedding[Mixture.Agent]] = {
         val u = this.head
         val ceOpts =
           for (v <- that) yield ComponentEmbedding.findEmbedding(u, v)
@@ -291,7 +297,9 @@ trait Patterns {
         (embeddingIndices remove ce.head) match {
           case Some(i) => {
             // Clear lifts
-            for (i <- 0 until ce.length) ce(i).removeLift(ce.component(i))
+            for (k <- 0 until ce.length) {
+              ce(k).removeLift(ce.component(k))
+            }
 
             // Remove embedding from collection
             val j = embeddings.length - 1

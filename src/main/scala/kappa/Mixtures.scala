@@ -128,9 +128,15 @@ trait Mixtures {
 
       val m = Mixture()
 
-      def +=(agent: Agent): this.type = {
-        agent._mixture = m
-        m += agent
+      def +=(u: Agent): this.type = {
+        // Make a disconnected copy of `u` and add it to `m`
+        val ss = u._siteStates.clone
+        val ls = new Array[Link](u.length)
+        // RHZ: Is the agent state shared with the copy?
+        val v = new Agent(u.state, ss, ls)
+        v._copy = u
+        v._mixture = m
+        m += v
         this
       }
 
@@ -434,25 +440,16 @@ trait Mixtures {
            with RollbackAgent
            with Markable {
 
-      protected[kappa/*Mixture*/] var _mixture: Mixture = null
-      // protected[kappa/*Mixture*/] var next: Agent = null
-      // protected[kappa/*Mixture*/] var prev: Agent = null
+      /** A reference to a copy of this agent. */
+      protected[kappa/*Mixture*/] var _copy: Agent = null
 
-      /** A reference to a copy of this agent (used by [[Mixture]]`.copy`). */
-      // protected[kappa/*Mixture*/] var copy: Agent = null
+      protected[kappa/*Mixture*/] var _mixture: Mixture = null
 
       /** The mixture this agent belongs to. */
       @inline def mixture =
         if (_mixture == null) throw new NullPointerException(
           "attempt to access parent mixture of orphan agent")
         else _mixture
-
-      /** Generate a disconnected copy of this agent. */
-      def copy: Agent = {
-        val ss = this._siteStates.clone
-        val ls = new Array[Link](this.length)
-        new Agent(this.state, ss, ls)
-      }
 
       /**
        * Register a component embedding in the lift map of this agent.
@@ -478,7 +475,7 @@ trait Mixtures {
        * Check all component embeddings in the lift set for
        * consistency and remove those that are no longer valid.
        */
-      def pruneLifts {
+      def pruneLifts(checkpoint: Boolean) {
         val invalidLifts = liftMap filterNot { case (u, ce) =>
             (u matches this) && (u.indices forall {
             j => (u.neighbour(j), this.neighbour(j)) match {
@@ -489,6 +486,8 @@ trait Mixtures {
           })
         }
         for (ce <- invalidLifts.values) {
+          if (checkpoint)
+            mix.checkpointRemovedEmbedding(ce)
           ce.component.removeEmbedding(ce)
         }
       }

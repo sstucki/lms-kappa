@@ -51,7 +51,8 @@ trait TKappaActions extends KappaLikeActions {
         KappaLikeActionBuilder.commonLongestPrefix(rhs, lhs)
 
       new TKappaBiRuleBuilder(new BiAction(lhs, rhs, fwdPe, bwdPe,
-        lhsAgentOffsets, rhsAgentOffsets, None,
+        lhsAgentOffsets, rhsAgentOffsets,
+        Some(Thermodynamics.updateEnergy),
         Some(Thermodynamics.checkEnergy)))
     }
   }
@@ -79,8 +80,8 @@ trait TKappaActions extends KappaLikeActions {
      * @param bwdLaw kinetic law of backward rule
      */
     def :@(rate: => Double) = withRateLaws(
-      () => biaction.lhs.inMix * rate,
-      () => biaction.rhs.inMix * rate)
+      mkRateLawFromRate(rate, biaction.lhs),
+      mkRateLawFromRate(rate, biaction.rhs))
 
     // RHZ: Proposal to solve the operator precedence issue (letters
     // have the lowest precedence which is exactly what we want)
@@ -102,7 +103,10 @@ trait TKappaActions extends KappaLikeActions {
   object Thermodynamics {
 
     var lastEnergy: Double = 0
-    val kB: Double = 1.3806488e-23
+
+    // FIXME: The problem is that the post-condition is evaluated
+    // before performUpdates is run and therefore the delta energy
+    // is always 0.
 
     /** 
      * Check whether we accept or not the transition given the
@@ -111,17 +115,14 @@ trait TKappaActions extends KappaLikeActions {
     def checkEnergy(action: Action, agents: Action.Agents): Boolean = {
       val nextEnergy = mixtureEnergy
       lazy val deltaE = nextEnergy - lastEnergy
-      lazy val kBT = kB * temperature
-      lazy val prob = math.exp(-deltaE / kBT)
-      if (lastEnergy > nextEnergy) { // accept
-        lastEnergy = nextEnergy
-        true
-      } else if (rand.nextDouble < prob) { // accept
-        lastEnergy = nextEnergy
-        true
-      } else { // reject
-        false
-      }
+      println(nextEnergy + " - " + lastEnergy + " = " + deltaE)
+      lazy val prob = math.exp(-deltaE / kB * temperature)
+      (lastEnergy >= nextEnergy) || (rand.nextDouble < prob)
+    }
+
+    def updateEnergy(action: Action, agents: Action.Agents): Boolean = {
+      lastEnergy = mixtureEnergy
+      true
     }
   }
 }

@@ -1,8 +1,14 @@
 package kappa
 
 trait KappaLikeActions extends Actions {
-  this: KappaLikeContext with SiteGraphs with Patterns with Mixtures
-      with Embeddings with PartialEmbeddings with Rules =>
+  this: KappaLikeContext
+      with SiteGraphs
+      with Patterns
+      with Mixtures
+      with RollbackMachines
+      with Embeddings
+      with PartialEmbeddings
+      with Rules =>
 
   object KappaLikeActionBuilder {
 

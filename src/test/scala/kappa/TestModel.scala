@@ -31,7 +31,7 @@ class TestModel extends KappaModel with FlatSpec {
   val kM = 1
   val r3 = withRule("A(s:p)" -> "A(s:q)" :@ (vmax / (kM + "A(s:p)".inMix)))
 
-  init (100 of "A(s:p)")
+  init (10 of "A(s:p)")
   println("Mixture: " + mix)
 
   when ("A(s)".inMix < 50) exec (k = 7)

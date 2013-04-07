@@ -8,10 +8,8 @@ class TKappaModel extends Model
     with TKappaActions {
 
   var temperature: Double = 298.15 // room temperature
-
-  // We actually only store the (only) connected component of
-  // the energy pattern.  TODO Should I use a Map instead?
   var energyPatterns: Array[(Pattern.Component, Double)] = Array()
+  val kB: Double = 1.3806488e-23
 
 
   /** Compute the current energy of the system. */
@@ -48,11 +46,6 @@ class TKappaModel extends Model
   /** Declare an energy pattern. */
   def energy(energyCost: Double, pattern: PartialAbstractPattern*) {
     energy(energyCost, partialAbstractPatternsToPattern(pattern))
-  }
-
-  override def initialise {
-    super.initialise
-    Thermodynamics.lastEnergy = mixtureEnergy
   }
 }
 

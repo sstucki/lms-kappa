@@ -6,8 +6,14 @@ import scala.collection.mutable
 
 
 trait Actions {
-  this: LanguageContext with SiteGraphs with Patterns with Mixtures
-      with Embeddings with PartialEmbeddings with Rules =>
+  this: LanguageContext
+      with SiteGraphs
+      with Patterns
+      with Mixtures
+      with RollbackMachines
+      with Embeddings
+      with PartialEmbeddings
+      with Rules =>
 
   // --- Actions ---
 
@@ -75,6 +81,7 @@ trait Actions {
         if (!activations.isEmpty) {
           activationMap += ((idx, activations))
 
+          // RHZ: This is redundant no? Or the += above has side effects?
           if (!activations.isEmpty && !activations.head.isEmpty) {
             println ("# Added activation entry for action " + lhs + " -> " +
               rhs + " on component # " + idx + " (CC " +
@@ -135,15 +142,13 @@ trait Actions {
 
         val mas = mix.markedAgents(Updated)
 
+        performUpdates(agents, mas)
+
         // Check post-conditions
         if (postCondition map { f => f(this, agents) } getOrElse true) {
           // Discard pre-application checkpoint and perform
           // negative/positive updates.
           if (!postCondition.isEmpty) mix.discardCheckpoint
-
-          // FIXME: performUpdates should be executed before the post-condition
-          performUpdates(agents, mas)
-
           (true, false)
         } else {
           // Roll back to the state of the mixture prior to the action
@@ -248,17 +253,21 @@ trait Actions {
       // collection does not work as it should, so we perform
       // negative updates for all modified agents for now.  To be
       // investigated.
-      for (v <- modifiedAgents) v.pruneLifts
+      for (v <- modifiedAgents) v.pruneLifts(!postCondition.isEmpty)
 
       // -- Positive update --
-      //var updates = 0
-      for ((ci, ae) <- activationMap; ps <- ae) {
+      // var updates = 0
+
+      // pes is a list of representative pairs of partial embeddings
+      for ((ci, ae) <- activationMap; pes <- ae) {
         val c = patternComponents(ci)
-        val ps2 = ps map { case (u, v) => (u, agents(v)) }
-        val ces = ComponentEmbedding.findEmbeddings(ps2)
+        val pes2 = pes map { case (u, v) => (u, agents(v)) }
+        val ces = ComponentEmbedding.findEmbeddings(pes2)
         for (ce <- ces) {
+          if (!postCondition.isEmpty)
+            mix.checkpointAddedEmbedding(ce)
           c.addEmbedding(ce)
-          //updates += 1
+          // updates += 1
         }
       }
 
@@ -271,9 +280,11 @@ trait Actions {
       //var sideEffects = 0
       val mas2 = mix.markedAgents(SideEffect)
       for (c <- patternComponents) {
-        val ps = for (u <- c; v <- sideAffected) yield (u, v)
-        val ces = ComponentEmbedding.findEmbeddings(ps)
+        val pes = for (u <- c; v <- sideAffected) yield (u, v)
+        val ces = ComponentEmbedding.findEmbeddings(pes)
         for (ce <- ces) {
+          if (!postCondition.isEmpty)
+            mix.checkpointAddedEmbedding(ce)
           c.addEmbedding(ce)
           //sideEffects += 1
         }

@@ -6,8 +6,14 @@ import scala.collection.mutable
 
 
 trait KaSpaceActions extends KappaLikeActions {
-  this: KaSpaceContext with SiteGraphs with Patterns with Mixtures
-      with Embeddings with PartialEmbeddings with Rules =>
+  this: KaSpaceContext
+      with SiteGraphs
+      with Patterns
+      with Mixtures
+      with RollbackMachines
+      with Embeddings
+      with PartialEmbeddings
+      with Rules =>
 
   /** Factory object for building KaSpace actions.  */
   implicit object KaSpaceActionBuilder extends ActionBuilder {
