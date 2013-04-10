@@ -8,18 +8,18 @@ trait KaSpaceParsers extends KappaLikeParsers {
   object KaSpaceParser extends KappaLikeParser {
 
     lazy val agentState: Parser[AbstractAgentState] =
-      agentType ~ opt(":" ~> agentLabel) ^^ {
+      agentType ~ opt(stateDelim ~> agentLabel) ^^ {
         case atype ~ label => AbstractKaSpaceAgentState(atype, label) }
 
     lazy val siteState: Parser[AbstractSiteState] =
-      siteName ~ opt(":" ~> siteLabel) ^^ {
+      siteName ~ opt(stateDelim ~> siteLabel) ^^ {
         case sname ~ label => AbstractKaSpaceSiteState(sname, label) }
 
     lazy val linkState: Parser[AbstractLinkState] =
       linkLabel ^^ { l => AbstractKaSpaceLinkState(Some(l)) }
 
     lazy val linked: Parser[AbstractLinked] =
-      linkId ~ opt(":" ~> linkState) ^^ {
+      linkId ~ opt(stateDelim ~> linkState) ^^ {
         case id ~ state => AbstractKaSpaceLinked(
           id, state getOrElse AbstractKaSpaceLinkState(None))
       }

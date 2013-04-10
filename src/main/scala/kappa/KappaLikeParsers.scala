@@ -36,17 +36,17 @@ trait KappaLikeParsers extends Parsers {
 
     // Parsers for contact graph states -- FIXME: Refactor
     lazy val agentStateSet: Parser[AgentStateSetName] =
-      agentType ~ opt(":" ~> list(agentLabel)) ^^ {
+      agentType ~ opt(stateDelim ~> list(agentLabel)) ^^ {
         case atype ~ labels =>
           KappaLikeAgentStateSetName(atype, labels getOrElse List()) }
 
     lazy val siteStateSet: Parser[SiteStateSetName] =
-      siteName ~ opt(":" ~> list(siteLabel)) ^^ {
+      siteName ~ opt(stateDelim ~> list(siteLabel)) ^^ {
         case sname ~ labels =>
           KappaLikeSiteStateSetName(sname, labels getOrElse List()) }
 
     lazy val linkStateSet: Parser[LinkStateSetName] =
-      linkId ~ opt(":" ~> list(linkLabel)) ^^ {
+      linkId ~ opt(stateDelim ~> list(linkLabel)) ^^ {
         case ln ~ labels =>
           KappaLikeLinkStateSetName(ln, labels getOrElse List()) }
   }

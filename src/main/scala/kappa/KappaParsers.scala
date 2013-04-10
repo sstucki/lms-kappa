@@ -17,7 +17,7 @@ trait KappaParsers extends KappaLikeParsers {
       agentType ^^ (AbstractKappaAgentState(_))
 
     lazy val siteState: Parser[AbstractSiteState] =
-      siteName ~ opt(":" ~> siteLabel) ^^ {
+      siteName ~ opt(stateDelim ~> siteLabel) ^^ {
         case sname ~ label => AbstractKappaSiteState(sname, label) }
 
     lazy val linkState: Parser[AbstractLinkState] =

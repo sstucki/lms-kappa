@@ -96,7 +96,8 @@ trait KappaContext extends KappaLikeContext {
 
     // -- Any API --
 
-    @inline override def toString = siteName + (internalState map (":" + _) getOrElse "")
+    @inline override def toString =
+      siteName + (internalState map (stateDelim + _) getOrElse "")
   }
 
 

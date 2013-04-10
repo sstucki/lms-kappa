@@ -5,14 +5,17 @@ package kappa
 trait KappaLikeContext extends LanguageContext {
   this: ContactGraphs with KappaLikeAbstractSyntax with KappaLikeParsers =>
 
+  // RHZ: Where should this definition go?
+  val stateDelim = "~"
+
   // -- State set types --
   type AgentStateSet <: KappaLikeAgentStateSet
   type SiteStateSet <: KappaLikeSiteStateSet
   type LinkStateSet <: KappaLikeLinkStateSet
 
 
-  def optionContains[T](x: Option[T], xs: List[T]): Boolean =
-    x map (xs contains _) getOrElse true
+  @inline final def optionContains[T](x: Option[T], xs: List[T])
+      : Boolean = x map (xs contains _) getOrElse true
 
 
   /** Kappa-like agent state sets. */

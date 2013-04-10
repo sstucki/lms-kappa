@@ -66,7 +66,7 @@ trait KaSpaceContext extends KappaLikeContext {
     // -- Any API --
 
     @inline override def toString =
-      agentStateSet.agentType + (radius map (":" + _) getOrElse "")
+      agentType + (radius map (stateDelim + _) getOrElse "")
   }
 
 
@@ -111,7 +111,7 @@ trait KaSpaceContext extends KappaLikeContext {
     // -- Any API --
 
     @inline override def toString =
-      siteStateSet.siteName + (position map (":" + _) getOrElse "")
+      siteName + (position map (stateDelim + _) getOrElse "")
   }
 
   // TODO Add LinkId to KaSpaceLinkState
@@ -158,7 +158,7 @@ trait KaSpaceContext extends KappaLikeContext {
 
     // -- Any API --
     @inline override def toString = (linkId, orientation) match {
-      case (Some(id), Some(w)) => id + ":" + w
+      case (Some(id), Some(w)) => id + stateDelim + w
       case (Some(id), None) => id.toString
       case (None, Some(w)) => w.toString
       case (None, None) => ""
