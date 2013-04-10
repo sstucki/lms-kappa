@@ -61,7 +61,8 @@ trait KappaLikeActions extends Actions {
   @inline final protected
   def mkRateLawFromRate(rate: => Double, lhs: Pattern) =
     if (rate == Double.PositiveInfinity) {
-      () => if (lhs.inMix == 0) 0 else rate
+      () => if (lhs.inMix == 0) 0
+            else lhs.inMix * rate
     } else {
       () => lhs.inMix * rate
     }

@@ -57,8 +57,28 @@ trait Actions {
 
     type ActivationEntry = Iterable[Iterable[(Pattern.Agent, AgentIndex)]]
 
+    private var _atoms: Seq[Action.Atom] = null
+
     /** The atomic actions making up this action. */
-    val atoms: Seq[Action.Atom] = mkAtoms(lhs, rhs, pe, rhsAgentOffsets)
+    def atoms: Seq[Action.Atom] =
+      if (_atoms == null) register else _atoms
+
+    /** Register this action. */
+    def register: Seq[Action.Atom] = {
+
+      // Register the components of LHS pattern
+      val componentIndices = lhs.registerComponents
+
+      // Compute the atomic actions
+      _atoms = mkAtoms(lhs, rhs, pe, rhsAgentOffsets)
+
+      // Find positive influence of this rule on every registered
+      // component and initialize the positive influence map
+      // of the action accordingly.
+      for (c <- patternComponents) addActivation(c)
+
+      _atoms
+    }
 
     /** Activation map. */
     val activationMap =
@@ -81,7 +101,8 @@ trait Actions {
         if (!activations.isEmpty) {
           activationMap += ((idx, activations))
 
-          // RHZ: This is redundant no? Or the += above has side effects?
+          // RHZ: The first part of the predicate is redundant no?
+          // Or does the += above have side effects?
           if (!activations.isEmpty && !activations.head.isEmpty) {
             println ("# Added activation entry for action " + lhs + " -> " +
               rhs + " on component # " + idx + " (CC " +
@@ -111,51 +132,53 @@ trait Actions {
       embedding: Embedding[Mixture.Agent],
       mixture: Mixture = mix): (Boolean, Boolean) = {
 
-      // Check consistency and populate the agents array.
-      val additions = rhs.length - pe.length
-      val totalAgents = (embedding map (_.length)).sum + additions
-      val agents = new Array[Mixture.Agent](totalAgents)
-      val (clash, garbage) = checkConsistency(embedding, agents)
-      if (garbage > 0) {
-        throw new IllegalStateException(
-          "# found and collected " + garbage +
-          " garbage component embeddings.")
-      } else if (clash) {
+      if (!checkInjectivity(embedding, mixture)) {
         println("# clash!")
         (false, true)
-      } else if (!(preCondition map { f => f(this, agents) } getOrElse true)) {
-        println("# pre-condition = false.")
-        (false, false)
       } else {
 
-        // If the post-condition is defined, checkpoint the mixture so
-        // we can restore its current state if the post-condition
-        // evaluates to `false`.
-        if (!postCondition.isEmpty) mix.checkpoint
+        // Populate the agents array
+        val additions = rhs.length - pe.length
+        // RHZ: Isn't totalAgents = lhs.length + additions?
+        val totalAgents = (embedding map (_.length)).sum + additions
+        val agents = new Array[Mixture.Agent](totalAgents)
+        for (ce <- embedding; (v, i) <- ce.zipWithIndex)
+          agents(i) = v
 
-        // Clear the marked agents list of mix
-        mix.clearMarkedAgents(Updated)
-        mix.clearMarkedAgents(SideEffect)
-
-        // Apply all atomic actions
-        for (a <- atoms) a(agents, mixture)
-
-        val mas = mix.markedAgents(Updated)
-
-        performUpdates(agents, mas)
-
-        // Check post-conditions
-        if (postCondition map { f => f(this, agents) } getOrElse true) {
-          // Discard pre-application checkpoint and perform
-          // negative/positive updates.
-          if (!postCondition.isEmpty) mix.discardCheckpoint
-          (true, false)
-        } else {
-          // Roll back to the state of the mixture prior to the action
-          // application.
-          println("# post-condition = false.")
-          mix.rollback
+        if (!(preCondition map { f => f(this, agents) } getOrElse true)) {
+          println("# pre-condition = false.")
           (false, false)
+        } else {
+
+          // If the post-condition is defined, checkpoint the mixture so
+          // we can restore its current state if the post-condition
+          // evaluates to `false`.
+          if (!postCondition.isEmpty) mixture.checkpoint
+
+          // Clear the marked agents list of mix
+          mixture.clearMarkedAgents(Updated)
+          mixture.clearMarkedAgents(SideEffect)
+
+          // Apply all atomic actions
+          for (a <- atoms) a(agents, mixture)
+
+          // Perform negative and positive update
+          val mas = mixture.markedAgents(Updated)
+          performUpdates(agents, mas)
+
+          // Check post-conditions
+          if (postCondition map { f => f(this, agents) } getOrElse true) {
+            // Discard pre-application checkpoint and perform
+            // negative/positive updates.
+            if (!postCondition.isEmpty) mixture.discardCheckpoint
+            (true, false)
+          } else {
+            // Roll back to the state of the mixture prior to the action
+            // application.
+            println("# post-condition = false.")
+            mixture.rollback
+            (false, false)
+          }
         }
       }
     }
@@ -168,65 +191,31 @@ trait Actions {
     // -- Protected/private methods --
 
     /**
-     * Check the consistency of an embedding and fill the agents array.
-     *
-     * The method checks the consistency of an embedding, i.e. whether
-     * it is injective and whether every agent in the domain matches
-     * its image.  As a side effect, it populates the `agents` array
-     * with agents from the codomain of the embeddings.
+     * Check whether an embedding is injective, i.e. whether each
+     * agent of each connected component in the domain of the
+     * embedding is mapped to a different agent in the mixture.
      *
      * @param embedding the embedding to check.
-     * @param agents the agents array to fill.
-     * @return a `(clash, garbage)` pair, where `clash` is `true` if
-     *         the embedding is not injective and `garbage` is the
-     *         number of component embeddings that contained agents in
-     *         their domain that did not match their images.
+     * @param mixture the mixture where the agents in the codomain are.
+     * @return `true` if the embedding is injective.
      */
-    protected[Action] def checkConsistency(
-      embedding: Embedding[Mixture.Agent], agents: Agents): (Boolean, Int) = {
+    protected[Action] def checkInjectivity(
+      embedding: Embedding[Mixture.Agent],
+      mixture: Mixture): Boolean = {
 
-      mix.clearMarkedAgents(Visited)
-      var clash: Boolean = false
-      var garbage: Int = 0
-      var i: Int = 0
-      for (ce <- embedding) {
+      mixture.clearMarkedAgents(Visited)
 
-        // Check embedding consistency
-        // val consistent = ce.indices forall { k =>
-        for (k <- ce.indices) {
-
-          // Add agent
-          val v = ce(k)
-          agents(i) = v
-          i += 1
-
+      embedding forall { ce =>
+        ce forall { v =>
           // Check for clashes
           if (v hasMark Visited) {
-            clash = true // Agent already in image => clash!
+            false // Agent already in image => clash!
           } else {
-            mix.mark(v, Visited)
+            mixture.mark(v, Visited)
+            true
           }
-
-          // TODO: This should not be neccesary anymore since
-          // pruneLifts does it.
-
-          // Check agent consistency, ie check if the domain and
-          // image of the embedding have the same neighbours
-          // val u = ce.component(k)
-          // (u matches v) && (u.indices forall {
-          //   j => (u.neighbour(j), v.neighbour(j)) match {
-          //     case (None, _) => true
-          //     case (Some(w1), Some(w2)) => ce(w1.index) == w2
-          //     case _ => false
-          //   }
-          // })
         }
-        // if (!consistent) {
-        //   ce.component.removeEmbedding(ce)
-        //   garbage += 1
-        // }
       }
-      (clash, garbage)
     }
 
     /**
@@ -354,10 +343,10 @@ trait Actions {
         extends Atom {
 
       def apply(agents: Agents, mixture: Mixture) {
-        mix += (state, siteStates)
+        mixture += (state, siteStates)
 
         // Register the new agent in the agents array
-        val u = mix.head
+        val u = mixture.head
         agents(a) = u
       }
     }
@@ -366,7 +355,7 @@ trait Actions {
         extends Atom {
 
       def apply(agents: Agents, mixture: Mixture) {
-        mix -= agents(a)
+        mixture -= agents(a)
       }
     }
 
@@ -378,7 +367,7 @@ trait Actions {
       def apply(agents: Agents, mixture: Mixture) {
         val u1 = agents(a1)
         val u2 = agents(a2)
-        mix connect (u1, s1, l1, u2, s2, l2)
+        mixture connect (u1, s1, l1, u2, s2, l2)
       }
     }
 
@@ -387,7 +376,7 @@ trait Actions {
 
       def apply(agents: Agents, mixture: Mixture) {
         val u = agents(a)
-        mix disconnect (u, s)
+        mixture disconnect (u, s)
       }
     }
 
@@ -396,7 +385,7 @@ trait Actions {
 
       def apply(agents: Agents, mixture: Mixture) {
         val u = agents(a)
-        mix updateAgentState (u, state)
+        mixture updateAgentState (u, state)
       }
     }
 
@@ -406,7 +395,7 @@ trait Actions {
 
       def apply(agents: Agents, mixture: Mixture) {
         val u = agents(a)
-        mix updateSiteState (u, s, state)
+        mixture updateSiteState (u, s, state)
       }
     }
 
@@ -479,6 +468,9 @@ trait Actions {
       }
 
       val atoms = new mutable.ArrayBuffer[Atom]()
+
+      // FIXME: We are using the longest common prefix convention
+      // here but we are not supposed to.
 
       // Find all agent deletions
       for (lu <- lhs drop pe.length) {
@@ -560,8 +552,8 @@ trait Actions {
       }
 
       def atomOrd(a: Atom) = a match {
-        case _:LinkAddition => 1
         case _:LinkDeletion => 0
+        case _:LinkAddition => 1
       }
 
       atoms ++= linkAtoms.sortBy(atomOrd)

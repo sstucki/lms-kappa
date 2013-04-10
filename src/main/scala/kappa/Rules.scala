@@ -26,15 +26,8 @@ trait Rules {
     /** Register this rule in the model. */
     def register {
 
-      // Register the components of LHS pattern
-      action.lhs.registerComponents
-
-      // Find positive influence of this rule on every registered
-      // component and initialize the positive influence map
-      // of the action accordingly.
-      for (c <- patternComponents) yield {
-        (c.modelIndex, action.addActivation(c))
-      }
+      // Register the action
+      action.register
 
       // Add this rule to the rules vector of the model
       rules = rules :+ this
@@ -56,10 +49,11 @@ trait Rules {
     bwdLaw: () => Double)
       extends RuleBox {
 
+    val fwdAction = biaction.fwdAction
+    val bwdAction = biaction.bwdAction
+
     /** Register this bidirectional rule in the model. */
     def register {
-      val fwdAction = biaction.fwdAction
-      val bwdAction = biaction.bwdAction
       Rule(fwdAction, fwdLaw).register
       Rule(bwdAction, bwdLaw).register
     }
