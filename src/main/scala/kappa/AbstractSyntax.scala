@@ -52,6 +52,9 @@ trait AbstractSyntax {
     /** Append an abstract action to this partial abstract pattern.  */
     @inline def :+(that: AbstractAction): AbstractAction = this ++ that
 
+    /** Append an abstract bidirectional action to this partial abstract pattern.  */
+    @inline def :+(that: AbstractBiAction): AbstractBiAction = this ++ that
+
     /** Append an abstract pattern to this partial abstract pattern.  */
     @inline def ++(that: AbstractPattern): AbstractPattern =
       this.toAbstractPattern ++ that
@@ -60,7 +63,7 @@ trait AbstractSyntax {
     @inline def ++(that: AbstractAction): AbstractAction =
       AbstractAction(this ++ that.lhs, that.rhs)
 
-    /** Append an abstract action to this partial abstract pattern.  */
+    /** Append an abstract bidirectional action to this partial abstract pattern.  */
     @inline def ++(that: AbstractBiAction): AbstractBiAction =
       AbstractBiAction(this ++ that.lhs, that.rhs)
 
@@ -76,12 +79,20 @@ trait AbstractSyntax {
     @inline def +:(that: AbstractAction): AbstractAction =
       that ++ this.toAbstractPattern
 
+    /** Prepend an abstract bidirectional action to this partial abstract pattern.  */
+    @inline def +:(that: AbstractBiAction): AbstractBiAction =
+      that ++ this.toAbstractPattern
+
     /** Prepend an abstract agent to this partial abstract pattern.  */
     @inline def ::(that: AbstractAgent): AbstractPattern =
       that +: this
 
     /** Prepend an abstract action to this partial abstract pattern.  */
     @inline def ::(that: AbstractAction): AbstractAction =
+      that +: this
+
+    /** Prepend an abstract bidirectional action to this partial abstract pattern.  */
+    @inline def ::(that: AbstractBiAction): AbstractBiAction =
       that +: this
 
     /**
@@ -99,8 +110,8 @@ trait AbstractSyntax {
      * Build an action from this partial abstract pattern and the
      * empty pattern.
      */
-    @inline def ->()(implicit bab: BiActionBuilder): bab.B =
-      bab(this.toPattern, AbstractPattern().toPattern)
+    @inline def ->()(implicit ab: ActionBuilder): ab.B =
+      ab(this.toPattern, AbstractPattern().toPattern)
 
     /**
      * Build an abstract action from this partial abstract pattern and
@@ -117,9 +128,10 @@ trait AbstractSyntax {
      * Build a bidirectional action from this partial abstract pattern
      * and the empty pattern.
      */
-    @inline def ->()(implicit ab: ActionBuilder): ab.B =
-      ab(this.toPattern, AbstractPattern().toPattern)
+    @inline def <->()(implicit bab: BiActionBuilder): bab.B =
+      bab(this.toPattern, AbstractPattern().toPattern)
 
+    // FIXME: :@ and !@ methods should be language-specific
     /**
      * Build the tail of a rule that follows mass-action kinetics.
      *
@@ -421,6 +433,7 @@ trait AbstractSyntax {
     @inline def ::(that: AbstractAgent): AbstractAction =
       that +: this
 
+    // FIXME: :@ and !@ methods should be language-specific
     /**
      * Build a rule that follows mass-action kinetics.
      *
@@ -444,33 +457,35 @@ trait AbstractSyntax {
       ab(lhs.toPattern, rhs.toPattern).getAction
   }
 
+  // FIXME: Documentation!
   /** A class representing abstract actions. */
   final case class AbstractBiAction(
     lhs: AbstractPattern, rhs: AbstractPattern) extends PartialAbstractRule {
 
     /** Append an abstract agent to this abstract action.  */
-    @inline def :+(that: AbstractAgent): AbstractAction =
-      AbstractAction(lhs, rhs :+ that)
+    @inline def :+(that: AbstractAgent): AbstractBiAction =
+      AbstractBiAction(lhs, rhs :+ that)
 
     /** Append an abstract pattern to this abstract action.  */
-    @inline def ++(that: AbstractPattern): AbstractAction =
-      AbstractAction(lhs, rhs ++ that)
+    @inline def ++(that: AbstractPattern): AbstractBiAction =
+      AbstractBiAction(lhs, rhs ++ that)
 
     /** Append an abstract rule tail to this abstract action.  */
-    @inline def ++(that: AbstractRuleTail)(
-      implicit ab: ActionBuilder): AbstractRule = {
-      val action = AbstractAction(lhs, this.rhs ++ that.rhs).toAction
-      AbstractRule(action, that.toRate(action.lhs))
+    @inline def ++(that: AbstractBiRuleTail)(
+      implicit bab: BiActionBuilder): AbstractBiRule = {
+      val action = AbstractBiAction(lhs, this.rhs ++ that.rhs).toBiAction
+      AbstractBiRule(action, that.toFwdRate(action.lhs), that.toBwdRate(action.rhs))
     }
 
     /** Prepend an abstract agent to this partial abstract pattern.  */
-    @inline def +:(that: AbstractAgent): AbstractAction =
-      AbstractAction(that +: lhs, rhs)
+    @inline def +:(that: AbstractAgent): AbstractBiAction =
+      AbstractBiAction(that +: lhs, rhs)
 
     /** Prepend an abstract agent to this partial abstract pattern.  */
-    @inline def ::(that: AbstractAgent): AbstractAction =
+    @inline def ::(that: AbstractAgent): AbstractBiAction =
       that +: this
 
+    // FIXME: :@ and !@ methods should be language-specific
     /**
      * Build a rule that follows mass-action kinetics.
      *
@@ -492,7 +507,7 @@ trait AbstractSyntax {
       implicit bab: BiActionBuilder): AbstractBiRule =
       AbstractBiRule(toBiAction, () => fwdLaw, () => bwdLaw)
 
-    /** Convert this abstract action into an action. */
+    /** Convert this abstract bidirectional action into an action. */
     @inline def toBiAction()(implicit bab: BiActionBuilder): BiAction =
       bab(lhs.toPattern, rhs.toPattern).getBiAction
   }
@@ -546,6 +561,71 @@ trait AbstractSyntax {
 
     /** Build a final rate law expression given a left-hand side. */
     @inline def toRate(lhs: Pattern): () => Double = law
+  }
+
+  // FIXME: Documentation!
+  /** A class representing tails of rules. */
+  sealed abstract class AbstractBiRuleTail extends PartialAbstractRule {
+
+    /** The right-hand side of the rule of which this is the tail. */
+    def rhs: AbstractPattern
+
+    /** Prepend an agent to the right-hand side of this tail. */
+    def +:(that: AbstractAgent): AbstractBiRuleTail
+
+    /** Prepend an abstract pattern to the right-hand side of this tail. */
+    def prependAbstractPattern(that: AbstractPattern): AbstractBiRuleTail
+
+    /** Build a final rate law expression given a left-hand side. */
+    def toFwdRate(lhs: Pattern): () => Double
+
+    /** Build a final rate law expression given a left-hand side. */
+    def toBwdRate(lhs: Pattern): () => Double
+
+    /** Prepend an agent to the right-hand side of this tail. */
+    @inline def ::(that: AbstractAgent): AbstractBiRuleTail = that +: this
+  }
+
+  /** A class representing tails of rules that follow mass-action kinetics. */
+  final case class AbstractMassActionBiRuleTail(
+    rhs: AbstractPattern, fwdRate: () => Double, bwdRate: () => Double)
+      extends AbstractBiRuleTail {
+
+    /** Prepend an agent to the right-hand side of this tail. */
+    @inline def +:(that: AbstractAgent): AbstractBiRuleTail =
+      AbstractMassActionBiRuleTail(that +: rhs, fwdRate, bwdRate)
+
+    /** Prepend an abstract pattern to the right-hand side of this tail. */
+    def prependAbstractPattern(that: AbstractPattern): AbstractBiRuleTail =
+      AbstractMassActionBiRuleTail(that ++ rhs, fwdRate, bwdRate)
+
+    /** Build a final forward rate law expression given a left-hand side. */
+    @inline def toFwdRate(lhs: Pattern): () => Double =
+      () => lhs.inMix * fwdRate()
+
+    /** Build a final backward rate law expression given a left-hand side. */
+    @inline def toBwdRate(lhs: Pattern): () => Double =
+      () => lhs.inMix * bwdRate()
+  }
+
+  /** A class representing tails of rules that follow arbitrary rate laws. */
+  final case class AbstractRateLawBiRuleTail(
+    rhs: AbstractPattern, fwdLaw: () => Double, bwdLaw: () => Double)
+      extends AbstractBiRuleTail {
+
+    /** Prepend an agent to the right-hand side of this tail. */
+    @inline def +:(that: AbstractAgent): AbstractBiRuleTail =
+      AbstractRateLawBiRuleTail(that +: rhs, fwdLaw, bwdLaw)
+
+    /** Prepend an abstract pattern to the right-hand side of this tail. */
+    def prependAbstractPattern(that: AbstractPattern): AbstractBiRuleTail =
+      AbstractRateLawBiRuleTail(that ++ rhs, fwdLaw, bwdLaw)
+
+    /** Build a final rate law expression given a left-hand side. */
+    @inline def toFwdRate(lhs: Pattern): () => Double = fwdLaw
+
+    /** Build a final rate law expression given a left-hand side. */
+    @inline def toBwdRate(lhs: Pattern): () => Double = bwdLaw
   }
 
   /** A class representing abstract Rules. */
