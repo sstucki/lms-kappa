@@ -6,7 +6,10 @@ import java.io._
 
 
 trait Perturbations {
-  self: LanguageContext with Mixtures with Patterns with Model =>
+  self: LanguageContext
+      with Mixtures
+      with Patterns
+      with Model =>
 
   import DoubleApprox._
 
@@ -19,7 +22,7 @@ trait Perturbations {
 
     var counter: Int = 0
     var maxCalls: Int = Int.MaxValue
-    var until: () => Boolean = () => false
+    var until: () => Boolean = () => true
     var on = true
 
     def until(cond: => Boolean) {
@@ -27,11 +30,13 @@ trait Perturbations {
     }
 
     def only(n: Int) = OnlyN(n)
-    def only() = Only
 
     case class OnlyN(n: Int) {
       def times { maxCalls = counter + n }
     }
+
+    // FIXME: This is not working
+    def only = Only
 
     object Only {
       def once { maxCalls = counter + 1 }
@@ -40,6 +45,7 @@ trait Perturbations {
 
     // Function0[Unit] API
 
+    /** Apply the effect if the condition holds. */
     def apply {
       if (on) {
         if (until() && counter < maxCalls) {
@@ -66,7 +72,7 @@ trait Perturbations {
   // -- Perturbation conditions --
 
   object StopPerturbationException
-      extends Exception("stopped by perturbation")
+      extends SimulatorException("stopped by perturbation")
 
   // RHZ: since the perturbation condition is an opaque function, we will probably
   //      have this problem: https://github.com/jkrivine/KaSim/issues/21
