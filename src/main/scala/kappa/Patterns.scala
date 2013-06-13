@@ -570,14 +570,31 @@ trait Patterns {
         val n = agents.length
         val componentMap: Array[ComponentIndex] = Array.fill(n)(-1)
 
-        def traverseComponent(i: AgentIndex, j: ComponentIndex) {
-          if (componentMap(i) < 0) {
-            componentMap(i) = j
-            val u = agents(i)
-            for (s <- u.sites) s.link match {
-              case Linked(to, _) =>
-                traverseComponent(to.agent.index, j)
-              case _ => ()
+        // FIXME: Stack overflow
+        // def traverseComponent(i: AgentIndex, j: ComponentIndex) {
+        //   if (componentMap(i) < 0) {
+        //     componentMap(i) = j
+        //     val u = agents(i)
+        //     for (s <- u.sites) s.link match {
+        //       case Linked(to, _) =>
+        //         traverseComponent(to.agent.index, j)
+        //       case _ => ()
+        //     }
+        //   }
+        // }
+
+        def traverseComponent(ci: ComponentIndex, ai: AgentIndex) {
+          val todo = new mutable.Queue[AgentIndex]()
+          todo.enqueue(ai)
+          while (todo.nonEmpty) {
+            val i = todo.dequeue
+            if (componentMap(i) < 0) {
+              componentMap(i) = ci
+              val u = agents(i)
+              for (s <- u.sites) s.link match {
+                case Linked(to, _) => todo.enqueue(to.agent.index)
+                case _ => ()
+              }
             }
           }
         }
@@ -586,7 +603,7 @@ trait Patterns {
         var m = 0
         for (i <- 0 until n) {
           if (componentMap(i) < 0) {
-            traverseComponent(i, m)
+            traverseComponent(m, i)
             m += 1
           }
         }

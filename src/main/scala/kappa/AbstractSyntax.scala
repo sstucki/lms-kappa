@@ -360,6 +360,7 @@ trait AbstractSyntax {
     // RHZ: How can I add things on the language-specific side here?
     // For instance, I'd like to add a + method in Kappa that doesn't
     // require the AbstractLinkState.
+    // I'd probably need to make AbstractPattern an abstract class
 
     final class Connector(
       eps: List[(EndpointName, AbstractLinkState,
