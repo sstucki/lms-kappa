@@ -98,18 +98,26 @@ trait Model extends LanguageContext
   // -- Observables --
 
   final class Obs(val obs: Pattern) {
+    // FIXME: This won't work if we do:
+    // val a = obs ... ; obs ... ; a named "a"
     def named(name: String) = {
       obsNames = obsNames.dropRight(1) :+ name
       this
     }
 
     observables = observables :+ obs
-    obsNames = obsNames :+ (obs.toString)
+    obsNames = obsNames :+ obs.toString
+    // TODO: For some reason I need to register observables here.
+    // It should be investigated why the automatic registration fails.
+    // To see an example where it fails, go to
+    // src/test/scala/kappa/models/DoubleStrandBreakModel.scala
+    for (cc <- obs.components) cc.register
   }
 
   implicit def obsToPattern(obs: Obs): Pattern = obs.obs
 
   /** Declare an observable. */
+  def obs(obs: String) = new Obs(obs) named obs
   def obs(obs: Pattern) = new Obs(obs)
   def obs(obs: AbstractPattern) = new Obs(obs.toPattern)
   def obs(obs: PartialAbstractPattern*) =
@@ -120,6 +128,8 @@ trait Model extends LanguageContext
     val name = if (description == "") obs.toString else description
     this.observables = this.observables :+ obs
     this.obsNames = this.obsNames :+ name
+    // TODO: See note above.
+    for (cc <- obs.components) cc.register
     this
   }
   def withObs(obs: Pattern): Model = withObs("", obs)
@@ -156,7 +166,8 @@ trait Model extends LanguageContext
    */
   def withRule(
     rh: PartialAbstractRule, rt: PartialAbstractRule*)(
-    implicit ab: ActionBuilder): RuleBox = {
+    implicit ab: ActionBuilder, bab: BiActionBuilder)
+      : RuleBox = {
     val rs = partialAbstractRulesToRules(rh :: rt.toList)
     if (rs.length != 1) {
       throw new IllegalArgumentException(
@@ -174,7 +185,8 @@ trait Model extends LanguageContext
    */
   def withRules(
     rh: PartialAbstractRule, rt: PartialAbstractRule*)(
-    implicit ab: ActionBuilder): Seq[RuleBox] = {
+    implicit ab: ActionBuilder, bab: BiActionBuilder)
+      : Seq[RuleBox] = {
     val rs = partialAbstractRulesToRules(rh :: rt.toList)
     rs map registerRule
     rs
@@ -211,13 +223,9 @@ trait Model extends LanguageContext
 
     // (Re-)compute all component embeddings.  This is necessary as
     // some components might have been registered before the mixture
-    // was initialized (i.e. the LHS' of the rules).
-    //
-    // TODO: To not compute twice we should not compute them when
-    // registering patterns.
-    for (c <- patternComponents) {
+    // was initialized (e.g. the LHS of the rules).
+    for (c <- patternComponents)
       c.initEmbeddings
-    }
   }
 
   def run {
@@ -273,7 +281,7 @@ trait Model extends LanguageContext
       val e = r.action.lhs.randomEmbedding(rand)
 
       // Apply the rule/event
-      // FIXME: We should handle this more elegantly
+      // FIXME: We should perhaps handle this more elegantly
       val (productive, clash) = r.action(e, mix)
       if (productive) {
 

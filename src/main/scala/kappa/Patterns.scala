@@ -67,7 +67,8 @@ trait Patterns {
     }
 
     /** Register the components of this pattern in the model. */
-    def registerComponents = for (c <- components) c.register
+    def registerComponents: Seq[ComponentIndex] =
+      for (c <- components) yield c.register
 
     // FIXME: Should implement this properly.  The actual string
     // representation of patterns is probably language-specific, so we
@@ -83,20 +84,20 @@ trait Patterns {
     // FIXME Operator precedence problem with :@ and !@
     /** Bidirectional action (BiAction) construction. */
     def <->(that: Pattern)(implicit bab: BiActionBuilder)
-        : bab.B = bab(this, that)
+        : bab.BiRuleBuilder = bab(this, that)
 
     /** Bidirectional action (BiAction) construction. */
     def <->(that: AbstractPattern)(implicit bab: BiActionBuilder)
-        : bab.B = bab(this, that.toPattern)
+        : bab.BiRuleBuilder = bab(this, that.toPattern)
 
     // TODO Implicits defs are too fragile (see AbstractSyntax)
     /** Action construction. */
     def ->(that: Pattern)(implicit ab: ActionBuilder)
-        : ab.B = ab(this, that)
+        : ab.RuleBuilder = ab(this, that)
 
     /** Action construction. */
     def ->(that: AbstractPattern)(implicit ab: ActionBuilder)
-        : ab.B = ab(this, that.toPattern)
+        : ab.RuleBuilder = ab(this, that.toPattern)
 
 
     // -- Core Seq[Pattern.Agent] API --
@@ -225,7 +226,7 @@ trait Patterns {
        * NOTE: This is just a convenience method for making sure we're
        * always accessing the correct set of embeddings.
        */
-      @inline protected[Pattern] def embeddings = {
+      @inline /*protected[Pattern]*/ def embeddings = {
         val representative = patternComponents(this.modelIndex)
         representative._embeddings
       }
@@ -330,6 +331,7 @@ trait Patterns {
         embeddings(rand.nextInt(embeddings.size))
       }
 
+      // RHZ: This is also for the lazy negative update right?
       /**
        * Remove inconsistent embeddings from the embedding set of this
        * pattern component.
@@ -401,7 +403,7 @@ trait Patterns {
               new mutable.HashMap[Mixture.Agent, EmbeddingIndex]()
 
             // Initialize the embedding set
-            initEmbeddings
+            // initEmbeddings
             // TODO: Should we initialise here? We are anyway
             // initialising in Model.initialise
 
@@ -522,7 +524,8 @@ trait Patterns {
             _link = _link match {
               case Undefined => link
               case _ => throw new IllegalStateException(
-                "attempt to define previously defined site")
+                "attempt to redefine a site previously defined as " + _link +
+                " in agent " + agent.state + " and site " + this.state)
             }
             this
           }
@@ -574,7 +577,7 @@ trait Patterns {
             for (s <- u.sites) s.link match {
               case Linked(to, _) =>
                 traverseComponent(to.agent.index, j)
-              case _ => {}
+              case _ => ()
             }
           }
         }
