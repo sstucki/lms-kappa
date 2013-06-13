@@ -134,6 +134,14 @@ trait ComponentEmbeddings {
      *         the pattern component containing `u` into the mixture
      *         containing `v`, or `None` if no such embedding exists.
      */
+    // NOTE that since we are modifying the lift set here, we can
+    // call findEmbedding only once per embedding.  Therefore we
+    // can not initialise embeddings when registering the patterns.
+    // Otherwise we will not find the embedding on the second pass.
+    // The code that test whether the found embedding is already in
+    // the lift set is in extendInjection.
+    // Perhaps to aliviate this problem we could clear all lift sets
+    // in Model.initialise?
     def findEmbedding(u: Pattern.Agent, v: Mixture.Agent)
         : Option[ComponentEmbedding[Mixture.Agent]] = {
       val component = u.component
@@ -188,8 +196,10 @@ trait ComponentEmbeddings {
      */
     def findEmbeddings(ps: Iterable[(Pattern.Agent, Mixture.Agent)])
         : Iterable[ComponentEmbedding[Mixture.Agent]] = {
+      // RHZ: Why not just do the flatMap? It takes cares of the
+      // empty case already.
       if (ps.isEmpty) Iterable.empty
-      else ps flatMap { p => findEmbedding(p._1, p._2) }
+      else ps flatMap { case (u, v) => findEmbedding(u, v) }
     }
 
     /**
@@ -251,23 +261,21 @@ trait ComponentEmbeddings {
       u: Pattern.Agent, v: Mixture.Agent, inj: Array[Mixture.Agent])
         : Boolean = {
       val i = u.index
-      if (inj(i) != null) inj(i) == v           // Functionality test
-      else if (v hasMark Visited) false         // Injectivity test
-      else if (v.liftMap isDefinedAt u) false   // Duplicate test
-      else {
-        if (u matches v) {
-          inj(i) = v
-          v.mixture.mark(v, Visited)
-          u.indices forall { j =>
-            (u.neighbour(j), v.neighbour(j)) match {
-              case (None, _) => true
-              case (Some(w1), Some(w2)) =>
-                extendInjection(w1, w2, inj)
-              case _ => false
-            }
+      if (inj(i) != null) inj(i) == v          // Functionality test
+      else if (v hasMark Visited) false        // Injectivity test
+      else if (v.liftMap isDefinedAt u) false  // Duplicate test
+      else if (u matches v) {
+        inj(i) = v
+        v.mixture.mark(v, Visited)
+        u.indices forall { j =>
+          (u.neighbour(j), v.neighbour(j)) match {
+            case (None, _) => true
+            case (Some(w1), Some(w2)) =>
+              extendInjection(w1, w2, inj)
+            case _ => false
           }
-        } else false
-      }
+        }
+      } else false
     }
   }
 }

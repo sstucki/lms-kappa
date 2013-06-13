@@ -299,7 +299,7 @@ trait Mixtures {
       u1._links(i1) = Linked(u2, i2, l1 withLinkId freshId)
       u2._links(i2) = Linked(u1, i1, l2 withLinkId freshId)
 
-      // TODO Shouldn't these marks be set by the action?
+      // TODO: Shouldn't these marks be set by the action?
       mark(u1, Updated)
       mark(u2, Updated)
 
@@ -366,9 +366,10 @@ trait Mixtures {
 
     // -- Manage LinkIds in mix --
     // This is a little hack. Even when a more elegant solution is
-    // desirable, it's not clear that one can easily achieved while
-    // making toString work nicely.
+    // desirable, it's not clear that one can be easily achieved
+    // while making toString work nicely.
 
+    // FIXME: This doesn't seem to be working properly
     val recycledIds: mutable.Queue[LinkId] = mutable.Queue()
     var freshId: LinkId = -1
 

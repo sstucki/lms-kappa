@@ -1,4 +1,4 @@
-package scala
+package kappa
 
 import scala.language.implicitConversions
 
