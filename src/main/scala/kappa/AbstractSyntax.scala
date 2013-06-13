@@ -364,42 +364,14 @@ trait AbstractSyntax {
     final class Connector(
       eps: List[(EndpointName, AbstractLinkState,
                  AbstractLinkState, EndpointName)]) {
-      // epToLink: List[(EndpointName, AbstractLink)],
-      // linkToEp: List[(AbstractLink, EndpointName)]) {
 
       def +(ep1: EndpointName, ls1: AbstractLinkState,
             ls2: AbstractLinkState, ep2: EndpointName) =
-        new Connector((ep1, ls1, ls2, ep2) :: eps) //,
-      //    epToLink, linkToEp)
+        new Connector((ep1, ls1, ls2, ep2) :: eps)
 
       def +(xs: Seq[(EndpointName, AbstractLinkState,
                      AbstractLinkState, EndpointName)]) =
         new Connector(xs.toList ++ eps)
-
-      // def +(ep1: EndpointName, l2: AbstractLink) =
-      //   new Connector(epToEp, (ep1, l2) :: epToLink, linkToEp)
-
-      // def +(l1: AbstractLink, ep2: EndpointName) =
-      //   new Connector(epToEp, epToLink, (l1, ep2) :: linkToEp)
-
-      // def +[T: TypeTag](xs: Seq[T]) =
-      //   if (typeOf[T] <:< typeOf[(EndpointName, AbstractLinkState,
-      //                             EndpointName, AbstractLinkState)])
-      //     new Connector(xs.asInstanceOf[
-      //       Seq[(EndpointName, AbstractLinkState,
-      //            EndpointName, AbstractLinkState)]].toList ++
-      //       this.epToEp, epToLink, linkToEp)
-      //   else if (typeOf[T] <:< typeOf[(EndpointName, AbstractLink)])
-      //     new Connector(epToEp, xs.asInstanceOf[
-      //       Seq[(EndpointName, AbstractLink)]].toList ++ epToLink,
-      //       linkToEp)
-      //   else if (typeOf[T] <:< typeOf[(AbstractLink, EndpointName)])
-      //     new Connector(epToEp, epToLink, xs.asInstanceOf[
-      //       Seq[(AbstractLink, EndpointName)]].toList ++ linkToEp)
-      //   else
-      //     throw new IllegalArgumentException(
-      //       "argument is not of appropiate type")
-
 
       def >-(that: AbstractPattern): AbstractPattern = {
 
@@ -475,147 +447,17 @@ trait AbstractSyntax {
       }
     }
 
-    //     // Set of endpoints in `this` to be connected to endpoints
-    //     // in `that`.
-    //     val epToEp1 = epToEp map (_._1) toSet
-
-    //     // Map from endpoints in `this` to abstract links
-    //     val epToLink1 = epToLink.toMap
-
-    //     // Fill the new agents array with agents from this pattern
-    //     // and close the corresponding endpoints
-    //     for ((u1:AbstractAgent, i1) <- self.agents.zipWithIndex) {
-    //       val sites = for ((s1:AbstractSite, j1) <- u1.sites.zipWithIndex) yield s1.link match {
-    //         case AbstractEndpoint(ep1) =>
-    //           // if s1.link is an open endpoint and it has to
-    //           // be connected with another open endpoint...
-    //           if (epToEp1 contains ep1) {
-    //             // then we'll register ep1 in linkMap
-    //             linkMap += ((ep1, i1, j1))
-    //             // and return a site with a closed endpoint
-    //             AbstractSite(s1.state, AbstractUndefined)
-
-    //           } else if (epToLink1 contains ep1) {
-    //             // instead if it's an open endpoint that has to be
-    //             // replaced by an abstract link, we do that
-    //             AbstractSite(s1.state, epToLink1(ep1))
-
-    //           } else {
-    //             s1 // if s1.link is an open endpoint but we are going
-    //                // to connect it, we leave it open
-    //           }
-    //         case _ => s1 // if s1.link is not an open endpoint,
-    //                      // we leave it like that
-    //       }
-    //       // add the new abstract agent
-    //       newAgents(i1) = AbstractAgent(u1.state, sites)
-    //     }
-
-    //     val offset = self.agents.length
-
-    //     // Map from the endpoints in `that` to the endpoints in `this`
-    //     // plus the abstract link states for the new link
-    //     val epToEp2 = (for ((ep1, ls1, ep2, ls2) <- epToEp)
-    //                    yield (ep2, (ep1, ls1, ls2))).toMap
-
-    //     // Map from endpoints in `that` to abstract links
-    //     val epToLink2 = linkToEp map (_.swap) toMap
-
-    //     for ((u2, i2) <- that.agents.zipWithIndex) {
-    //       val sites = for ((s2, j2) <- u2.sites.zipWithIndex) yield {
-    //         s2.link match {
-    //           case AbstractEndpoint(ep2) =>
-    //             if (epToEp2 contains ep2) {
-    //               // we add the new link to links
-    //               val (ep1, ls1, ls2) = epToEp2(ep2)
-    //               linkMap find (_._1 == ep1) match {
-    //                 case Some((ep1, i1, j1)) =>
-    //                   links += ((i1, j1, ls1, offset + i2, j2, ls2))
-    //                 case None =>
-    //                   throw new IllegalArgumentException(
-    //                     "endpoint '" + ep1 + "' was not registered")
-    //               }
-
-    //               // and we return a site with a closed endpoint
-    //               AbstractSite(s2.state, AbstractUndefined)
-
-    //             } else if (epToLink2 contains ep2) {
-    //               AbstractSite(s2.state, epToLink2(ep2))
-
-    //             } else {
-    //               s2 // if s2.link is an open endpoint but we are going
-    //                  // to connect it, we leave it open
-    //             }
-    //           case _ => s2 // if s2.link is not an open endpoint,
-    //                        // we leave it like that
-    //         }
-    //       }
-    //       newAgents(offset + i2) = AbstractAgent(u2.state, sites)
-    //     }
-
-    //     val thatLinks = 
-    //       for ((i1, j1, ls1, i2, j2, ls2) <- that.links)
-    //       yield (i1, j1, ls1, offset + i2, j2, ls2)
-
-    //     AbstractPattern(newAgents.toVector,
-    //       self.siteGraphString + that.siteGraphString,
-    //       links.toList ++ self.links ++ thatLinks)
-    //   }
-    // }
-
     /** Connect this abstract pattern (say `p1`) to another abstract
       * pattern (say `p2`) using the open endpoint `ep1` in `p1` and
       * `ep2` in `p2`.  The resulting link has states `ls1`, `ls2`.
       */
     def -<(ep1: EndpointName, ls1: AbstractLinkState,
            ls2: AbstractLinkState, ep2: EndpointName) =
-      new Connector(List((ep1, ls1, ls2, ep2))) //, List(), List())
+      new Connector(List((ep1, ls1, ls2, ep2)))
 
     def -<(xs: Seq[(EndpointName, AbstractLinkState,
                     AbstractLinkState, EndpointName)]) =
       new Connector(xs.toList)
-
-    // /** Connect this abstract pattern (say `p1`) to another abstract
-    //   * pattern (say `p2`) by replacing a given open endpoint `ep1`
-    //   * in `p1` for a given abstract link `l1`.
-    //   */
-    // def -<(ep1: EndpointName, l1: AbstractLink) =
-    //   new Connector(List(), List((ep1, l1)), List())
-
-    // /** Connect this abstract pattern (say `p1`) to another abstract
-    //   * pattern (say `p2`) by replacing a given open endpoint `ep2`
-    //   * in `p2` for a given abstract link `l2`.
-    //   */
-    // def -<(l2: AbstractLink, ep2: EndpointName) =
-    //   new Connector(List(), List(), List((l2, ep2)))
-
-    // /** Connect this abstract pattern (say `p1`) to another abstract
-    //   * pattern (say `p2`) using a list of connector instructions.
-    //   * A connector instruction can be any of:
-    //   * 1. A tuple (ep1, ls1, ep2, ls2): Connect open endpoint `ep1`
-    //   * in `p1` and `ep2` in `p2` with link states `ls1`, `ls2`.
-    //   * 2. A tuple (ep1, l1): Replace open endpoint `ep1` in `p1` by
-    //   * `l1`.
-    //   * 3. A tuple (ep2, l2): Replace open endpoint `ep2` in `p2` by
-    //   * `l2`.
-    //   */
-    // def -<[T: TypeTag](xs: Seq[T]) =
-    //   if (typeOf[T] <:< typeOf[(EndpointName, AbstractLinkState,
-    //                             EndpointName, AbstractLinkState)])
-    //     new Connector(xs.asInstanceOf[
-    //       Seq[(EndpointName, AbstractLinkState,
-    //            EndpointName, AbstractLinkState)]].toList,
-    //       List(), List())
-    //   else if (typeOf[T] <:< typeOf[(EndpointName, AbstractLink)])
-    //     new Connector(List(),
-    //       xs.asInstanceOf[Seq[(EndpointName, AbstractLink)]].toList,
-    //       List())
-    //   else if (typeOf[T] <:< typeOf[(AbstractLink, EndpointName)])
-    //     new Connector(List(), List(),
-    //       xs.asInstanceOf[Seq[(AbstractLink, EndpointName)]].toList)
-    //   else
-    //     throw new IllegalArgumentException(
-    //       "argument is not of appropiate type")
 
     /** Iterates over all open endpoints in this abstract pattern and
       * replace them using `f`.
@@ -635,65 +477,6 @@ trait AbstractSyntax {
       * abstract pattern.
       */
     def close: AbstractPattern = closeWith { _ => AbstractStub }
-
-    // /** Get a sequence of all open endpoints in this abstract pattern. */
-    // private def openEndpoints(ap: AbstractPattern): Seq[EndpointName] = {
-    //   for (u <- ap.agents; s <- u.sites) yield s.link match {
-    //     case AbstractEndpoint(ep1) => Some(ep1)
-    //     case _ => None
-    //   }
-    // }.flatten
-
-    // /** Connect `this` abstract pattern with `that` abstract pattern
-    //   * using `f`.  This is done by taking the first open endpoints
-    //   * in `this` and `that` and then using `f` to get two abstract
-    //   * links that replace the two open endpoints.  This process is
-    //   * repeated for all zipped pairs of open endpoints in `this` and
-    //   * `that`.
-    //   */
-    // def zipWith(that: AbstractPattern)(
-    //   f: (EndpointName, EndpointName) => (AbstractLink, AbstractLink))
-    //     : AbstractPattern = {
-    //   val ep1s = openEndpoints(this)
-    //   val ep2s = openEndpoints(that)
-    //   val (l1s, l2s) = ((ep1s, ep2s).zipped map f).unzip
-    //   this -< (ep1s zip l2s) + (l1s zip ep2s) >- that
-    // }
-
-    // /** Connect all open endpoints in `this` abstract pattern with all
-    //   * open endpoints in `that` abstract pattern using `f` to
-    //   * generate the appropriate abstract link states.
-    //   */
-    // def zip(that: AbstractPattern)(
-    //   f: (EndpointName, EndpointName) => (AbstractLinkState, AbstractLinkState))
-    //     : AbstractPattern = {
-    //   val ep1s = openEndpoints(this)
-    //   val ep2s = openEndpoints(that)
-    //   val (ls1s, ls2s) = ((ep1s, ep2s).zipped map f).unzip
-    //   val epToEp =
-    //     for ((((ep1, ls1), ep2), ls2) <- ep1s zip ls1s zip ep2s zip ls2s)
-    //     yield (ep1, ls1, ep2, ls2)
-    //   this -< epToEp >- that
-    // }
-
-    // final class Zipped(that: AbstractPattern) {
-    //   def using(f: (EndpointName, EndpointName) =>
-    //     (AbstractLinkState, AbstractLinkState)): AbstractPattern = {
-    //     val ep1s = openEndpoints(self)
-    //     val ep2s = openEndpoints(that)
-    //     val (ls1s, ls2s) = ((ep1s, ep2s).zipped map f).unzip
-    //     val epToEp =
-    //       for ((((ep1, ls1), ep2), ls2) <- ep1s zip ls1s zip ep2s zip ls2s)
-    //       yield (ep1, ls1, ep2, ls2)
-    //     self -< epToEp >- that
-    //   }
-    // }
-
-    // /** Connect all open endpoints in `this` abstract pattern with all
-    //   * open endpoints in `that` abstract pattern using `f` to
-    //   * generate the appropriate abstract link states.
-    //   */
-    // def zip(that: AbstractPattern) = new Zipped(that)
 
 
     @inline override def toAbstractPattern: AbstractPattern = this
