@@ -5,9 +5,6 @@ package kappa
 trait KappaLikeContext extends LanguageContext {
   this: ContactGraphs with KappaLikeAbstractSyntax with KappaLikeParsers =>
 
-  // RHZ: Where should this definition go?
-  val stateDelim = "~"
-
   // -- State set types --
   type AgentStateSet <: KappaLikeAgentStateSet
   type SiteStateSet <: KappaLikeSiteStateSet

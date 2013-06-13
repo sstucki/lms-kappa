@@ -1,25 +1,27 @@
 package kappa
 
+import scala.language.implicitConversions
+
 import scala.util.parsing.combinator._
 
 
 trait Parsers {
   this: LanguageContext with AbstractSyntax =>
 
-  // Fixme: Refactor and remove
+  // FIXME: Refactor and remove
   /** A trait for anything that is parsed as a link . */
   trait GenericLinkStateSetName {
     /** Unique identifier for a link. */
     def id: LinkId
   }
 
-  // Fixme: Refactor and remove
+  // FIXME: Refactor and remove
   // States for contact graphs
   type AgentStateSetName
   type  SiteStateSetName
   type  LinkStateSetName <: GenericLinkStateSetName
 
-  // Fixme: Refactor and remove
+  // FIXME: Refactor and remove
   object AST {
     type ContactGraph = List[CGAgent]
 
@@ -36,7 +38,7 @@ trait Parsers {
   /** Generic parser for the Kappa-like languages. */
   trait GenericParser extends JavaTokenParsers {
 
-    lazy val linkId : Parser[LinkId]      = wholeNumber ^^ (_.toInt)
+    lazy val linkId: Parser[LinkId] = wholeNumber ^^ (_.toInt)
 
     def agentState: Parser[AbstractAgentState]
     def  siteState: Parser[AbstractSiteState]
@@ -65,7 +67,11 @@ trait Parsers {
 
     // site ::= "?" | "!" ( wildcard | linked )
     lazy val link: Parser[AbstractLink] =
-      "?" ^^ (_ => AbstractUndefined) | "!" ~> (wildcard | linked)
+      undefined ^^ (_ => AbstractUndefined) |
+      linkDelim ~> (wildcard | linked) |
+      endpointDelim ~> endpoint
+
+    lazy val endpoint: Parser[AbstractEndpoint] = ident ^^ (AbstractEndpoint(_))
 
     // wildcard ::= "_"
     //   | agent_state [ "." ( "_" | site_state [ "." ( "_" | link_state ) ] ) ]
@@ -97,7 +103,7 @@ trait Parsers {
     lazy val cgIntf: Parser[CGIntf] = "(" ~> repsep(cgSite, ",") <~ ")"
 
     lazy val cgSite: Parser[CGSite] =
-      siteStateSet ~ opt("!" ~> list(linkStateSet)) ^^ {
+      siteStateSet ~ opt(linkDelim ~> list(linkStateSet)) ^^ {
         case states ~ links => CGSite(states, links getOrElse List()) }
 
     @inline final protected def list[T](p: Parser[T]) = "{" ~> rep1sep(p, ",") <~ "}"
@@ -112,7 +118,13 @@ trait Parsers {
 
   val parser: GenericParser
 
-  def parseSiteGraph(s: String) = parser.simpleParse(parser.pattern, s, "site graph")
-  def parseContactGraph(s: String) = parser.simpleParse(parser.cg, s, "contact graph")
+  def parseSiteGraph(s: String) =
+    parser.simpleParse(parser.pattern, s, "site graph")
+  def parseContactGraph(s: String) =
+    parser.simpleParse(parser.cg, s, "contact graph")
+
+  // FIXME: This implicit is problematic
+  // implicit def stringToAbstractPattern(s: String): AbstractPattern =
+  //   parseSiteGraph(s)
 }
 

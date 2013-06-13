@@ -7,6 +7,13 @@ import scala.reflect.ClassTag
 trait LanguageContext {
   this: ContactGraphs with Parsers =>
 
+  // RHZ: Where should these definitions go?
+  val stateDelim = "~"
+  val linkDelim = "!"
+  val endpointDelim = "/"
+  val undefined = "?"
+
+
   // FIXME: Refactor parsing of contact graphs and remove dependency
   // on Parsers
 
