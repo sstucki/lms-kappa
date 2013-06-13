@@ -102,17 +102,6 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
 
   // -- Sugar for pattern and mixture construction. --
 
-  // rhz: I want to be able to leave "holes" in a SiteGraphBuilder where
-  // later I connect sites
-  // Perhaps the only thing I need is to be able to "glue" two patterns
-  // with one semi-link each. Or maybe I need a "hole" type where I can
-  // put stubs, wildcards, links, anything, maybe even states.
-  // Example of what I want:
-  //   pp"A(c!_, x!1), _(a!1)" connect "C(a!_)" apply "B"
-  // Or: pp"A(x!_)" free
-  // Or: pp"A(x!_)" wildcard (Some("A", None), None, None)
-
-
   /** Convert site names into abstract site states. */
   implicit def siteNameToAbstractSiteState(
     n: SiteName): PartialAbstractKappaSiteState =
