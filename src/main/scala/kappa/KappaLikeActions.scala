@@ -68,7 +68,7 @@ trait KappaLikeActions extends Actions {
     }
 
   final class KappaLikeRuleBuilder(action: Action)
-      extends RuleBuilder {
+      extends RuleBuilderIntf {
 
     def getAction: Action = action
 
@@ -97,7 +97,7 @@ trait KappaLikeActions extends Actions {
 
 
   final class KappaLikeBiRuleBuilder(biaction: BiAction)
-      extends BiRuleBuilder {
+      extends BiRuleBuilderIntf {
 
     def getBiAction: BiAction = biaction
 

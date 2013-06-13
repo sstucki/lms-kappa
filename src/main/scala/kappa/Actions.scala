@@ -142,8 +142,11 @@ trait Actions {
         // RHZ: Isn't totalAgents = lhs.length + additions?
         val totalAgents = (embedding map (_.length)).sum + additions
         val agents = new Array[Mixture.Agent](totalAgents)
-        for (ce <- embedding; (v, i) <- ce.zipWithIndex)
+        var i = 0
+        for (ce <- embedding; v <- ce) {
           agents(i) = v
+          i += 1
+        }
 
         if (!(preCondition map { f => f(this, agents) } getOrElse true)) {
           println("# pre-condition = false.")
@@ -588,15 +591,14 @@ trait Actions {
 
   /** Convert a pair `(lhs, rhs)` of patterns into an action. */
   implicit def patternPairToAction(lr: (Pattern, Pattern))(
-    implicit ab: ActionBuilder): RuleBuilder =
+    implicit ab: ActionBuilder): ab.RuleBuilder =
     ab(lr._1, lr._2)
 
 
   /** Base class for factory objects used to build actions. */
   abstract class ActionBuilder {
 
-    // FIXME Find a better name for B
-    type B <: RuleBuilder
+    type RuleBuilder <: RuleBuilderIntf
 
     /**
      * Construct an action from a LHS and RHS pattern.
@@ -604,12 +606,12 @@ trait Actions {
      * @param lhs the left-hand side of the resulting action.
      * @param rhs the right-hand side of the resulting action.
      */
-    def apply(lhs: Pattern, rhs: Pattern): B
+    def apply(lhs: Pattern, rhs: Pattern): RuleBuilder
   }
 
 
   /** A trait for Rule builders. */
-  trait RuleBuilder {
+  trait RuleBuilderIntf {
 
     def getAction: Action
 
@@ -648,8 +650,7 @@ trait Actions {
   /** Base class for factory objects used to build actions. */
   abstract class BiActionBuilder {
 
-    // FIXME Find a better name for B
-    type B <: BiRuleBuilder
+    type BiRuleBuilder <: BiRuleBuilderIntf
 
     /**
      * Construct an action from a LHS and RHS pattern.
@@ -657,12 +658,12 @@ trait Actions {
      * @param lhs the left-hand side of the resulting action.
      * @param rhs the right-hand side of the resulting action.
      */
-    def apply(lhs: Pattern, rhs: Pattern): B
+    def apply(lhs: Pattern, rhs: Pattern): BiRuleBuilder
   }
 
 
   /** A trait for BiRule builders. */
-  trait BiRuleBuilder {
+  trait BiRuleBuilderIntf {
 
     def getBiAction: BiAction
 

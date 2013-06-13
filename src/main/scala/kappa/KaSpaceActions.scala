@@ -18,7 +18,7 @@ trait KaSpaceActions extends KappaLikeActions {
   /** Factory object for building KaSpace actions.  */
   implicit object KaSpaceActionBuilder extends ActionBuilder {
 
-    type B = KappaLikeRuleBuilder
+    type RuleBuilder = KappaLikeRuleBuilder
 
     /**
      * Construct a KaSpace action from a LHS and RHS pattern using the
@@ -27,7 +27,7 @@ trait KaSpaceActions extends KappaLikeActions {
      * @param lhs the left-hand side of this action.
      * @param rhs the right-hand side of this action.
      */
-    def apply(lhs: Pattern, rhs: Pattern): B = {
+    def apply(lhs: Pattern, rhs: Pattern): RuleBuilder = {
 
       val (pe, rhsAgentOffsets) =
         KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
@@ -42,9 +42,9 @@ trait KaSpaceActions extends KappaLikeActions {
   /** Factory object for building bidirectional KaSpace actions.  */
   implicit object KaSpaceBiActionBuilder extends BiActionBuilder {
 
-    type B = KappaLikeBiRuleBuilder
+    type BiRuleBuilder = KappaLikeBiRuleBuilder
 
-    def apply(lhs: Pattern, rhs: Pattern): B = {
+    def apply(lhs: Pattern, rhs: Pattern): BiRuleBuilder = {
 
       val (fwdPe, rhsAgentOffsets) =
         KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)

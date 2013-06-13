@@ -16,7 +16,7 @@ trait TKappaActions extends KappaLikeActions {
   /** Factory object for building KaSpace actions.  */
   implicit object TKappaActionBuilder extends ActionBuilder {
 
-    type B = KappaLikeRuleBuilder
+    type RuleBuilder = KappaLikeRuleBuilder
 
     /**
      * Construct a KaSpace action from a LHS and RHS pattern using the
@@ -25,7 +25,7 @@ trait TKappaActions extends KappaLikeActions {
      * @param lhs the left-hand side of this action.
      * @param rhs the right-hand side of this action.
      */
-    def apply(lhs: Pattern, rhs: Pattern): B = {
+    def apply(lhs: Pattern, rhs: Pattern): RuleBuilder = {
 
       val (pe, rhsAgentOffsets) =
         KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
@@ -40,9 +40,9 @@ trait TKappaActions extends KappaLikeActions {
   /** Factory object for building bidirectional KaSpace actions.  */
   implicit object TKappaBiActionBuilder extends BiActionBuilder {
 
-    type B = TKappaBiRuleBuilder
+    type BiRuleBuilder = TKappaBiRuleBuilder
 
-    def apply(lhs: Pattern, rhs: Pattern): B = {
+    def apply(lhs: Pattern, rhs: Pattern): BiRuleBuilder = {
 
       val (fwdPe, rhsAgentOffsets) =
         KappaLikeActionBuilder.commonLongestPrefix(lhs, rhs)
@@ -59,7 +59,7 @@ trait TKappaActions extends KappaLikeActions {
 
 
   final class TKappaBiRuleBuilder(biaction: BiAction)
-      extends BiRuleBuilder {
+      extends BiRuleBuilderIntf {
 
     def getBiAction: BiAction = biaction
 
@@ -104,10 +104,6 @@ trait TKappaActions extends KappaLikeActions {
 
     var lastEnergy: Double = 0
 
-    // FIXME: The problem is that the post-condition is evaluated
-    // before performUpdates is run and therefore the delta energy
-    // is always 0.
-
     /** 
      * Check whether we accept or not the transition given the
      * difference in energy between the source and target state.
@@ -115,7 +111,6 @@ trait TKappaActions extends KappaLikeActions {
     def checkEnergy(action: Action, agents: Action.Agents): Boolean = {
       val nextEnergy = mixtureEnergy
       lazy val deltaE = nextEnergy - lastEnergy
-      println(nextEnergy + " - " + lastEnergy + " = " + deltaE)
       lazy val prob = math.exp(-deltaE / kB * temperature)
       (lastEnergy >= nextEnergy) || (rand.nextDouble < prob)
     }
