@@ -116,6 +116,8 @@ trait Mixtures {
          with RollbackMachine
          with Marks {
 
+    // TODO: It would be nice if Mixture didn't have a reverse method
+
     import Mixture.{Agent, Linked}
 
     /** The [[Markable]] instances in this mixture are [[Agent]]s. */
@@ -222,6 +224,8 @@ trait Mixtures {
       // TODO: All of this could be in the action too right?
       checkpointAgent(agent)
 
+      mark(agent, Updated)
+
       // Disconnect agent
       for (l <- agent._links) {
         l match {
@@ -235,6 +239,9 @@ trait Mixtures {
           case _ => ()
         }
       }
+
+      // We annotate the agent for garbage collection
+      mark(agent, Deleted)
 
       super.-=(agent)
     }
@@ -255,7 +262,7 @@ trait Mixtures {
     // link addition and deletion).  The actual instances of both the
     // mixture and the specific agents they will act on are
     // only defined w.r.t. an embedding.  In that sense the embedding
-    // is sequence of actual agent parameters to the action, an
+    // is a sequence of actual agent parameters to the action, an
     // environment that binds the formal agent parameter to actual
     // ones.
     //
@@ -286,6 +293,12 @@ trait Mixtures {
     // that this class is not supposed to be manipulated directly in
     // this way.  Then again, as long as it doesn't hurt performance,
     // we might always add it just for fun.
+    //
+    // RHZ: I think it's important to be able to manipulate Mixtures
+    // easily to let the user define perturbations that modify the
+    // Mixture or stop the simulation to run a deterministic sequence
+    // of actions without having to create embeddings manually for
+    // that.  See for instance DoubleStrandBreakModel.scala.
 
     /** Connect two sites in this mixture. */
     def connect(u1: Agent, i1: SiteIndex, l1: LinkState,
@@ -355,6 +368,29 @@ trait Mixtures {
       mark(u, Updated)
       this
     }
+
+    // -- Traversals --
+
+    /** Traverse the mixture by jumping from one agent `u` to its
+      * neighbour at site `site`(u) and call `f` on each agent that
+      * finds on the way.
+      */
+    def traverse(u: Agent, site: Agent => SiteIndex, f: Agent => Unit) {
+      def trav(agentOpt: Option[Agent]) {
+        agentOpt match {
+          case Some(u) => { f(u); trav(u.neighbour(site(u))) }
+          case None => ()
+        }
+      }
+      trav(Some(u))
+    }
+
+    def traverse(u: Agent, i: SiteIndex)(f: Agent => Unit): Unit =
+      traverse(u, _ => i, f)
+
+    def traverse(u: Agent, s: SiteState)(f: Agent => Unit): Unit =
+      traverse(u, u => u.siteIndex(s), f)
+
 
     override def toString = iterator.mkString("", ",", "")
   }
@@ -477,7 +513,9 @@ trait Mixtures {
        * consistency and remove those that are no longer valid.
        */
       def pruneLifts(checkpoint: Boolean) {
-        val invalidLifts = liftMap filterNot { case (u, ce) =>
+        val invalidLifts =
+          if (this hasMark Deleted) liftMap
+          else liftMap filterNot { case (u, ce) =>
             (u matches this) && (u.indices forall {
             j => (u.neighbour(j), this.neighbour(j)) match {
               case (None, _) => true
@@ -486,9 +524,10 @@ trait Mixtures {
             }
           })
         }
-        for (ce <- invalidLifts.values) {
+        for ((u, ce) <- invalidLifts) {
           if (checkpoint)
             mix.checkpointRemovedEmbedding(ce)
+          // removeEmbeddings takes care of removing the lifts
           ce.component.removeEmbedding(ce)
         }
       }

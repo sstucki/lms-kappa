@@ -6,7 +6,11 @@ import scala.language.postfixOps
 import kappa.TKappaModel
 
 
-class Chemosensors1d extends TKappaModel {
+class Chemosensors1dModel extends TKappaModel {
+
+  // Model variants
+  val withGrowingRing = true
+  val withSensorBinding = true
 
   // Rate constant for the irreversible rules
   var insert = 2e-6
@@ -24,10 +28,6 @@ class Chemosensors1d extends TKappaModel {
   // Ising variables
   val alpha = 0.5
   val J = 5.0
-
-  // Model variants
-  val withGrowingRing = false
-  val withSensorBinding = true
 
   if (!withGrowingRing) {
     insert = 0.0
@@ -114,9 +114,8 @@ class Chemosensors1d extends TKappaModel {
   init ("M(s, l!2, r!1), M(s, l!1, r!2)")
 
 
-  // More invariants
-  val disconnectedSensor: Pattern = "S(m)"
-  invariant (disconnectedSensor.inMix == 0)
+  // More invariants: no unbound sensors
+  invariant ("S(m)".inMix == 0)
 
 
   // More observables
@@ -170,11 +169,15 @@ class Chemosensors1d extends TKappaModel {
   // }
 
   if (withGrowingRing) {
-    // maxTime = 1.3e6
+    maxTime = 1.3e6
     // maxEvents = 800000
   } else {
     maxTime = 3e5
   }
   run
+}
+
+object Chemosensors1dModelMain {
+  def main(args: Array[String]): Unit = new Chemosensors1dModel
 }
 

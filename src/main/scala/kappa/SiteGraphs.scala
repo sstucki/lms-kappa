@@ -119,6 +119,27 @@ trait SiteGraphs {
         new Site(i, siteStates(i), links(i))
 
       /**
+       * Return a given site of this agent as a [[Agent#Site]].
+       *
+       * @param s the site state of the site to return.
+       * @return the first site with state `s`.
+       */
+      @inline def site(s: SiteState): Site = site(siteIndex(s))
+
+      /**
+       * Return the index of the site with the given state.
+       *
+       * @param s the site state.
+       * @return the index of the first site with state `s`.
+       */
+      @inline def siteIndex(s: SiteState): SiteIndex = {
+        val i = siteStates.indexWhere { t: SiteState => t == s }
+        if (i < 0) throw new NoSuchElementException(
+          "agent " + this + " doesn't have a site with state " + s)
+        i
+      }
+
+      /**
        * Return a view of the sites of this agent.
        *
        * NOTE: This will return a collection of [[Agent#Site]]s

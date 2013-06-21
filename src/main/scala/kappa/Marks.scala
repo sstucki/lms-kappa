@@ -38,6 +38,9 @@ final object SideEffect extends MarkType {
 final object Visited extends MarkType {
   @inline def toInt = 3
 }
+final object Deleted extends MarkType {
+  @inline def toInt = 4
+}
 // etc...
 
 

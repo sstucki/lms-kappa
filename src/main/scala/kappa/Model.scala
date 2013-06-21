@@ -117,7 +117,7 @@ trait Model extends LanguageContext
   implicit def obsToPattern(obs: Obs): Pattern = obs.obs
 
   /** Declare an observable. */
-  def obs(obs: String) = new Obs(obs) named obs
+  def obs(obs: String) = new Obs(stringToPattern(obs)) named obs
   def obs(obs: Pattern) = new Obs(obs)
   def obs(obs: AbstractPattern) = new Obs(obs.toPattern)
   def obs(obs: PartialAbstractPattern*) =
