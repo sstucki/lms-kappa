@@ -32,8 +32,7 @@ trait Patterns {
    */
   final class Pattern private (
     val components: Array[Pattern.Component],
-    val agents: Array[Pattern.Agent],
-    val siteGraphString: String = "")
+    val agents: Array[Pattern.Agent])
       extends Seq[Pattern.Agent] {
 
     import SiteGraph.{Link, Undefined, Stub, Wildcard}
@@ -74,14 +73,14 @@ trait Patterns {
     // representation of patterns is probably language-specific, so we
     // might want to delegate this to an language-specific
     // PatternPrinter or something like that.
-    override def toString =
-      if (!siteGraphString.isEmpty) siteGraphString
-      else iterator.mkString("", ",", "")
+    //
+    // RHZ: There is a dirty solution in Mixtures
+    override def toString = iterator.mkString("", ",", "")
 
 
     // -- BiAction construction --
 
-    // FIXME Operator precedence problem with :@ and !@
+    // FIXME: Operator precedence problem with :@ and !@
     /** Bidirectional action (BiAction) construction. */
     def <->(that: Pattern)(implicit bab: BiActionBuilder)
         : bab.BiRuleBuilder = bab(this, that)
@@ -499,13 +498,8 @@ trait Patterns {
     }
 
 
-    /**
-     * Builder for patterns.
-     *
-     * @param siteGraphString the string representing the pattern to build.
-     * @param lstateMap map from bond labels to forward and reverse link states.
-     */
-    class Builder(val siteGraphString: String) {
+    /** Builder for patterns. */
+    class Builder() {
 
       import Builder._
 
@@ -611,7 +605,7 @@ trait Patterns {
         // Allocate the pattern
         val as = new Array[Pattern.Agent](n)
         val cs = new Array[Pattern.Component](m)
-        val p = new Pattern(cs, as, siteGraphString)
+        val p = new Pattern(cs, as)
 
         // Collect the agent indices in per-component buffers
         val compAgentIndices =

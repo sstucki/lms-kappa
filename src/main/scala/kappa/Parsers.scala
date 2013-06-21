@@ -118,13 +118,13 @@ trait Parsers {
 
   val parser: GenericParser
 
-  def parseSiteGraph(s: String) =
+  def parseSiteGraph(s: String): AbstractPattern =
     parser.simpleParse(parser.pattern, s, "site graph")
-  def parseContactGraph(s: String) =
+  def parseContactGraph(s: String): AST.ContactGraph =
     parser.simpleParse(parser.cg, s, "contact graph")
 
   // FIXME: This implicit is problematic
-  // implicit def stringToAbstractPattern(s: String): AbstractPattern =
-  //   parseSiteGraph(s)
+  implicit def stringToAbstractPattern(s: String): AbstractPattern =
+    parseSiteGraph(s)
 }
 

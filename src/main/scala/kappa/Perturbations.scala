@@ -9,6 +9,7 @@ trait Perturbations {
   self: LanguageContext
       with Mixtures
       with Patterns
+      with AbstractSyntax
       with Model =>
 
   import DoubleApprox._
@@ -74,19 +75,34 @@ trait Perturbations {
   object StopPerturbationException
       extends SimulatorException("stopped by perturbation")
 
-  // RHZ: since the perturbation condition is an opaque function, we will probably
+  // RHZ: Since the perturbation condition is an opaque function, we will probably
   //      have this problem: https://github.com/jkrivine/KaSim/issues/21
 
   /** A trait for perturbation conditions. */
   class PerturbationCondition(condition: () => Boolean)
       extends Function0[Boolean] {
-
-    // Perturbation construction operators
+    self =>
 
     def exec(effect: => Unit) = Perturbation(this, () => effect)
 
-    def add(n: Int) = Add(m => Perturbation(this, () => mix ++= m * n))
-    def add(n: Int, m: Mixture) = Perturbation(this, () => mix ++ m * n)
+    class Add(n: Int) {
+      def of(m: Mixture) = Perturbation(self, () => mix ++ m * n)
+      def of(m: AbstractPattern): Perturbation = of(Mixture(m.toPattern))
+    }
+
+    class Del(n: Int) {
+      def of(p: Pattern) = Perturbation(self,
+        () => removeNEmbeddings(n, p))
+      def of(p: AbstractPattern): Perturbation = of(p.toPattern)
+    }
+
+    def add(n: Int) = new Add(n)
+    def add(n: Int, m: Mixture) = new Add(n) of m
+    def add(n: Int, m: AbstractPattern) = new Add(n) of m
+
+    def del(n: Int) = new Del(n)
+    def del(n: Int, p: Pattern) = new Del(n) of p
+    def del(n: Int, p: AbstractPattern) = new Del(n) of p
 
     def removeNEmbeddings(n: Int, p: Pattern) {
       for (c <- p.components) {
@@ -102,9 +118,6 @@ trait Perturbations {
         }
       }
     }
-
-    def del(n: Int) = Del(p => Perturbation(this, () => removeNEmbeddings(n, p)))
-    def del(n: Int, p: Pattern) = Perturbation(this, () => removeNEmbeddings(n, p))
 
     // RHZ: I find this a bit useless. WDYT?
     def snapshot(baseFilename: String) = {
@@ -141,9 +154,6 @@ trait Perturbations {
 
     def stop = Perturbation(this,
       () => throw StopPerturbationException)
-
-    case class Add(of: Mixture => Perturbation)
-    case class Del(of: Pattern => Perturbation)
 
     // Function0[Boolean] API
 

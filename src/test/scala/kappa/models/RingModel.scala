@@ -1,12 +1,11 @@
 package kappa.models
 
-import org.scalatest.FlatSpec
 import scala.math._
 
 import kappa.{ KaSpaceModel, Orientation, Position }
 
 
-class RingModel extends KaSpaceModel with FlatSpec {
+class RingModel extends KaSpaceModel {
 
   // Agent radius
   val radius = 1
@@ -19,9 +18,9 @@ class RingModel extends KaSpaceModel with FlatSpec {
   val wLR = Orientation.z(-Pi * 2 / 3)
   val wRL = Orientation.z( Pi * 2 / 3)
 
-  contactGraph = s"""A:{$radius} (c:{$posR}!{3:{$wRL}}, b:{$posL}!{1:{$wLR}}),
-                     B:{$radius} (a:{$posR}!{1:{$wRL}}, c:{$posL}!{2:{$wLR}}),
-                     C:{$radius} (b:{$posR}!{2:{$wRL}}, a:{$posL}!{3:{$wLR}})"""
+  contactGraph = s"""A~{$radius} (c~{$posR}!{3~{$wRL}}, b~{$posL}!{1~{$wLR}}),
+                     B~{$radius} (a~{$posR}!{1~{$wRL}}, c~{$posL}!{2~{$wLR}}),
+                     C~{$radius} (b~{$posR}!{2~{$wRL}}, a~{$posL}!{3~{$wLR}})"""
 
   // Number of molecules in initial mixture.
   val nA = 3000
@@ -63,9 +62,9 @@ class RingModel extends KaSpaceModel with FlatSpec {
 
   // -- Rules --
   withRules(  // Bind
-    "A(b), B(a)" -> s"A(b!1:$wLR), B(a!1:$wRL)" :@ on_rate,
-    "B(c), C(b)" -> s"B(c!1:$wLR), C(b!1:$wRL)" :@ on_rate,
-    "C(a), A(c)" -> s"C(a!1:$wLR), A(c!1:$wRL)" :@ on_rate)
+    "A(b), B(a)" -> s"A(b!1~$wLR), B(a!1~$wRL)" :@ on_rate,
+    "B(c), C(b)" -> s"B(c!1~$wLR), C(b!1~$wRL)" :@ on_rate,
+    "C(a), A(c)" -> s"C(a!1~$wLR), A(c!1~$wRL)" :@ on_rate)
 
   withRules(  // Unbind
     "A(b!1), B(a!1)" -> "A(b), B(a)" :@ off_rate,
@@ -74,17 +73,17 @@ class RingModel extends KaSpaceModel with FlatSpec {
 
   withRules(  // Close
     "B(a, c!1), C(b!1, a!2), A(c!2, b)" ->
-    s"B(a!3:$wRL, c!1), C(b!1, a!2), A(c!2, b!3:$wLR)" :@ close_rate,
+    s"B(a!3~$wRL, c!1), C(b!1, a!2), A(c!2, b!3~$wLR)" :@ close_rate,
     "C(b, a!1), A(c!1, b!2), B(a!2, c)" ->
-    s"C(b!3:$wRL, a!1), A(c!1, b!2), B(a!2, c!3:$wLR)" :@ close_rate,
+    s"C(b!3~$wRL, a!1), A(c!1, b!2), B(a!2, c!3~$wLR)" :@ close_rate,
     "A(c, b!1), B(a!1, c!2), C(b!2, a)" ->
-    s"A(c!3:$wRL, b!1), B(a!1, c!2), C(b!2, a!3:$wLR)" :@ close_rate)
+    s"A(c!3~$wRL, b!1), B(a!1, c!2), C(b!2, a!3~$wLR)" :@ close_rate)
 
 
   // -- Mixture --
-  withInit(m"A:$radius (b:$posL, c:$posR)" * nA)
-  withInit(m"B:$radius (a:$posR, c:$posL)" * nB)
-  withInit(m"C:$radius (a:$posL, b:$posR)" * nC)
+  withInit(m"A~$radius (b~$posL, c~$posR)" * nA)
+  withInit(m"B~$radius (a~$posR, c~$posL)" * nB)
+  withInit(m"C~$radius (a~$posL, b~$posR)" * nC)
 
 
   // -- Expected observables --
@@ -123,5 +122,9 @@ class RingModel extends KaSpaceModel with FlatSpec {
   // Simulate!
   maxTime = 1E6
   run
+}
+
+object RingModelMain {
+  def main(args: Array[String]): Unit = new RingModel
 }
 

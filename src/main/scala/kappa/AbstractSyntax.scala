@@ -109,8 +109,8 @@ trait AbstractSyntax {
       AbstractAction(this.toAbstractPattern, that.toAbstractPattern)
 
     /** Build an action from this partial abstract pattern and a pattern. */
-    @inline def ->(that: Pattern)(implicit ab: ActionBuilder)
-        : ab.RuleBuilder = ab(this.toPattern, that)
+    @inline def ->(that: AbstractPattern)(implicit ab: ActionBuilder)
+        : ab.RuleBuilder = ab(this.toPattern, that.toPattern)
 
     /**
      * Build an action from this partial abstract pattern and the
@@ -127,8 +127,8 @@ trait AbstractSyntax {
       AbstractBiAction(this.toAbstractPattern, that.toAbstractPattern)
 
     /** Build a bidirectional action from this partial abstract pattern and a pattern. */
-    @inline def <->(that: Pattern)(implicit bab: BiActionBuilder)
-        : bab.BiRuleBuilder = bab(this.toPattern, that)
+    @inline def <->(that: AbstractPattern)(implicit bab: BiActionBuilder)
+        : bab.BiRuleBuilder = bab(this.toPattern, that.toPattern)
 
     /**
      * Build a bidirectional action from this partial abstract pattern
@@ -337,23 +337,29 @@ trait AbstractSyntax {
   /** A class representing abstract patterns. */
   final case class AbstractPattern(
     agents: Vector[AbstractAgent] = Vector(),
-    siteGraphString: String = "",
     links: Seq[(AgentIndex, SiteIndex, AbstractLinkState,
-                AgentIndex, SiteIndex, AbstractLinkState)] =
-      List())
+                AgentIndex, SiteIndex, AbstractLinkState)] = List())
       extends PartialAbstractPattern {
     self =>
 
     @inline override def :+(that: AbstractAgent): AbstractPattern = {
-      AbstractPattern(agents :+ that, siteGraphString, links)
+      AbstractPattern(agents :+ that, links)
     }
 
     @inline override def ++(that: AbstractPattern): AbstractPattern =
-      AbstractPattern(this.agents ++ that.agents, siteGraphString, links)
+      AbstractPattern(this.agents ++ that.agents, links)
 
     @inline override def +:(that: AbstractAgent): AbstractPattern = {
-      AbstractPattern(that +: agents, siteGraphString, links)
+      AbstractPattern(that +: agents, links)
     }
+
+    def reverse: AbstractPattern =
+      new AbstractPattern(agents.reverse,
+        for ((i1, j1, ls1, i2, j2, ls2) <- links)
+        yield (agents.length - i1 - 1, j1, ls1,
+               agents.length - i2 - 1, j2, ls2))
+
+    @inline def inMix: Int = this.toPattern.inMix
 
     // *** Connectors ***
 
@@ -443,7 +449,6 @@ trait AbstractSyntax {
           yield (offset + i1, j1, ls1, offset + i2, j2, ls2)
 
         AbstractPattern(newAgents.toVector,
-          self.siteGraphString + that.siteGraphString,
           self.links ++ thatLinks ++ links.toList)
       }
     }
@@ -471,7 +476,7 @@ trait AbstractSyntax {
             case AbstractEndpoint(ep) => AbstractSite(s.state, f(ep))
             case _ => s
           })
-      AbstractPattern(newAgents.toVector, siteGraphString, links)
+      AbstractPattern(newAgents.toVector, links)
     }
 
     /** Replace all open endpoints by stubs (i.e. free sites) in this
@@ -485,7 +490,7 @@ trait AbstractSyntax {
     override def toPattern: Pattern = {
 
       // Create a builder to build this pattern
-      val pb = new Pattern.Builder(siteGraphString)
+      val pb = new Pattern.Builder()
 
       // Create a map to track which sites a given link connects.
       type LinkMapValue = List[(pb.type#Agent#Site, AbstractLinkState)]
@@ -842,8 +847,8 @@ trait AbstractSyntax {
    * @param expr the string to build the pattern from.
    * @return a pattern corresponding to the expression `expr`.
    */
-  implicit def stringToPattern(expr: String): Pattern =
-    parseSiteGraph(expr).toPattern
+  // implicit def stringToPattern(expr: String): Pattern =
+  //   parseSiteGraph(expr).toPattern
 
   /**
    * Build a mixture from a string.
@@ -854,9 +859,16 @@ trait AbstractSyntax {
    * @param expr the string to build the mixture from.
    * @return a mixture corresponding to the expression `expr`.
    */
-  implicit def stringToMixture(expr: String) = Mixture(stringToPattern(expr))
+  // implicit def stringToMixture(expr: String) = Mixture(stringToPattern(expr))
 
-  implicit def scToInterpolator(sc: StringContext): Interpolator =
+  // Not implicits anymore
+  def stringToPattern(expr: String): Pattern =
+    parseSiteGraph(expr).toPattern
+
+  def stringToMixture(expr: String): Mixture =
+    Mixture(stringToPattern(expr))
+
+  implicit def interpolator(sc: StringContext): Interpolator =
     new Interpolator(sc)
 
   final class Interpolator(sc: StringContext) {
