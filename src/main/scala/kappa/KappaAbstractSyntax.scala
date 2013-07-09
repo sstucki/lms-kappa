@@ -32,6 +32,8 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
     /** Creates an agent state from this abstract agent state. */
     @inline final def toAgentState: AgentState =
       KappaAgentState(findAgentStateSet)
+
+    override def toString = agentType
   }
 
   /** Companion object of the AbstractKappaAgentState class. */
@@ -48,6 +50,8 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
     /** Creates a site state from this abstract site state. */
     @inline final def toSiteState(agentStateSet: AgentStateSet): SiteState =
       KappaSiteState(findSiteStateSet(agentStateSet), label)
+
+    override def toString = name + (label map ("~"+_) getOrElse "")
   }
 
   /** Companion object of the AbstractKappaSiteState class. */
@@ -64,6 +68,8 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
     @inline final def toLinkState(linkId: Option[LinkId],
       source: SiteStateSet, target: SiteStateSet): LinkState =
       KappaLinkState(linkId)
+
+    override def toString = ""
   }
 
   /** Companion object of the AbstractKappaLinkState class. */
@@ -91,6 +97,8 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
   /** A class representing abstract KappaLike links. */
   class AbstractKappaLinked(val id: LinkId) extends AbstractLinked {
     @inline final def state: AbstractLinkState = AbstractKappaLinkState
+
+    override def toString = "!" + id
   }
 
   /** Companion object of the PartialAbstractKappaLinkState class. */
@@ -110,6 +118,16 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
   /** Convert link IDs into abstract links. */
   implicit def linkIdToAbstractLinkState(id: LinkId): AbstractKappaLinked =
     AbstractKappaLinked(id)
+
+
+  /** Chain together a sequence of monomers. */
+  def chain(monomers: Seq[AbstractPattern], prev: EndpointName,
+    next: EndpointName): AbstractPattern = {
+    val l = AbstractKappaLinkState
+    monomers.tail.foldLeft(monomers.head) { (chain, ap) =>
+      chain -< (next, l, l, prev) >- ap
+    }
+  }
 
 
   /**

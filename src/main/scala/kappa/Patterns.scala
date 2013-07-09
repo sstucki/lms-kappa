@@ -518,8 +518,9 @@ trait Patterns {
             _link = _link match {
               case Undefined => link
               case _ => throw new IllegalStateException(
-                "attempt to redefine a site previously defined as " + _link +
-                " in agent " + agent.state + " and site " + this.state)
+                "attempt to redefine a site previously defined as " +
+                _link + " in agent '" + agent.state + "' and site '" +
+                this.state + "'")
             }
             this
           }
@@ -529,6 +530,8 @@ trait Patterns {
             to   define Linked(this, toState)
             this
           }
+
+          override def toString = state + "!" + link
         }
 
         val sites = new mutable.ArrayBuffer[Site]()
@@ -538,10 +541,15 @@ trait Patterns {
           sites += s
           s
         }
+
+        override def toString = state + "(" + sites + ")"
       }
 
       final case class Linked(to: Agent#Site, state: LinkState)
-          extends Defined
+          extends Defined {
+        // FIXME: How can I print the linkId?
+        override def toString = state.toString
+      }
 
       /** The set of agents added to the builder. */
       val agents = mutable.ArrayBuffer[Agent]()

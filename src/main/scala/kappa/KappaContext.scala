@@ -184,8 +184,12 @@ trait KappaContext extends KappaLikeContext {
 
     // Site label symbols
     type SiteLabelSym = Int
-    private val labelSyms: Map[SiteLabel, SiteLabelSym] = internalStates.zipWithIndex.toMap
-    @inline def getLabelSym(label: SiteLabel): SiteLabelSym = labelSyms(label)
+    private val labelSyms: Map[SiteLabel, SiteLabelSym] =
+      internalStates.zipWithIndex.toMap
+
+    @inline def getLabelSym(label: SiteLabel): SiteLabelSym =
+      labelSyms.getOrElse(label, throw new Exception("internal " +
+        "state '" + label + "' not found for site '" + this))
 
     // -- KappaLikeSiteStateSet API --
 

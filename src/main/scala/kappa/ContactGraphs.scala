@@ -16,6 +16,9 @@ trait ContactGraphs {
     val linkStateSets: Vector[LinkStateSet],
     private val contactGraphString: String)
   {
+    // TODO: Define contact graph extension
+    // def +=(cg: String) { }
+
     override def toString: String = contactGraphString
   }
 
@@ -26,6 +29,10 @@ trait ContactGraphs {
     else throw new IllegalStateException("no contact graph defined")
 
   def contactGraph_= (cg: String) = {
+    if (_contactGraph != null)
+      throw new IllegalStateException(
+        "contact graph cannot be redefined from scratch")
+
     val ast = parseContactGraph(cg)
     val cgb = new ContactGraphBuilder
     cgb.contactGraphString = cg
