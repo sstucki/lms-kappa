@@ -353,6 +353,10 @@ trait AbstractSyntax {
       AbstractPattern(that +: agents, links)
     }
 
+    def isEmpty: Boolean = agents.isEmpty
+
+    def nonEmpty: Boolean = agents.nonEmpty
+
     def reverse: AbstractPattern =
       new AbstractPattern(agents.reverse,
         for ((i1, j1, ls1, i2, j2, ls2) <- links)
@@ -407,6 +411,7 @@ trait AbstractSyntax {
 
         val offset = self.agents.length
 
+        // TODO: This should be done lazily
         val links = for {
           (ep1, ls1, ls2, ep2) <- eps
           ((i1, j1) +: ep1rest) <- eps1 get ep1
@@ -468,21 +473,32 @@ trait AbstractSyntax {
     /** Iterates over all open endpoints in this abstract pattern and
       * replace them using `f`.
       */
-    def closeWith(f: EndpointName => AbstractLink): AbstractPattern = {
+    def closeAllWith(f: EndpointName => AbstractLink)
+        : AbstractPattern = closeWith(Int.MaxValue, f)
+
+    /** Replace all open endpoints by stubs (i.e. free sites) in this
+      * abstract pattern.
+      */
+    def closeAll: AbstractPattern =
+      closeWith(Int.MaxValue, { _ => AbstractStub })
+
+    def closeWith(n: Int, f: EndpointName => AbstractLink)
+        : AbstractPattern = {
+      var i = 0
       val newAgents =
-        for (u <- agents)
-        yield AbstractAgent(u.state,
+        for (u <- agents) yield AbstractAgent(u.state,
           for (s <- u.sites) yield s.link match {
-            case AbstractEndpoint(ep) => AbstractSite(s.state, f(ep))
+            case AbstractEndpoint(ep) if i < n => {
+              i += 1
+              AbstractSite(s.state, f(ep))
+            }
             case _ => s
           })
       AbstractPattern(newAgents.toVector, links)
     }
 
-    /** Replace all open endpoints by stubs (i.e. free sites) in this
-      * abstract pattern.
-      */
-    def close: AbstractPattern = closeWith { _ => AbstractStub }
+    def close(n: Int): AbstractPattern =
+      closeWith(n, { _ => AbstractStub })
 
 
     @inline override def toAbstractPattern: AbstractPattern = this
@@ -497,8 +513,11 @@ trait AbstractSyntax {
       val linkMap =
         new mutable.HashMap[LinkId, LinkMapValue]() withDefaultValue Nil
 
+      val siteMap =
+        new mutable.HashMap[(AgentIndex, SiteIndex), pb.type#Agent#Site]()
+
       // Create agents
-      for (u <- agents) {
+      for ((u, i) <- agents.zipWithIndex) {
 
         // Create the concrete agent state from the abstract one and
         // get its associated agent state set.
@@ -507,18 +526,22 @@ trait AbstractSyntax {
 
         // Create the concrete site states and complete the interface
         // by filling in undefined sites states.
-        val sites = { for (s <- u.sites) yield
-          (s.state.toSiteState(agentStateSet), s)
+        val sites = { for ((s, j) <- u.sites.zipWithIndex) yield
+          (s.state.toSiteState(agentStateSet), (s, j))
         }.toMap
 
         val siteStates = agentStateSet.completeInterface(sites.keys)
-        val intf = siteStates map { siteState => (siteState,
-          sites.get(siteState) map (_.link) getOrElse AbstractUndefined) }
+        val intf = siteStates map { siteState =>
+          (siteState, sites.get(siteState) map (_._1.link) getOrElse
+            AbstractUndefined) }
 
         val v = pb += agentState
         for ((siteState, link) <- intf) {
 
           val x = v += siteState
+
+          if (sites contains siteState)
+            siteMap += ((i, sites(siteState)._2) -> x)
 
           link match {
             case AbstractUndefined => ()
@@ -566,10 +589,8 @@ trait AbstractSyntax {
 
       // Connect open endpoints
       for ((i1, j1, ls1, i2, j2, ls2) <- links) {
-        val u1 = pb.agents(i1)
-        val u2 = pb.agents(i2)
-        val x1 = u1.sites(j1)
-        val x2 = u2.sites(j2)
+        val x1 = siteMap((i1, j1))
+        val x2 = siteMap((i2, j2))
         val ss1 = x1.state.siteStateSet
         val ss2 = x2.state.siteStateSet
         x1 connect (x2,
@@ -581,6 +602,7 @@ trait AbstractSyntax {
       pb.build
     }
   }
+
 
   /** A class representing abstract actions. */
   final case class AbstractAction(
@@ -705,6 +727,8 @@ trait AbstractSyntax {
     /** Prepend an agent to the right-hand side of this tail. */
     @inline def ::(that: AbstractAgent): AbstractRuleTail = that +: this
   }
+
+  // FIXME: :@(fwdRate, bwdRate) missing
 
   /** A class representing tails of rules that follow mass-action kinetics. */
   final case class AbstractMassActionRuleTail(
