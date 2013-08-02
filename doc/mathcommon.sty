@@ -1,0 +1,263 @@
+%%%
+%
+% mathcommon.sty
+%
+% My personal list of commonly used LaTeX math packages and macros.
+%
+% To use the macros defined in this file, add the following line to
+% the preamble of a LaTeX document:
+%
+%   \uspackage{mathcommon}
+%
+% Authors: Sandro Stucki <sandro.stucki@gmail.com>
+%          Ricardo Honorato-Zimmer <rikardo.horo@gmail.com>
+%
+%
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{mathcommon}%
+  [2013/05/11 LaTeX package defining common math macros]
+
+
+%%% Packages %%%
+
+% AMS Math typesetting
+\RequirePackage{amsmath}   % AMS math basics
+\RequirePackage{amsfonts}  % Math fonts
+\RequirePackage{amssymb}   % Math symbols
+
+% Some styles may come with their own definitions proof/theorem
+% environments that are not compatible with the amsthm package.
+\@ifundefined{proof}{  %
+  \RequirePackage{amsthm}  % Package for theorem environments
+}
+
+% Double stroke font (e.g. \mathds{1} for the indicator function)
+\RequirePackage{dsfont}
+
+% More math symbols (e.g. double-brackets: \llbracket, \rrbracket)
+%\RequirePackage{stmaryrd}
+
+% Algorithms/pseud-ocode typesetting
+%\RequirePackage[ruled,vlined,linesnumbered]{algorithm2e}
+
+
+%%% Theorem environments %%%
+
+
+% Only attempt to define new theorem environments if the amsthm
+% package was loaded.  The use of the \@ifundefined macro below guards
+% the theorem environment definitions to avoid overriding previous
+% definitions (that are compatible with amsthm), e.g. when using
+% special styles or packages such as beamer.
+\ifcsname newtheoremstyle\endcsname%
+%
+% Theorem environments with slanted text.
+% \newtheoremstyle{thmslanttext}%
+%   {\topsep}% space above the theorem (default)
+%   {\topsep}% space below the theorem (default)
+%   {\slshape}% body font (slanted)
+%   {}% indentation (none)
+%   {\bfseries\sffamily}% head font (bold, sans serif)
+%   {}% punctuation between head and body (none)
+%   {1em}% space after theorem head (1em)
+%   {}% head specification (default format)
+% \theoremstyle{thmslanttext}%
+\theoremstyle{plain}% (use default AMS "plain" style)
+\@ifundefined{theorem}{\newtheorem{theorem}{Theorem}[section]}{}
+\@ifundefined{corollary}{\newtheorem{corollary}[theorem]{Corollary}}{}
+\@ifundefined{proposition}{\newtheorem{proposition}{Proposition}[section]}{}
+\@ifundefined{lemma}{\newtheorem{lemma}[theorem]{Lemma}}{}
+\@ifundefined{conjecture}{\newtheorem{conjecture}[theorem]{Conjecture}}{}
+\@ifundefined{definition}{\newtheorem{definition}{Definition}[section]}{}
+\@ifundefined{remark}{\newtheorem{remark}{Remark}[section]}{}
+\@ifundefined{note}{\newtheorem*{note}{Note}}{}
+%
+% Theorem environments with regular text.
+% \newtheoremstyle{thmnormaltext}%
+%   {\topsep}% space above the theorem (default)
+%   {\topsep}% space below the theorem (default)
+%   {}% body font (regular)
+%   {}% indentation (none)
+%   {\bfseries\sffamily}% head font (bold, sans serif)
+%   {}% punctuation between head and body (none)
+%   {1em}% space after theorem head (1em)
+%   {}% head specification (default format)
+% \theoremstyle{thmnormaltext}%
+\theoremstyle{definition}% (use predefined AMS "definition" style)
+\@ifundefined{fact}{\newtheorem{fact}{Fact}[section]}{}
+\@ifundefined{hypothesis}{\newtheorem{hypothesis}[theorem]{Hypothesis}}{}
+\@ifundefined{example}{\newtheorem{example}{Example}[section]}{}
+\@ifundefined{exercise}{\newtheorem{exercise}{Exercise}[section]}{}
+\@ifundefined{problem}{\newtheorem{problem}{Problem}[section]}{}
+\@ifundefined{notation}{\newtheorem*{notation}{Notation}}{}
+%
+\fi% End of \ifcsnamenewtheorem\endcsname
+
+
+%%% Probability theory symbols %%%
+
+% Simple bold versions
+\DeclareMathOperator*{\pr}{\mathbf{P}}     % Probability
+\renewcommand*{\exp}{\operatorname*{\mathbf{E}}}  % Expectation
+\DeclareMathOperator*{\var}{\mathbf{V}}    % Variance
+\DeclareMathOperator*{\ind}{\mathbf{1}}    % Indicator function
+
+% "Blackboard bold"/double stroke versions
+\DeclareMathOperator*{\PP}{\mathbb{P}}     % Probability
+\DeclareMathOperator*{\EE}{\mathbb{E}}     % Expectation
+\DeclareMathOperator*{\VV}{\mathbb{V}}     % Variance
+\DeclareMathOperator*{\IInd}{\mathds{1}}   % Indicator function
+
+% "Verbose" bold versions
+\renewcommand*{\Pr}{\operatorname*{\mathbf{Pr}}}  % Probability
+\DeclareMathOperator*{\Var}{\mathbf{Var}}  % Variance
+\DeclareMathOperator*{\Cov}{\mathbf{Cov}}  % Covariance
+
+
+%%% Sets and macros for set definitions %%%
+
+% Common sets
+\renewcommand{\emptyset}{\varnothing}  % Empty set
+\newcommand{\NN}{\mathbb{N}}           % Natural numbers
+\newcommand{\ZZ}{\mathbb{Z}}           % Integers
+\newcommand{\QQ}{\mathbb{Q}}           % Rational numbers
+\newcommand{\RR}{\mathbb{R}}           % Real numbers
+
+% Orientations in 3D euclidean space
+\DeclareMathOperator{\SO}{SO(3)}
+
+% Computability theory sets
+\newcommand{\KK}{\mathbb{K}}     % Undecidable problems
+\newcommand{\zero}{\varnothing}  % lowest Turing degree (0)
+
+% Complexity classes
+\newcommand{\Poly}{\mathbf{P}}         % P
+\newcommand{\NP}{\mathbf{NP}}          % NP
+\newcommand{\PSPACE}{\mathbf{PSPACE}}  % PSPACE
+\newcommand{\AP}{\mathbf{AP}}          % AP
+\newcommand{\PPoly}{\mathbf{P/Poly}}   % P/Poly
+
+% Standalone "such that" colon
+\newcommand{\st}{:}
+
+% Simple set notation.
+\newcommand{\set}[1]{\left\{ #1 \right\}}
+
+% Command for generating "set of <x> s.t. <p(x)>" definitions.  The
+% parameters are
+%
+% #1: the variable name(s) (to appear before the "s.t." colon), and
+%
+% #2: the predicate deciding set membership for particular instances
+% of the variables (to appear after the colon).
+%
+% The output is of the form "{ #1 : #2 }" with the curly braces
+% adjusted to the expression.
+\newcommand{\setof}[2]{\set{#1 \st #2}}
+
+% Indexed set
+\newcommand{\iset}[1]{\set{#1}_{i \in I}}
+
+% Tuples and sequences
+\newcommand{\tuple}[1]{\langle #1 \rangle}
+\newcommand{\seq}[1]{#1}
+
+
+% Set operators
+\newcommand{\duni}{+}              % Disjoint union.
+\newcommand{\dsum}{\sum}           % Disjoint union ("sum").
+\DeclareMathOperator{\inl}{inl}    % Left injection of disjoint union.
+\DeclareMathOperator{\inr}{inr}    % Right injection of disjoint union.
+%\renewcommand{\setminus}{-}        % Relative complement/difference.
+\DeclareMathOperator*{\union}{\cup}       % Union
+\DeclareMathOperator*{\bigunion}{\bigcup} % Union
+
+% Powerset
+\newcommand{\pset}[1]{\mathcal{P}\left(#1\right)}
+
+% Cardinality of a set
+\DeclareMathOperator*{\card}{Card}
+
+% Symbols for domain, co-domain and image of functions
+\DeclareMathOperator*{\dom}{dom}    % Domain of a (partial) function
+\DeclareMathOperator*{\cod}{cod}    % Co-domain of a function
+\DeclareMathOperator*{\img}{img}    % Image/range of a function
+
+% Function composition
+\DeclareMathOperator*{\comp}{\circ}
+
+% Restriction of a function #1 to domain #2
+\newcommand{\rest}[2]{{#1}|_{#2}}
+
+% Restriction of a function #1 to domain #2 (for big #1's)
+\newcommand{\bigrest}[2]{\left.#1\right|_{#2}}
+
+
+%% Logic
+
+% Boolean constants
+\newcommand{\false}{\mathbf{false}}
+\newcommand{\true}{\mathbf{true}}
+
+% Implication
+\DeclareMathOperator*{\then}{\Rightarrow}
+
+
+%%% Categories %%%
+
+% Typeset categories using a bold, regular math font
+\newcommand{\cat}[1]{\ensuremath{\boldsymbol{\mathbf{#1}}}}
+
+% Classes in categories
+\DeclareMathOperator{\ob}{ob}      % Objects of a category.
+\def\hom{\operatorname{hom}}       % Morphisms of a category.
+\newcommand{\Span}{\mathbf{Span}}
+\newcommand{\Cospan}{\mathbf{Cospan}}
+\newcommand{\Cocone}{\mathbf{Co\text{-}cone}}
+\newcommand{\Prod}{\mathbf{Prod}}
+
+
+%% Objects
+\newcommand{\init}{\mathbf{0}} % Initial object
+\newcommand{\term}{\mathbf{1}} % Terminal object
+
+
+%% Arrows
+
+% Simple arrows with one argument (the name of the morphism).
+\newcommand{\toby}[1]{\stackrel{#1}{\longrightarrow}}
+\newcommand{\getsby}[1]{\stackrel{#1}{\longleftarrow}}
+
+% Automatically extended arrows for long names.
+\newcommand{\xtoby}[1]{\xrightarrow{#1}}
+\newcommand{\xgetsby}[1]{\xleftarrow{#1}}
+
+% Inclusion arrows with one argument (the name of the morphism).
+\newcommand{\incds}{\hookleftarrow}
+\newcommand{\incin}{\hookrightarrow}
+
+% Inclusion arrows with one argument (the name of the morphism).
+\newcommand{\incdsby}[1]{\xhookleftarrow{#1}}
+\newcommand{\incinby}[1]{\xhookrightarrow{#1}}
+
+% Epimorphism
+\newcommand{\toepi}{\twoheadrightarrow}
+
+
+%%% Vector notation %%%
+
+% Typeset vectors using a bold, regular math font
+\renewcommand{\vec}[1]{\boldsymbol{\mathbf{#1}}}
+
+% Vector norm
+\newcommand{\vnorm}[1]{\lvert #1 \rvert}
+
+
+%%% Other symbols %%%
+
+% Symbols for argmax/argmin
+\DeclareMathOperator*{\argmax}{argmax}
+\DeclareMathOperator*{\argmin}{argmin}
+
+% Average
+\newcommand{\avg}[1]{\langle #1 \rangle}

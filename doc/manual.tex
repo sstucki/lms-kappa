@@ -1,0 +1,178 @@
+\documentclass{article}
+
+\usepackage[english]{babel}
+\usepackage{hyperref}
+\usepackage{xspace}
+
+\usepackage{kappa}
+
+\newcommand{\kpp}{Kappa\xspace}
+\newcommand{\lms}{LMS\xspace}
+\newcommand{\lmsk}{\lms-\kpp}
+
+\title{\lmsk: \\ User manual}
+\author{Ricardo Honorato-Zimmer and Sandro Stucki}
+
+% Agents
+%
+% \newagent[rectangle, rounded corners=1em, minimum width=10ex,%
+%   minimum height=4em, text width=1cm, text depth=1.3em,%
+%   align=center]{\rnap}{RNA pol}{n1//west/n1,n2//south/n2,n3//east/n3}
+% \newagent{\sig}{$\sigma$}{n//south/n}
+\newagent[rectangle, rounded corners=1em, align=center,%
+  minimum width=16ex, minimum height=3em]{\rib}{Ribosome}{%
+    n1//west/n1,n2//south/n2,n3//east/n3,a//north/a}
+\newagent{\nuc}{R}{b//north/b,u//west/u,d//east/d,t//south/t}
+\newagent{\aac}{aa}{b//south/b,u//west/u,d//east/d,t//north/t}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\lmsk is an \emph{embedded domain-specific language} for the
+\kpp language (\url{http://www.kappalanguage.org/}) on Scala
+(\url{http://www.scala-lang.org/}).  That is, it enables you
+(the user) to write \kpp models as objects within Scala, making
+it possible to write models programmatically.
+
+In this manual, we first introduce how to write \kpp patterns in
+Scala.  \kpp patterns are used to define the rules and initial state
+of a model among other uses.  Second, we introduce \emph{contact graphs}.
+Once we have defined the contact graph, the rules and the initial
+state of a model, we can run it.  However, without first stating what
+patterns we want to track during the simulation, running a simulation
+is meaningless.  For this we define observables that are patterns
+which count the number of instances of a pattern in the mixture.
+To visualise a simulation we may plot these observables.
+
+Later, we will dive into the different extensions that have been
+developed on top of \kpp.  These extensions allow us to describe aspects
+of biological or biochemical systems that are hard or impossible to
+express inside \kpp itself.
+
+
+\section{Patterns, Mixtures and Rules}
+In \kpp, an agent has a set of \emph{sites} called the agent's
+interface.  Each of these sites can either be bound to another site
+(of any agent) or be free.  Also, each site can have a state, commonly
+represented by a name (but not necessarily so as we will see in some
+of the extensions).  In addition to a set of sites, each agent has a
+\emph{type}.  Agents commonly represent proteins while sites represent
+domains or motifs.  However, this can be otherwise depending on the
+modelling problem.  A \kpp pattern is a collection of such agents
+whose sites might be bound together.  Complementary to the definition
+of a pattern is the definition of an \emph{embedding}: a pattern can
+be embedded into another if the former can be included (superposed)
+into the latter and the inclusion respects the connectivity and the
+state of sites.  To illustrate these two complementary ideas, let's
+take as an example the binding of the ribosome to an mRNA chain
+(Fig.~\ref{fig:patterns}).
+\begin{figure}[t]
+  \begin{center}
+    \resizebox{\linewidth}{!}{%
+      \begin{tikzpicture}
+        \rib{rib}{(0pt,0pt)}{n1,n2,n3};
+        \nuc{n1}{(-60pt,-60pt)}{b,d};
+        \nuc{n2}{(0pt,-60pt)}{b,d,u};
+        \nuc{n3}{(60pt,-60pt)}{b,u};
+
+        \draw[link, rounded corners=5pt] (rib-n1) -| (n1-b);
+        \draw[link, rounded corners=5pt] (rib-n3) -| (n3-b);
+        \draw[link] (rib-n2) -- (n2-b);
+        \draw[link] (n1-d) -- (n2-u);
+        \draw[link] (n2-d) -- (n3-u);
+
+        \draw[very thick,->] (n2.south) ++(0pt,-15pt) -- ++(0pt,-30pt);
+
+        \begin{scope}[shift={(0pt,-240pt)}]
+          \rib[fill={orange!40}]{rib}{(0pt,0pt)}{%
+            n1/fill=orange!20/west/n1,n2/fill=orange!20/south/n2,%
+            n3/fill=orange!20/east/n3,a};
+          \nuc[fill=orange!40]{n1}{(-60pt,-60pt)}{%
+            b/fill=orange!20/north/b,d/fill=orange!20/east/d,u,t};
+          \nuc[fill=orange!40]{n2}{(0pt,-60pt)}{%
+            b/fill=orange!20/north/b,d/fill=orange!20/east/d,%
+            u/fill=orange!20/west/u,t};
+          \nuc[fill=orange!40]{n3}{(60pt,-60pt)}{%
+            b/fill=orange!20/north/b,d,u/fill=orange!20/west/u,t};
+
+          \nuc{n4}{(-120pt,-60pt)}{b,d,u,t};
+          \nuc{n5}{(-180pt,-60pt)}{b,d,u,t};
+          \nuc{n6}{(120pt,-60pt)}{b,d,u,t};
+          \nuc{n7}{(180pt,-60pt)}{b,d,u,t};
+          % \sig{s}{(-120pt,-11pt)}{n};
+
+          \aac{aa1}{(0pt,60pt)}{b,u,t};
+          \aac{aa2}{(-60pt,60pt)}{b,u,d,t};
+          \aac{aa3}{(-120pt,60pt)}{b,u,d,t};
+          \aac{aa4}{(-180pt,60pt)}{b,d,t};
+
+          \draw[link, rounded corners=5pt] (rib-n1) -| (n1-b);
+          \draw[link, rounded corners=5pt] (rib-n3) -| (n3-b);
+          \draw[link] (rib-n2) -- (n2-b);
+          \draw[link] (n1-d) -- (n2-u);
+          \draw[link] (n2-d) -- (n3-u);
+          \draw[link] (n5-d) -- (n4-u);
+          \draw[link] (n4-d) -- (n1-u);
+          \draw[link] (n3-d) -- (n6-u);
+          \draw[link] (n6-d) -- (n7-u);
+          % \draw[link] (n4-b) -- (s-n);
+
+          \draw[link] (rib-a) -- (aa1-b);
+          \draw[link] (aa1-u) -- (aa2-d);
+          \draw[link] (aa2-u) -- (aa3-d);
+          \draw[link] (aa3-u) -- (aa4-d);
+
+          \state{n1}{t}{A};
+          \state{n2}{t}{C};
+          \state{n3}{t}{C};
+          \state{n4}{t}{G};
+          \state{n5}{t}{U};
+          \state{n6}{t}{U};
+          \state{n7}{t}{G};
+
+          \state{aa1}{t}{T};
+          \state{aa2}{t}{L};
+          \state{aa3}{t}{P};
+          \state{aa4}{t}{N};
+        \end{scope}
+      \end{tikzpicture}
+    }
+  \end{center}
+  \caption{Kappa patterns and embedding.}
+  \label{fig:patterns}
+\end{figure}
+In the figure we see two \kpp patterns, one above and one below the
+arrow.  The arrow represents an embedding, that is, it tells us that
+the pattern above can be included in the pattern below.  To make this
+more apparent, we have highlighted the agents and sites in the second
+pattern where the inclusion can be made.  Of course, nothing forbids
+the second pattern to have two or more inclusion places in which case
+we would have more than one embedding for the pattern above.  This is
+crucial when we talk about the reaction mixture, where
+
+\section{Contact graphs}
+
+\section{Observables and Plotting}
+
+\section{First example: ...}
+
+\section{Perturbations} % and some other advanced things like ...?
+
+\section{Extensions}
+\subsection{GeEK: Geometrically enhanced Kappa}
+
+\subsection{Thermodynamic Kappa}
+
+\subsection{Spatial Kappa}
+
+\subsection{Hierarchical Kappa} % or a better name?
+
+\section{Kappa BioBrick Framework}
+
+\section{Fragmentation and ODEs}
+
+\section{Performance} % comparisons with KaSim and NFSim?
+
+\end{document}
