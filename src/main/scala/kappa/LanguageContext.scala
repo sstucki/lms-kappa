@@ -71,7 +71,7 @@ trait LanguageContext {
         yield (siteStateSet -> siteState)
       }.toMap withDefault (_.undefinedSite)
 
-      //siteStateSets.map(siteMap.lift).flatten
+      // siteStateSets.map(siteMap.lift).flatten
       siteStateSets map siteMap
     }
   }

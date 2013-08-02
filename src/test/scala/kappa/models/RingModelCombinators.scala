@@ -99,33 +99,33 @@ class RingModelCombinators extends KaSpaceModel with FlatSpec {
   // Monomers
   withObs("A", A(b, c))
   withObs("B", B(a, c))
-  withObs("C")(C(a, b))
+  withObs("C", C(a, b))
 
   // Dimers
-  withObs("AB")(A(b!1, c) :: B(a!1, c))
-  withObs("AC")(A(c!1, b), C(a!1, b))
-  withObs("BC")(B(c!1, a), C(b!1, a))
+  withObs("AB", A(b!1, c) :: B(a!1, c))
+  withObs("AC", A(c!1, b), C(a!1, b))
+  withObs("BC", B(c!1, a), C(b!1, a))
 
   // Trimers
-  withObs("ABC")(A(b!1, c) :+ B(a!1, c!2) :+ C(a, b!2))
-  withObs("BCA")(B(c!2, a) +: C(b!2, a!1) +: A(b, c!1))
-  withObs("CAB")(C(a!1, b) +: A(c!1, b!2) :+ B(a!2, c))
+  withObs("ABC", A(b!1, c) :+ B(a!1, c!2) :+ C(a, b!2))
+  withObs("BCA", B(c!2, a) +: C(b!2, a!1) +: A(b, c!1))
+  withObs("CAB", C(a!1, b) +: A(c!1, b!2) :+ B(a!2, c))
 
   // Triangle
-  withObs("triangle")(A(c!3, b!1), B(a!1, c!2), C(b!2, a!3))
+  withObs("triangle", A(c!3, b!1), B(a!1, c!2), C(b!2, a!3))
 
 
   // -- Unexpected observables --
 
   // Hexagon
-  withObs("hexagon")(
+  withObs("hexagon",
     A(c!6, b!1), B(a!1, c!2), C(b!2, a!3),
     A(c!3, b!4), B(a!4, c!5), C(b!5, a!6))
 
   // Tetramers
-  withObs("ABCA")(A(b!1), B(a!1, c!2), C(b!2, a!3), A(c!3))
-  withObs("BCAB")(B(c!2), C(b!2, a!3), A(c!3, b!1), B(a!1))
-  withObs("CABC")(C(a!3), A(c!3, b!1), B(a!1, c!2), C(b!2))
+  withObs("ABCA", A(b!1), B(a!1, c!2), C(b!2, a!3), A(c!3))
+  withObs("BCAB", B(c!2), C(b!2, a!3), A(c!3, b!1), B(a!1))
+  withObs("CABC", C(a!3), A(c!3, b!1), B(a!1, c!2), C(b!2))
 
 
   // Simulate!

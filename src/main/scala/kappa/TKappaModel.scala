@@ -29,10 +29,10 @@ class TKappaModel extends Model
     if (epIndex < 0) { // no iso found
       cc.register
       energyPatterns = energyPatterns :+ (cc, energyCost)
-    } else {
+    } else { // iso found
       val (p, c) = energyPatterns(epIndex)
-      println("Found isomorphic energy pattern: " + p)
-      println("  Updating its energy value from " + c + " to " +
+      println("# Found isomorphic energy pattern: " + p)
+      println("#   Updating its energy value from " + c + " to " +
         (c + energyCost))
       energyPatterns(epIndex) = (p, c + energyCost)
     }

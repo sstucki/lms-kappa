@@ -51,7 +51,8 @@ trait Actions {
     val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
     val preCondition:  Option[(Action, Action.Agents) => Boolean] = None,
     val postCondition: Option[(Action, Action.Agents) => Boolean] = None)
-      extends Function2[Embedding[Mixture.Agent], Mixture, (Boolean, Boolean)]
+      extends Function2[Embedding[Mixture.Agent], Mixture,
+        (Boolean, Boolean)]
   {
     import Action._
 
@@ -117,7 +118,7 @@ trait Actions {
     }
 
 
-    // -- Function2[Embedding, Mixture, Boolean] API --
+    // -- Function2[Embedding, Mixture, (Boolean, Boolean)] API --
 
     /**
      * Apply this action to a mixture along a given embedding.
@@ -125,8 +126,10 @@ trait Actions {
      * @param embedding the embedding along which the action should
      *        be applied.
      * @param mix the mixture to which the action should be applied.
-     * @return `true` if the action application resulted in a
-     *         productive event, `false` otherwise.
+     * @return a tuple of two booleans. The first boolean is `true`
+     *         if the action application resulted in a productive
+     *         event, `false` otherwise.  The second boolean is `true`
+     *         if the embedding is not injective.
      */
     def apply(
       embedding: Embedding[Mixture.Agent],

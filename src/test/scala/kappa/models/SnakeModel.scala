@@ -29,9 +29,9 @@ class SnakeModel extends KaSpaceModel with FlatSpec {
     "A(r), A(l)" -> s"A(r!1:$w90RL), A(l!1:$w90LR), A:$radius(l:$posL, r:$posR)" :@ 1)  // r2
   */
   // Observables
-  withObs("straight links")(s"A(r!1:$w180), A(l!1:$w180)")
-  withObs("90 deg turns")(s"A(r!1:$w90RL), A(l!1:$w90LR)")
-  withObs("free A")(s"A(l:$posL, r:$posR)")
+  withObs("straight links", s"A(r!1:$w180), A(l!1:$w180)")
+  withObs("90 deg turns", s"A(r!1:$w90RL), A(l!1:$w90LR)")
+  withObs("free A", s"A(l:$posL, r:$posR)")
 
   // Mixture
   withInit(m"A:$radius(l:$posL, r:$posR)" * 2)

@@ -38,13 +38,13 @@ class StackedTriangle extends KaSpaceModel with FlatSpec {
   withInit(m"A:$radius (l:$posL, r:$posR, n:$posN)" * 50)
 
   // Observables
-  withObs("triangle")("A(l!1, r!2), A(l!2, r!3), A(l!3, r!1)")
+  withObs("triangle", "A(l!1, r!2), A(l!2, r!3), A(l!3, r!1)")
   // Dimer
-  withObs("AA")("A(r!1), A(l!1)")
+  withObs("AA", "A(r!1), A(l!1)")
   // Trimer
-  withObs("AAA")("A(r!1), A(l!1, r!2), A(l!2)")
+  withObs("AAA", "A(r!1), A(l!1, r!2), A(l!2)")
   // Tetramer
-  withObs("AAAA")("A(r!1), A(l!1, r!2), A(l!2, r!3), A(l!3)")
+  withObs("AAAA", "A(r!1), A(l!1, r!2), A(l!2, r!3), A(l!3)")
 
   // Simulate!
   maxEvents = 100

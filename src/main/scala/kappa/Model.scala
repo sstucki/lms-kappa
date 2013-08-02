@@ -69,84 +69,33 @@ trait Model extends LanguageContext
   def withInit(count: Int) = new WithInit(count)
 
 
-  final class Count(count: Int) {
-    def of(mix: Mixture) = mix * count
-    def of(mix: Pattern) = Mixture(mix) * count
-    def of(mix: AbstractPattern) =
-      Mixture(mix.toPattern) * count
-    def of(mix: PartialAbstractPattern*) =
-      partialAbstractPatternsToMixture(mix) * count
-
-    // TODO: This doesn't work
-    def *(mix: Mixture) = of(mix)
-    def *(mix: Pattern) = of(mix)
-    def *(mix: AbstractPattern) = of(mix)
-    def *(mix: PartialAbstractPattern*) = of(mix: _*)
-  }
-
-  implicit def intToCount(n: Int) = new Count(n)
-
-  /** Declare a mixture as part of the initial state. */
-  def init(mix: Mixture) { this.mix ++= mix }
-  def init(mix: Pattern) { init(Mixture(mix)) }
-  def init(mix: AbstractPattern) { init(Mixture(mix.toPattern)) }
-  def init(mix: PartialAbstractPattern*) {
-    init(partialAbstractPatternsToMixture(mix))
-  }
-
-
   // -- Observables --
 
-  final class Obs(val obs: Pattern) {
-    // FIXME: This won't work if we do:
-    // val a = obs ... ; obs ... ; a named "a"
-    def named(name: String) = {
-      obsNames = obsNames.dropRight(1) :+ name
-      this
-    }
-
-    observables = observables :+ obs
-    obsNames = obsNames :+ obs.toString
-    // TODO: For some reason I need to register observables here.
-    // It should be investigated why the automatic registration fails.
-    // To see an example where it fails, go to
-    // src/test/scala/kappa/models/DoubleStrandBreakModel.scala
-    for (cc <- obs.components) cc.register
-  }
-
-  implicit def obsToPattern(obs: Obs): Pattern = obs.obs
-
-  /** Declare an observable. */
-  def obs(obs: String) = new Obs(stringToPattern(obs)) named obs
-  def obs(obs: Pattern) = new Obs(obs)
-  def obs(obs: AbstractPattern) = new Obs(obs.toPattern)
-  def obs(obs: PartialAbstractPattern*) =
-    new Obs(partialAbstractPatternsToPattern(obs))
-
-
-  def withObs(description: String, obs: Pattern): Model = {
+  def withObs(description: String, obs: Pattern): Pattern = {
     val name = if (description == "") obs.toString else description
     this.observables = this.observables :+ obs
     this.obsNames = this.obsNames :+ name
     // TODO: See note above.
     for (cc <- obs.components) cc.register
-    this
+    obs
   }
-  def withObs(obs: Pattern): Model = withObs("", obs)
-  def withObs(description: String, obs: AbstractPattern): Model =
+  def withObs(obs: Pattern): Pattern = withObs("", obs)
+  def withObs(description: String, obs: AbstractPattern): Pattern =
     withObs(description, obs.toPattern)
-  def withObs(obs: AbstractPattern): Model = withObs("", obs.toPattern)
-  def withObs(description: String, obs: PartialAbstractPattern*): Model =
+  def withObs(obs: AbstractPattern): Pattern = withObs("", obs.toPattern)
+  def withObs(description: String, obs: PartialAbstractPattern*): Pattern =
     withObs(description, partialAbstractPatternsToPattern(obs))
-  def withObs(obs: PartialAbstractPattern*): Model = withObs("", obs: _*)
+  def withObs(obs: PartialAbstractPattern*): Pattern = withObs("", obs: _*)
 
+  // FIXME: withObs(description: String) shadows
+  // withObs(obs: AbstractPattern)
   // "Curried" version of `withObs`.
-  final class WithObs(description: String) {
-    def apply(obs: Pattern): Model = withObs(description, obs)
-    def apply(obs: PartialAbstractPattern*): Model =
-      withObs(description, obs: _*)
-  }
-  def withObs(description: String) = new WithObs(description)
+  // final class WithObs(description: String) {
+  //   def apply(obs: Pattern): Pattern = withObs(description, obs)
+  //   def apply(obs: PartialAbstractPattern*): Pattern =
+  //     withObs(description, obs: _*)
+  // }
+  // def withObs(description: String) = new WithObs(description)
 
 
   // -- Rules --
@@ -193,7 +142,7 @@ trait Model extends LanguageContext
   }
 
 
-  // -- Simulation functions --
+  // -- Simulation and trajectories --
 
   /**
    * An exception that can be thrown in order to exit the simulator
@@ -321,171 +270,5 @@ trait Model extends LanguageContext
 
     println("# == K THX BYE!")
   }
-
-  // def runUntilDeadlock() {
-  //   try {
-  //     run
-  //   } catch {
-  //     case Deadlock => ()
-  //   }
-  // }
-
-  /*
-  def runNormal(rand: Random) {
-
-    // (Re-)compute all component embeddings.  This is necessary as
-    // some components might have been registered before the mixture
-    // was initialized (i.e. the LHS' of the rules).
-    //
-    // TODO: To not compute twice we should not compute them when
-    // registering patterns.
-    for (c <- patternComponents) {
-      c.initEmbeddings
-    }
-
-    // Print the initial event number, time and the observable counts.
-    println("" + events + "\t" + time + "\t" +
-      (obs map (_.inMix)).mkString("\t"))
-
-    try {
-
-      // == Normal simulator main event loop ==
-      while ((events < (maxEvents getOrElse (events + 1))) &&
-        (time < (maxTime getOrElse Double.PositiveInfinity))) {
-
-        if (rules.length == 0) {
-          throw EmptyRuleSet
-        }
-
-        // Compute all rule weights.
-        val weights = for (r <- rules) yield r.law()
-
-        // Build the activity tree
-        val tree = RandomTree(weights, rand)
-        val totalActivity = tree.totalWeight
-
-        if ((totalActivity == 0) || (totalActivity.isNaN)) {
-          throw Deadlock
-        }
-
-        // Advance time
-        val dt = -math.log(rand.nextDouble) / totalActivity
-        time += dt
-
-        // Pick a rule and event at random
-        val r = rules(tree.nextRandom._1)
-        val e = r.action.lhs.randomEmbedding(rand)
-
-        // Apply the rule/event
-        if (r.action(e, mix)) {
-          events += 1 // Productive event
-
-          // Print the event number, time and the observable counts.
-          println("" + events + "\t" + time + "\t" +
-            (obs map (_.inMix)).mkString("\t"))
-        } else {
-          nullEvents += 1 // Null event
-        }
-      }
-    } catch {
-      case SimulatorException(msg) => {
-        println("# Interrupted simulation: " + msg + ". Terminating.")
-      }
-    }
-  }
-
-  // RHZ: Shouldn't we get rid of this at some point?
-  def runNaive(rand: Random) {
-
-    // Print the initial event number, time and the observable counts.
-    println("" + events + "\t" + time + "\t" +
-      (obs map (_.inMix)).mkString("\t"))
-
-    try {
-      // == Naive simulator main event loop ==
-      while ((events < (maxEvents getOrElse (events + 1))) &&
-        (time < (maxTime getOrElse Double.PositiveInfinity))) {
-
-        if (rules.length == 0) {
-          throw SimulatorException("no rules")
-        }
-
-        // (Re-)compute all component embeddings.
-        for (c <- patternComponents) {
-          c.initEmbeddings
-        }
-
-        // Compute all rule weights.
-        val weights = for (r <- rules) yield r.law()
-
-        // Build the activity tree
-        val tree = RandomTree(weights, rand)
-        val totalActivity = tree.totalWeight
-
-        if (totalActivity == 0) {
-          throw SimulatorException("no more events")
-        }
-
-        // Advance time
-        val dt = -math.log(rand.nextDouble) / totalActivity
-        time += dt
-
-        // Pick a rule and event at random
-        val r = rules(tree.nextRandom._1)
-        val e = r.action.lhs.randomEmbedding(rand)
-
-        // Apply the rule/event
-        if (r.action(e, mix)) {
-          events += 1 // Productive event
-
-          // Print the event number, time and the observable counts.
-          println("" + events + "\t" + time + "\t" +
-            (obs map (_.inMix)).mkString("\t"))
-        } else {
-          nullEvents += 1 // Null event
-        }
-      }
-    } catch {
-      case SimulatorException(msg) => {
-        println("# Interrupted simulation: " + msg + ". Terminating.")
-      }
-    }
-  }
-
-  /** Run a simulation of this model. */
-  def run() {
-
-    // Create a new random number generator
-    val rand = new util.Random
-
-    // Print model info
-    println("# == Rules:")
-    for (r <- rules) println("#    " + r + ": " + r.action.atoms)
-    println
-    println("# == Observables:")
-    for ((n, o) <- obsNames zip obs) println("#    " + n + ": " + o)
-    println
-
-    println("# === Start of simulation ===")
-    println("Event\tTime\t" + obsNames.mkString("\"", "\"\t\"", "\""))
-
-    // Call normal main loop
-    runNormal(rand)
-    //runNaive(rand)
-
-    println("# === End of simulation ===")
-    println
-
-    val totalEvents: Double = events + nullEvents
-    println("# == Statistics:")
-    println("#    Productive events : " + events)
-    println("#    Null events       : " + nullEvents)
-    println("#    Efficiency        : " + events / totalEvents)
-    println("#    Total time        : " + time)
-    println
-
-    println("# == K THX BYE!")
-  }
-  */
 }
 

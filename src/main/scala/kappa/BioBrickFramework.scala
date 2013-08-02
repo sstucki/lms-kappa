@@ -198,7 +198,7 @@ trait BioBrickFramework extends KappaModel {
         throw new IllegalStateException("terminator not defined")
       else _terminator
 
-    devices = devices :+ this
+    // devices = devices :+ this
   }
 
   def withDevice(dev: Device): Device = {

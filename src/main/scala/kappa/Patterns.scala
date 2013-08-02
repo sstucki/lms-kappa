@@ -403,8 +403,7 @@ trait Patterns {
 
             // Initialize the embedding set
             // initEmbeddings
-            // TODO: Should we initialise here? We are anyway
-            // initialising in Model.initialise
+            // Embeddings are initialised in Model.initialise
 
             println("# Registered component # " + _modelIndex + ": CC " +
               _index + " of pattern " + _pattern)
@@ -525,13 +524,14 @@ trait Patterns {
             this
           }
 
-          def connect(to: Agent#Site, fromState: LinkState, toState: LinkState) = {
+          def connect(to: Agent#Site,
+            fromState: LinkState, toState: LinkState) = {
             this define Linked(to, fromState)
             to   define Linked(this, toState)
             this
           }
 
-          override def toString = state + "!" + link
+          override def toString = state + linkDelim + link
         }
 
         val sites = new mutable.ArrayBuffer[Site]()
@@ -571,19 +571,6 @@ trait Patterns {
 
         val n = agents.length
         val componentMap: Array[ComponentIndex] = Array.fill(n)(-1)
-
-        // FIXME: Stack overflow
-        // def traverseComponent(i: AgentIndex, j: ComponentIndex) {
-        //   if (componentMap(i) < 0) {
-        //     componentMap(i) = j
-        //     val u = agents(i)
-        //     for (s <- u.sites) s.link match {
-        //       case Linked(to, _) =>
-        //         traverseComponent(to.agent.index, j)
-        //       case _ => ()
-        //     }
-        //   }
-        // }
 
         def traverseComponent(ci: ComponentIndex, ai: AgentIndex) {
           val todo = new mutable.Queue[AgentIndex]()

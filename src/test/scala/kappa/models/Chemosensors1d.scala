@@ -68,11 +68,11 @@ class Chemosensors1dModel extends TKappaModel {
       "M(s!1, r!2), S(m!1, r), M(s!3, l!2), S(m!3, l)" <-> "M(s!1, r!2), S(m!1, r!4), M(s!3, l!2), S(m!3, l!4)" at bind
     )
 
-    val nonFreeL  = obs ("S(l!_, r)") named "NonFreeL"
-    val nonFreeR  = obs ("S(l, r!_)") named "NonFreeR"
-    val nonFreeRL = obs ("S(l!_, r!_)") named "NonFreeRL"
-    val free = obs ("S(l, r)") named "Free"
-    val link = obs ("S(r!1), S(l!1)") named "Link"
+    val nonFreeL  = withObs ("NonFreeL", "S(l!_, r)")
+    val nonFreeR  = withObs ("NonFreeR", "S(l, r!_)")
+    val nonFreeRL = withObs ("NonFreeRL", "S(l!_, r!_)")
+    val free = withObs ("Free", "S(l, r)")
+    val link = withObs ("Link", "S(r!1), S(l!1)")
 
     // Invariants
     invariant (nonFreeL.inMix == nonFreeR.inMix)
@@ -111,7 +111,7 @@ class Chemosensors1dModel extends TKappaModel {
   }
 
   // Initial state
-  init ("M(s, l!2, r!1), M(s, l!1, r!2)")
+  withInit ("M(s, l!2, r!1), M(s, l!1, r!2)")
 
 
   // More invariants: no unbound sensors
@@ -119,8 +119,8 @@ class Chemosensors1dModel extends TKappaModel {
 
 
   // More observables
-  val mem = obs ("M()") named "Mem"
-  val sensor = obs ("S()") named "Sensor"
+  val mem = withObs ("Mem", "M()")
+  val sensor = withObs ("Sensor", "S()")
 
 
   // Perturbations

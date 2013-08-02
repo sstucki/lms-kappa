@@ -77,13 +77,13 @@ class KaSimAbcModelCombinators extends KappaModel with FlatSpec {
 
   // #### Variables (cont)
   // %obs: 'AB' A(x!x.B)
-  withObs("AB")(A(x!(Some(B), Some(x), None)))
+  withObs("AB", A(x!(Some(B), Some(x), None)))
   // %obs: 'Cuu' C(x1~u?,x2~u?)
-  withObs("Cuu")(C(x1~u?, x2~u?))
+  withObs("Cuu", C(x1~u?, x2~u?))
   // %obs: 'Cpu' C(x1~p?,x2~u?)
-  withObs("Cpu")(C(x1~p?, x2~u?))
+  withObs("Cpu", C(x1~p?, x2~u?))
   // %obs: 'Cpp' C(x1~p?,x2~p?)
-  withObs("Cpp")(C(x1~p?, x2~p?))
+  withObs("Cpp", C(x1~p?, x2~p?))
 
   // %var: 'n_a' 1000
   val n_a = 100

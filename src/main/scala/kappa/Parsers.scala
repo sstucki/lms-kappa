@@ -123,7 +123,6 @@ trait Parsers {
   def parseContactGraph(s: String): AST.ContactGraph =
     parser.simpleParse(parser.cg, s, "contact graph")
 
-  // FIXME: This implicit is problematic
   implicit def stringToAbstractPattern(s: String): AbstractPattern =
     parseSiteGraph(s)
 }

@@ -21,17 +21,17 @@ class TestModel extends KappaModel with FlatSpec {
   withRule(r2)
   println(r2.action.atoms)
 
-  obs (r1.biaction.lhs) named "LHS r1"
-  obs (r2.action.lhs) named "LHS r2"
-  obs ("B()") named "B"
-  obs ("A(s:q)") named "Aq"
+  withObs ("LHS r1", r1.biaction.lhs)
+  withObs ("LHS r2", r2.action.lhs)
+  withObs ("B", "B()")
+  withObs ("Aq", "A(s:q)")
 
   // Quasi-steady-state approximation
   val vmax = 1
   val kM = 1
   val r3 = withRule("A(s:p)" -> "A(s:q)" :@ (vmax / (kM + "A(s:p)".inMix)))
 
-  init (10 of "A(s:p)")
+  withInit(10, "A(s:p)")
   println("Mixture: " + mix)
 
   when ("A(s)".inMix < 50) exec (k = 7)

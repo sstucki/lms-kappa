@@ -53,16 +53,16 @@ class KaSimAbcModel extends KappaModel {
   // #### Observables
 
   // %obs: 'AB' A(x!x.B)
-  withObs("AB")("A(x!_)")
+  withObs("AB", "A(x!_)")
 
   // %obs: 'Cuu' C(x1~u?,x2~u?)
-  withObs("Cuu")("C(x1~u?,x2~u?)")
+  withObs("Cuu", "C(x1~u?,x2~u?)")
 
   // %obs: 'Cpu' C(x1~p?,x2~u?)
-  withObs("Cpu")("C(x1~p?,x2~u?)")
+  withObs("Cpu", "C(x1~p?,x2~u?)")
 
   // %obs: 'Cpp' C(x1~p?,x2~p?)
-  withObs("Cpp")("C(x1~p?,x2~p?)")
+  withObs("Cpp", "C(x1~p?,x2~p?)")
 
 
   // #### Variables

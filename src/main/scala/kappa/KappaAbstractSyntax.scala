@@ -51,7 +51,8 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
     @inline final def toSiteState(agentStateSet: AgentStateSet): SiteState =
       KappaSiteState(findSiteStateSet(agentStateSet), label)
 
-    override def toString = name + (label map ("~"+_) getOrElse "")
+    override def toString =
+      name + (label map (stateDelim + _) getOrElse "")
   }
 
   /** Companion object of the AbstractKappaSiteState class. */
@@ -98,7 +99,7 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
   class AbstractKappaLinked(val id: LinkId) extends AbstractLinked {
     @inline final def state: AbstractLinkState = AbstractKappaLinkState
 
-    override def toString = "!" + id
+    override def toString = linkDelim + id
   }
 
   /** Companion object of the PartialAbstractKappaLinkState class. */

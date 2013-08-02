@@ -104,7 +104,7 @@ trait TKappaActions extends KappaLikeActions {
 
     var lastEnergy: Double = 0
 
-    /** 
+    /**
      * Check whether we accept or not the transition given the
      * difference in energy between the source and target state.
      */

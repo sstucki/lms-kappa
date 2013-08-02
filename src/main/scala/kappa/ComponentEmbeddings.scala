@@ -261,9 +261,9 @@ trait ComponentEmbeddings {
       u: Pattern.Agent, v: Mixture.Agent, inj: Array[Mixture.Agent])
         : Boolean = {
       val i = u.index
-      if (inj(i) != null) inj(i) == v          // Functionality test
-      else if (v hasMark Visited) false        // Injectivity test
-      else if (v.liftMap isDefinedAt u) false  // Duplicate test
+      if (inj(i) != null) inj(i) == v           // Functionality test
+      else if (v hasMark Visited) false         // Injectivity test
+      else if (v.liftMap isDefinedAt u) false   // Duplicate test
       else if (u matches v) {
         inj(i) = v
         v.mixture.mark(v, Visited)
