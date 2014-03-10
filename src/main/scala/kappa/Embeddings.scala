@@ -2,8 +2,12 @@ package kappa
 
 import collection.immutable.Vector
 
+
 trait Embeddings extends ComponentEmbeddings {
-  this: SiteGraphs with Patterns with Mixtures =>
+  this: ContactGraphs
+      with SiteGraphs
+      with Patterns
+      with Mixtures =>
 
   /**
    * A class reperesenting a total embedding as a product of
@@ -25,7 +29,8 @@ trait Embeddings extends ComponentEmbeddings {
    *        this embedding.
    */
   final class Embedding[T <: SiteGraph#AgentIntf](
-    val ces: Array[ComponentEmbedding[T]], val pattern: Pattern)
+    val ces: Array[ComponentEmbedding[T]],
+    val pattern: Pattern)
       extends Seq[ComponentEmbedding[T]] {
 
     /**
@@ -51,7 +56,7 @@ trait Embeddings extends ComponentEmbeddings {
 
     // -- Extra Seq[ComponentEmbedding] API --
 
-    @inline override def foreach[U](f: ComponentEmbedding[T] => U): Unit =
-      ces foreach f
+    @inline override def foreach[U](f: ComponentEmbedding[T] => U)
+        : Unit = ces foreach f
   }
 }

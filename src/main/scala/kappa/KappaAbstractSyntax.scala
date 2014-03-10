@@ -16,59 +16,86 @@ import scala.language.implicitConversions
 trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
   this: KappaContext
       with ContactGraphs
+      with SiteGraphs
       with Patterns
       with Mixtures
       with Actions
-      with Rules
-      with KappaParsers =>
+      with Rules =>
 
 
-  // -- Nodes of abstract syntax trees and their builders. --
+  // -- Contact graphs --
+
+  final case class AbstractKappaAgentStateSet(agentName: AgentName)
+      extends AbstractAgentStateSet {
+
+    def toAgentStateSet: AgentStateSet = KappaAgentStateSet(agentName)
+  }
+
+  final case class AbstractKappaSiteStateSet(siteName: SiteName,
+    labels: List[SiteLabel])
+      extends AbstractSiteStateSet {
+
+    def toSiteStateSet: SiteStateSet =
+      KappaSiteStateSet(siteName, labels)
+  }
+
+  final case class AbstractKappaLinkStateSet()
+      extends AbstractLinkStateSet {
+
+    def toLinkStateSet: LinkStateSet = KappaLinkStateSet
+  }
+
+
+  // -- Site graphs --
 
   /** A class representing abstract Kappa agent states. */
-  class AbstractKappaAgentState(val agentType: AgentTypeName)
-      extends PartialAbstractKappaLikeAgentState {
+  sealed case class AbstractKappaAgentState(agentName: AgentName)
+      extends AbstractKappaLikeAgentState {
+
+    val label: Option[AgentLabel] = None
 
     /** Creates an agent state from this abstract agent state. */
-    @inline final def toAgentState: AgentState =
-      KappaAgentState(findAgentStateSet)
+    @inline final def toAgentState = KappaAgentState(agentType.states)
 
-    override def toString = agentType
+    override def toString = agentName
+
+    /** A class representing abstract Kappa site states. */
+    sealed case class AbstractKappaSiteState(siteName: SiteName,
+      label: Option[SiteLabel])
+        extends AbstractKappaLikeSiteState {
+
+      /** Build an abstract site state with a particular label. */
+      @inline final def ~(label: SiteLabel): AbstractSiteState =
+        new AbstractKappaSiteState(siteName, Some(label))
+
+      /** Creates a site state from this abstract site state. */
+      @inline final def toSiteState: SiteState =
+        new KappaSiteState(siteType.states, label)
+
+      override def toString =
+        siteName + (label map (stateDelim + _) getOrElse "")
+    }
   }
 
-  /** Companion object of the AbstractKappaAgentState class. */
-  object AbstractKappaAgentState {
-    @inline def apply(agentType: AgentTypeName): AbstractKappaAgentState =
-      new AbstractKappaAgentState(agentType)
-  }
+  // Aliases
+  class AgentType(agentName: AgentName)
+      extends AbstractKappaAgentState(agentName) {
 
-  /** A class representing abstract Kappa site states. */
-  class AbstractKappaSiteState(
-    val name: SiteName, val label: Option[SiteLabel])
-      extends PartialAbstractKappaLikeSiteState {
+    // final class Site(siteName: SiteName)
+    //     extends AbstractKappaSiteState(siteName, None)
 
-    /** Creates a site state from this abstract site state. */
-    @inline final def toSiteState(agentStateSet: AgentStateSet): SiteState =
-      KappaSiteState(findSiteStateSet(agentStateSet), label)
-
-    override def toString =
-      name + (label map (stateDelim + _) getOrElse "")
-  }
-
-  /** Companion object of the AbstractKappaSiteState class. */
-  object AbstractKappaSiteState {
-    @inline def apply(
-      name: SiteName, label: Option[SiteLabel]): AbstractKappaSiteState =
-      new AbstractKappaSiteState(name, label)
+    final object Site {
+      def apply(siteName: SiteName) =
+        new AbstractKappaSiteState(siteName, None)
+    }
   }
 
   /** A class representing abstract Kappa link states. */
   class AbstractKappaLinkState extends AbstractLinkState {
 
     /** Creates a link state from this abstract link state. */
-    @inline final def toLinkState(linkId: Option[LinkId],
-      source: SiteStateSet, target: SiteStateSet): LinkState =
-      KappaLinkState(linkId)
+    @inline final def toLinkState(set: LinkStateSet,
+      linkId: Option[LinkId]): LinkState = KappaLinkState(linkId)
 
     override def toString = ""
   }
@@ -77,47 +104,17 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
   object AbstractKappaLinkState extends AbstractKappaLinkState
 
 
-  /** A class to build abstract Kappa site states. */
-  class PartialAbstractKappaSiteState(val name: SiteName)
-      extends PartialAbstractKappaLikeSiteState {
-
-    /** Build an abstract site state with a particular label. */
-    @inline final def ~(label: SiteLabel): AbstractSiteState =
-      new AbstractKappaSiteState(name, Some(label))
-
-    @inline final def toSiteState(agentStateSet: AgentStateSet): SiteState =
-      new AbstractKappaSiteState(name, None).toSiteState(agentStateSet)
-  }
-
-  /** Companion object of the PartialAbstractKappaSiteState class. */
-  object PartialAbstractKappaSiteState {
-    @inline def apply(name: SiteName): PartialAbstractKappaSiteState =
-      new PartialAbstractKappaSiteState(name)
-  }
-
   /** A class representing abstract KappaLike links. */
-  class AbstractKappaLinked(val id: LinkId) extends AbstractLinked {
+  final case class AbstractKappaLinked(val id: LinkId)
+      extends AbstractLinked {
+
     @inline final def state: AbstractLinkState = AbstractKappaLinkState
 
     override def toString = linkDelim + id
   }
 
-  /** Companion object of the PartialAbstractKappaLinkState class. */
-  object AbstractKappaLinked {
-    @inline def apply(id: LinkId): AbstractKappaLinked =
-      new AbstractKappaLinked(id)
-  }
-
-
-  // -- Sugar for pattern and mixture construction. --
-
-  /** Convert site names into abstract site states. */
-  implicit def siteNameToAbstractSiteState(
-    n: SiteName): PartialAbstractKappaSiteState =
-    PartialAbstractKappaSiteState(n)
-
   /** Convert link IDs into abstract links. */
-  implicit def linkIdToAbstractLinkState(id: LinkId): AbstractKappaLinked =
+  implicit def linkIdToAbstractLinkState(id: LinkId) =
     AbstractKappaLinked(id)
 
 
@@ -131,41 +128,103 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
   }
 
 
-  /**
-   * Alias for easy agent state creation.
-   *
-   * Use case:
-   * {{{
-   *   // Define an object `A` representing an agent of type "A".
-   *   object A extends AgentType("A")
-   *
-   *   // Define a val `x` representing a site with name "x".
-   *   val x = Site("x")
-   *
-   *   // Use `A` and `x` to constructor an agent.
-   *   withObs{ A(x) }
-   * }}}
-   */
-  class AgentType(agentTypeName: AgentTypeName)
-      extends AbstractKappaAgentState(agentTypeName)
+  // /**
+  //  * Alias for easy agent state creation.
+  //  *
+  //  * Use case:
+  //  * {{{
+  //  *   // Define an object `A` representing an agent of type "A".
+  //  *   object A extends AgentType("A")
+  //  *
+  //  *   // Define a val `x` representing a site with name "x".
+  //  *   val x = Site("x")
+  //  *
+  //  *   // Use `A` and `x` to constructor an agent.
+  //  *   withObs{ A(x) }
+  //  * }}}
+  //  */
+  // class AgentType(agentTypeName: AgentTypeName)
+  //     extends AbstractKappaAgentState(agentTypeName)
 
-  /**
-   * A factory object for easy site state creation.
-   *
-   * Use case:
-   * {{{
-   *   // Define an object `A` representing an agent of type "A".
-   *   object A extends AgentType("A")
-   *
-   *   // Define a val `x` representing a site with name "x".
-   *   val x = Site("x")
-   *
-   *   // Use `A` and `x` to constructor an agent.
-   *   withObs{ A(x) }
-   * }}}
-   */
-  object Site {
-    def apply(n: SiteName) = PartialAbstractKappaSiteState(n)
-  }
+  // /**
+  //  * A factory object for easy site state creation.
+  //  *
+  //  * Use case:
+  //  * {{{
+  //  *   // Define an object `A` representing an agent of type "A".
+  //  *   object A extends AgentType("A")
+  //  *
+  //  *   // Define a val `x` representing a site with name "x".
+  //  *   val x = Site("x")
+  //  *
+  //  *   // Use `A` and `x` to constructor an agent.
+  //  *   withObs{ A(x) }
+  //  * }}}
+  //  */
+  // object Site {
+  //   def apply(n: SiteName) = PartialAbstractKappaSiteState(n)
+  // }
+
+  // /** A class to build abstract Kappa site states. */
+  // final case class PartialAbstractKappaSiteState(val name: SiteName)
+  //     extends PartialAbstractKappaLikeSiteState {
+
+  //   /** Build an abstract site state with a particular label. */
+  //   @inline final def ~(label: SiteLabel): AbstractSiteState =
+  //     new AbstractKappaSiteState(name, Some(label))
+
+  //   @inline final def toSiteState(agentStateSet: AgentStateSet): SiteState =
+  //     new AbstractKappaSiteState(name, None).toSiteState(agentStateSet)
+  // }
+
+
+  // /** Companion object of the PartialAbstractKappaSiteState class. */
+  // object PartialAbstractKappaSiteState {
+  //   @inline def apply(name: SiteName): PartialAbstractKappaSiteState =
+  //     new PartialAbstractKappaSiteState(name)
+  // }
+
+
+  // -- Nodes of abstract syntax trees and their builders. --
+
+  // /** A class representing abstract Kappa agent states. */
+  // final case class AbstractKappaAgentState(val agentType: AgentTypeName)
+  //     extends PartialAbstractKappaLikeAgentState {
+
+  //   /** Creates an agent state from this abstract agent state. */
+  //   @inline final def toAgentState: AgentState =
+  //     KappaAgentState(findAgentStateSet)
+
+  //   override def toString = agentType
+  // }
+
+
+  // /** Companion object of the AbstractKappaAgentState class. */
+  // object AbstractKappaAgentState {
+  //   @inline def apply(agentType: AgentTypeName): AbstractKappaAgentState =
+  //     new AbstractKappaAgentState(agentType)
+  // }
+
+
+  // /** A class representing abstract Kappa site states. */
+  // final case class AbstractKappaSiteState(
+  //   val name: SiteName, val label: Option[SiteLabel])
+  //     extends PartialAbstractKappaLikeSiteState {
+
+  //   /** Creates a site state from this abstract site state. */
+  //   @inline final def toSiteState(agentStateSet: AgentStateSet): SiteState =
+  //     KappaSiteState(findSiteStateSet(agentStateSet), label)
+
+  //   override def toString =
+  //     name + (label map (stateDelim + _) getOrElse "")
+  // }
+
+
+  // /** Companion object of the AbstractKappaSiteState class. */
+  // object AbstractKappaSiteState {
+  //   @inline def apply(
+  //     name: SiteName, label: Option[SiteLabel]): AbstractKappaSiteState =
+  //     new AbstractKappaSiteState(name, label)
+  // }
 }
 

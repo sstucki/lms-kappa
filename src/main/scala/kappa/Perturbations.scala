@@ -16,6 +16,9 @@ trait Perturbations {
 
   var mods : Vector[Perturbation] = Vector()
 
+  object once
+  object twice
+
   /** A trait for perturbations. */
   case class Perturbation(condition: PerturbationCondition,
                           effect: () => Unit)
@@ -36,15 +39,10 @@ trait Perturbations {
       def times { maxCalls = counter + n }
     }
 
-    // FIXME: This is not working
-    def only = Only
+    def only(o: once.type) { maxCalls = counter + 1 }
+    def only(t: twice.type) { maxCalls = counter + 2 }
 
-    object Only {
-      def once { maxCalls = counter + 1 }
-      def twice { maxCalls = counter + 2 }
-    }
-
-    // Function0[Unit] API
+    // -- Function0[Unit] API --
 
     /** Apply the effect if the condition holds. */
     def apply {
@@ -87,7 +85,7 @@ trait Perturbations {
 
     class Add(n: Int) {
       def of(m: Mixture) = Perturbation(self, () => mix ++ m * n)
-      def of(m: AbstractPattern): Perturbation = of(Mixture(m.toPattern))
+      def of(m: AbstractPattern): Perturbation = of(m.toMixture)
     }
 
     class Del(n: Int) {
@@ -121,12 +119,13 @@ trait Perturbations {
 
     // RHZ: I find this a bit useless. WDYT?
     def snapshot(baseFilename: String) = {
-      var n = 1
+      var n: Int = 1
       Perturbation(this, () => {
         val p = stringToPattern(mix.toString)
         val outputStream = new BufferedWriter(new FileWriter(
           baseFilename + "-" + n + ".snap"))
 
+        // Count how many isomorphic copies of `c` there are in `cs`.
         def count(c: Pattern.Component, cs: Seq[Pattern.Component],
           rem: Seq[Pattern.Component], sum: Int):
             (Seq[Pattern.Component], Int) = cs match {
@@ -135,6 +134,8 @@ trait Perturbations {
           case Nil => (rem, sum)
         }
 
+        // Count how many connected components there are in each
+        // isomorphism class in `cs`.
         def hist(cs: Seq[Pattern.Component]):
             Seq[(Pattern.Component, Int)] = cs match {
           case hd +: tl => {

@@ -3,6 +3,7 @@ package kappa
 trait KappaLikeActions extends Actions {
   this: KappaLikeContext
       with SiteGraphs
+      with ContactGraphs
       with Patterns
       with Mixtures
       with RollbackMachines

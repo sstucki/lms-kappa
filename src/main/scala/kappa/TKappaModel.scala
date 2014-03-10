@@ -1,7 +1,7 @@
 package kappa
 
 /** A class representing Kappa models. */
-class TKappaModel extends Model
+abstract class TKappaModel extends Model
     with KappaContext
     with KappaParsers
     with KappaAbstractSyntax

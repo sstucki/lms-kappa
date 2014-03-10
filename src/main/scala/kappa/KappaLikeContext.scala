@@ -3,30 +3,40 @@ package kappa
 
 /** Language context for Kappa-like languages. */
 trait KappaLikeContext extends LanguageContext {
-  this: ContactGraphs with KappaLikeAbstractSyntax with KappaLikeParsers =>
+  this: ContactGraphs
+      with KappaLikeAbstractSyntax =>
 
-  // -- State set types --
-  type AgentStateSet <: KappaLikeAgentStateSet
-  type SiteStateSet <: KappaLikeSiteStateSet
-  type LinkStateSet <: KappaLikeLinkStateSet
+  type AgentName = String
+  type SiteName = String
+  type LinkName = LinkId
+
+  type AgentLabel
+  type SiteLabel
+  type LinkLabel
 
 
   @inline final def optionContains[T](x: Option[T], xs: List[T])
       : Boolean = x map (xs contains _) getOrElse true
 
 
+  // -- State set types --
+
+  type AgentStateSet <: KappaLikeAgentStateSet
+  type SiteStateSet <: KappaLikeSiteStateSet
+  type LinkStateSet <: KappaLikeLinkStateSet
+
   /** Kappa-like agent state sets. */
   trait KappaLikeAgentStateSet extends GenericAgentStateSet {
 
     /** Returns the agent type associated with this agent state set. */
-    def agentType: AgentTypeName
+    def agentName: AgentName
 
     /** Returns the set of labels associated with this agent state set. */
     def labels: List[AgentLabel]
 
-    @inline def contains(agentState: AgentState): Boolean =
-      (agentType == agentState.agentType) &&
-      optionContains(agentState.label, labels)
+    @inline def contains(that: AgentState): Boolean =
+      (agentName == that.agentName) &&
+      optionContains(that.label, labels)
 
     @inline def isEmpty: Boolean = labels.isEmpty
   }
@@ -40,9 +50,9 @@ trait KappaLikeContext extends LanguageContext {
     /** Returns the set of labels associated with this site state set. */
     def labels: List[SiteLabel]
 
-    @inline def contains(siteState: SiteState): Boolean =
-      (siteName == siteState.siteName) &&
-      optionContains(siteState.label, labels)
+    @inline def contains(that: SiteState): Boolean =
+      (siteName == that.siteName) &&
+      optionContains(that.label, labels)
 
     @inline def isEmpty: Boolean = labels.isEmpty
   }
@@ -52,24 +62,15 @@ trait KappaLikeContext extends LanguageContext {
     /** Returns the set of labels associated with this link state set. */
     def labels: List[LinkLabel]
 
-    @inline def contains(linkState: LinkState): Boolean =
-      optionContains(linkState.label, labels)
+    @inline def contains(that: LinkState): Boolean =
+      optionContains(that.label, labels)
 
     @inline def isEmpty: Boolean = labels.isEmpty
   }
 
 
-  // -- Constituents of site graph state types --
-  type AgentTypeName = String
-  type SiteName = String
-  type AgentLabel
-  type SiteLabel
-  type LinkLabel
-
-
   // -- State types --
 
-  // Refined type bound for agent state type
   type AgentState <: KappaLikeAgentState[AgentState]
   type SiteState <: KappaLikeSiteState[SiteState]
   type LinkState <: KappaLikeLinkState[LinkState]
@@ -79,7 +80,7 @@ trait KappaLikeContext extends LanguageContext {
     this: T =>
 
     /** Returns the agent type. */
-    def agentType: AgentTypeName
+    def agentName: AgentName
 
     /** Returns the agent label. */
     def label: Option[AgentLabel]
@@ -92,7 +93,7 @@ trait KappaLikeContext extends LanguageContext {
      */
     def matchesInLongestCommonPrefix(that: T): Boolean
 
-    // TODO matches and other methods can be defined here
+    // TODO: matches and other methods can be defined here
   }
 
   /** A trait for Kappa-like site states. */

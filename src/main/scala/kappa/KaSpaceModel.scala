@@ -5,8 +5,11 @@ import scala.collection.mutable
 import scala.language.implicitConversions
 
 
-class KaSpaceModel extends Model with KaSpaceContext with KaSpaceActions
-    with KaSpaceAbstractSyntax with KaSpaceParsers {
+abstract class KaSpaceModel extends Model
+    with KaSpaceContext
+    with KaSpaceActions
+    with KaSpaceAbstractSyntax
+    with KaSpaceParsers {
 
   /** Run a simulation of this model. */
   override def run() {

@@ -3,6 +3,7 @@ package kappa
 import scala.language.implicitConversions
 
 import scala.util.Random
+import scala.collection.mutable
 
 
 /** A class representing generic models. */
@@ -30,6 +31,51 @@ trait Model extends LanguageContext
   var invariants  : Vector[() => Boolean] = Vector()
 
 
+  // // -- Contact graph --
+
+  // def contactGraph_=(cg: String) {
+  //   if (_contactGraph != null)
+  //     throw new IllegalStateException(
+  //       "contact graph cannot be redefined from scratch, " +
+  //         "but it can be extended with +=")
+
+  //   val ast = parseContactGraph(cg)
+  //   _contactGraph = new ContactGraph
+
+  //   val linkMap = new mutable.ArrayBuffer[(ContactGraph.Agent#Site,
+  //     AbstractCGLink)]
+
+  //   for (AbstractCGAgent(states, sites) <- ast.agents) {
+  //     val u = new ContactGraph.Agent(states.toAgentStateSet)
+  //     _contactGraph += u
+  //     for (AbstractCGSite(states, links) <- sites) {
+  //       val x = u += states.toSiteStateSet
+  //       for (l <- links)
+  //         linkMap += (x -> l)
+  //     }
+  //   }
+
+  //   for (l <- linkMap groupBy { case (_, l) => l.id }) l match {
+  //     case (id, Seq((x1, l1), (x2, l2))) => {
+  //       x1 connect (x2, l1.states.toLinkStateSet)
+  //       x2 connect (x1, l2.states.toLinkStateSet)
+  //     }
+  //     case (id, Seq(_)) => throw new IllegalStateException(
+  //       "dangling link with label " + id)
+  //     case (id, xs) => throw new IllegalStateException(
+  //       "attempt to create hyperlink with label " + id +
+  //         " to connect sites: " + (xs map (_._1)).mkString(", "))
+  //   }
+
+  //   _contactGraph
+  // }
+
+  // TODO: Is there a language-agnostic way to handle extending a
+  // "contact agent" that's been defined before?
+  // def contactGraph_+=(cg: String) {
+  // }
+
+
   /** Set the maximum time for the simulation. */
   def maxTime_=(t: Double) = { _maxTime = Some(t) }
   @inline def maxTime = _maxTime
@@ -48,52 +94,59 @@ trait Model extends LanguageContext
 
   // -- Initial state --
 
-  def withInit(mix: Mixture): Model             = { this.mix ++= mix; this }
-  def withInit(count: Int, mix: Mixture): Model = withInit(mix * count)
-  def withInit(mix: Pattern): Model             = withInit(Mixture(mix))
-  def withInit(count: Int, mix: Pattern): Model = withInit(Mixture(mix) * count)
-  def withInit(mix: AbstractPattern): Model     = withInit(Mixture(mix.toPattern))
-  def withInit(count: Int, mix: AbstractPattern): Model =
-    withInit(Mixture(mix.toPattern) * count)
-  def withInit(mix: PartialAbstractPattern*): Model =
+  def withInit(mix: Mixture): Mixture = { this.mix ++= mix; mix }
+  def withInit(mix: Pattern): Mixture = withInit(mix.toMixture)
+  def withInit(mix: AbstractPattern): Mixture = withInit(mix.toMixture)
+  def withInit(mix: PartialAbstractPattern*): Mixture =
     withInit(partialAbstractPatternsToMixture(mix))
-  def withInit(count: Int, mix: PartialAbstractPattern*): Model =
+
+  def withInit(count: Int, mix: Mixture): Mixture =
+    withInit(mix * count)
+  def withInit(count: Int, mix: Pattern): Mixture =
+    withInit(mix.toMixture * count)
+  def withInit(count: Int, mix: AbstractPattern): Mixture =
+    withInit(mix.toMixture * count)
+  def withInit(count: Int, mix: PartialAbstractPattern*): Mixture =
     withInit(partialAbstractPatternsToMixture(mix) * count)
 
   // "Curried" version of `withInit`.
   final class WithInit(count: Int) {
-    def apply(mix: Mixture): Model = withInit(count, mix)
-    def apply(mix: Pattern): Model = withInit(count, mix)
-    def apply(mix: PartialAbstractPattern*): Model = withInit(count, mix: _*)
+    def apply(mix: Mixture): Mixture = withInit(count, mix)
+    def apply(mix: Pattern): Mixture = withInit(count, mix)
+    def apply(mix: PartialAbstractPattern*): Mixture =
+      withInit(count, mix: _*)
   }
   def withInit(count: Int) = new WithInit(count)
 
 
   // -- Observables --
 
+  def withObs(obs: Pattern): Pattern = withObs("", obs)
+  def withObs(obs: AbstractPattern): Pattern =
+    withObs(obs.toString, obs.toPattern)
+  def withObs(obs: PartialAbstractPattern*): Pattern =
+    withObs(partialAbstractPatternsToAbstractPattern(obs))
+
   def withObs(description: String, obs: Pattern): Pattern = {
     val name = if (description == "") obs.toString else description
     this.observables = this.observables :+ obs
     this.obsNames = this.obsNames :+ name
-    // TODO: See note above.
     for (cc <- obs.components) cc.register
     obs
   }
-  def withObs(obs: Pattern): Pattern = withObs("", obs)
   def withObs(description: String, obs: AbstractPattern): Pattern =
     withObs(description, obs.toPattern)
-  def withObs(obs: AbstractPattern): Pattern = withObs("", obs.toPattern)
-  def withObs(description: String, obs: PartialAbstractPattern*): Pattern =
+  def withObs(description: String, obs: PartialAbstractPattern*)
+      : Pattern =
     withObs(description, partialAbstractPatternsToPattern(obs))
-  def withObs(obs: PartialAbstractPattern*): Pattern = withObs("", obs: _*)
 
-  // FIXME: withObs(description: String) shadows
-  // withObs(obs: AbstractPattern)
+  // withObs(description: String) shadows the implicit conversion in
+  // withObs(obs: AbstractPattern). How can we solve this?
   // "Curried" version of `withObs`.
-  // final class WithObs(description: String) {
+  // final class WithObs(val description: String) {
   //   def apply(obs: Pattern): Pattern = withObs(description, obs)
   //   def apply(obs: PartialAbstractPattern*): Pattern =
-  //     withObs(description, obs: _*)
+  //     withObs(description, partialAbstractPatternsToPattern(obs))
   // }
   // def withObs(description: String) = new WithObs(description)
 
@@ -204,9 +257,9 @@ trait Model extends LanguageContext
     while ((events < (maxEvents getOrElse (events + 1))) &&
            (time < (maxTime getOrElse Double.PositiveInfinity))) {
 
-      // TODO Perhaps we should even distinguish between "hard" and
-      // "soft" deadlock... or perhaps we should abandon the square
-      // approximation here and only return throw hard deadlocks
+      // RHZ: Should we distinguish between apparent deadlocks (eg too
+      // many consecutive clashes) and real deadlocks (ie total
+      // activity equal 0)?
       if (consecutiveClashes >= maxConsecutiveClashes)
         throw Deadlock
 

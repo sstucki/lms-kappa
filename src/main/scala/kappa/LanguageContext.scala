@@ -5,78 +5,43 @@ import scala.reflect.ClassTag
 
 /** Generic language context trait. */
 trait LanguageContext {
-  this: ContactGraphs with Parsers =>
 
-  // RHZ: Where should these definitions go?
   val stateDelim = "~"
   val linkDelim = "!"
   val endpointDelim = "/"
   val undefined = "?"
 
 
-  // FIXME: Refactor parsing of contact graphs and remove dependency
-  // on Parsers
-
   // -- State set types --
+
   type AgentStateSet <: GenericAgentStateSet
   type SiteStateSet <: GenericSiteStateSet
   type LinkStateSet <: GenericLinkStateSet
 
 
-  /** Creates an agent state set from a set of agent state names. */
-  def mkAgentStateSet(stateSet: AgentStateSetName): AgentStateSet
+  // /** Creates an agent state set from a set of agent state names. */
+  // def mkAgentStateSet(stateSet: AgentStateSetName): AgentStateSet
 
-  /** Creates a site state set from a set of site state names. */
-  def mkSiteStateSet(agentStateSet: AgentStateSet, siteStateSet: SiteStateSetName): SiteStateSet
+  // /** Creates a site state set from a set of site state names. */
+  // def mkSiteStateSet(agentStateSet: AgentStateSet, siteStateSet: SiteStateSetName): SiteStateSet
 
-  /** Creates a link state set from a set of link state names. */
-  def mkLinkStateSet(source: SiteStateSet, target: SiteStateSet, stateSet: LinkStateSetName): LinkStateSet
+  // /** Creates a link state set from a set of link state names. */
+  // def mkLinkStateSet(source: SiteStateSet, target: SiteStateSet, stateSet: LinkStateSetName): LinkStateSet
 
 
   /** A trait for agent state sets. */
-  trait GenericAgentStateSet { // extends Set[AgentState] with SetLike[AgentState]
+  trait GenericAgentStateSet {
+    // extends Set[AgentState] with SetLike[AgentState]
 
     /** Tests whether this set contains a given agent state. */
-    def contains(astate: AgentState): Boolean
+    def contains(state: AgentState): Boolean
 
     /** Tests whether this set is empty. (Better description required) */
     def isEmpty: Boolean
-
-    /**
-     * An iterable for the finite set of sites associated with
-     * this agent state set.
-     */
-    //def siteStateSet: Iterable[SiteStateSet]
-
-    /**
-     * This method receives a partially defined, unordered interface
-     * and returns a fully defined, ordered one. In other words, it
-     * completes the given interface with the missing undefined sites.
-     *
-     * NOTE: The code that relies on the assumption that sites need
-     * to be ordered is in Patterns.Pattern.Agent.matches.
-     */
-    def completeInterface(siteStates: Iterable[SiteState]): Seq[SiteState] = {
-      val siteStateSets =
-        for (siteStateSet <- contactGraph.siteStateSets
-             if siteStateSet.agentStateSet == this)
-        yield siteStateSet
-
-      // FIXME Once a site state set is assigned a site,
-      // it shouldn't be available anymore for assignment
-      val siteMap: Map[SiteStateSet, SiteState] = {
-        for { siteState <- siteStates
-              siteStateSet <- siteStateSets
-              if (siteStateSet contains siteState) }
-        yield (siteStateSet -> siteState)
-      }.toMap withDefault (_.undefinedSite)
-
-      // siteStateSets.map(siteMap.lift).flatten
-      siteStateSets map siteMap
-    }
   }
 
-  trait GenericSiteStateSet { // extends Set[SiteState] with SetLike[SiteState]
+  trait GenericSiteStateSet {
+    // extends Set[SiteState] with SetLike[SiteState]
 
     /** Tests whether this set contains a given site state. */
     def contains(sstate: SiteState): Boolean
@@ -85,13 +50,17 @@ trait LanguageContext {
     def isEmpty: Boolean
 
     /** Returns an undefined site state. */
-    def undefinedSite: SiteState
+    def undefinedState: SiteState
 
-    /** Returns the agent state set to which this site state set is associated. */
-    def agentStateSet: AgentStateSet
+    /** Returns the default site state for this site state set. */
+    def defaultState: SiteState
+
+    // /** Returns the agent state set to which this site state set is associated. */
+    // def agentStateSet: AgentStateSet
   }
 
-  trait GenericLinkStateSet { // extends Set[LinkState] with SetLike[LinkState]
+  trait GenericLinkStateSet {
+    // extends Set[LinkState] with SetLike[LinkState]
 
     /** Tests whether this set contains a given site state. */
     def contains(lstate: LinkState): Boolean
@@ -111,16 +80,16 @@ trait LanguageContext {
   trait GenericAgentState[T] extends Matchable[T] {
     this: T =>
 
-    /** Returns the agent state set this agent state belongs to. */
-    def agentStateSet: AgentStateSet
+    // /** Returns the agent state set this agent state belongs to. */
+    // def agentStateSet: AgentStateSet
   }
 
   /** A trait for generic site states. */
   trait GenericSiteState[T] extends Matchable[T] {
     this: T =>
 
-    /** Returns the site state set this agent state belongs to. */
-    def siteStateSet: SiteStateSet
+    // /** Returns the site state set this agent state belongs to. */
+    // def siteStateSet: SiteStateSet
   }
 
   /** A trait for generic link states. */
@@ -133,8 +102,8 @@ trait LanguageContext {
     /** Returns a link state with a different link id. */
     def withLinkId(linkId: LinkId): T
 
-    /** Returns the link state set this agent state belongs to. */
-    def linkStateSet: LinkStateSet
+    // /** Returns the link state set this agent state belongs to. */
+    // def linkStateSet: LinkStateSet
   }
 
   /** An implicit providing a class tag for [[SiteState]]s. */

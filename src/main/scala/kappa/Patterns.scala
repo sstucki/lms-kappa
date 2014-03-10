@@ -69,18 +69,51 @@ trait Patterns {
     def registerComponents: Seq[ComponentIndex] =
       for (c <- components) yield c.register
 
-    // FIXME: Should implement this properly.  The actual string
-    // representation of patterns is probably language-specific, so we
-    // might want to delegate this to an language-specific
-    // PatternPrinter or something like that.
-    //
-    // RHZ: There is a dirty solution in Mixtures
     override def toString = iterator.mkString("", ",", "")
+
+    /** Converts pattern into a mixture. */
+    def toMixture: Mixture = {
+
+      val m = new Mixture
+      for (c <- this.components) {
+
+        if (!c.isComplete) throw new IllegalArgumentException(
+          "attempt to create mixture from incomplete pattern: " + this)
+
+        // Allocate unconnected copies of agents in this component
+        val as = new Array[Mixture.Agent](c.agents.size)
+        for (u <- c.agents) {
+          val n = u.length
+          // TODO: Are the siteStates shared or copied?
+          val v = Mixture.AgentImpl(u.agentType, u.state)(
+            u.siteTypes.toArray, u.siteStates.toArray,
+            new Array[Link](n))
+          // u.siteStates.copyToArray(v._siteStates)
+          m += v
+          as(u.index) = v
+        }
+
+        // Setup the interfaces of the agents in the component
+        for (u <- c.agents) {
+          for (i <- u.indices) {
+            val l = u.links(i) match {
+              case Linked(u, j, t, l) =>
+                Mixture.Linked(as(u.index), j, t, l)
+              case Stub => Stub
+              case _ => throw new IllegalArgumentException(
+                "attempt to create mixture with an undefined or " +
+                  "wildcard link")
+            }
+            as(u.index).links(i) = l
+          }
+        }
+      }
+      m
+    }
 
 
     // -- BiAction construction --
 
-    // FIXME: Operator precedence problem with :@ and !@
     /** Bidirectional action (BiAction) construction. */
     def <->(that: Pattern)(implicit bab: BiActionBuilder)
         : bab.BiRuleBuilder = bab(this, that)
@@ -89,7 +122,12 @@ trait Patterns {
     def <->(that: AbstractPattern)(implicit bab: BiActionBuilder)
         : bab.BiRuleBuilder = bab(this, that.toPattern)
 
-    // TODO Implicits defs are too fragile (see AbstractSyntax)
+    def <->(that: AbstractBiRuleTail)(implicit bab: BiActionBuilder) = {
+      val rhs = that.rhs.toPattern
+      BiRule(bab(this, rhs).getBiAction, that.toFwdRate(this),
+        that.toBwdRate(rhs))
+    }
+
     /** Action construction. */
     def ->(that: Pattern)(implicit ab: ActionBuilder)
         : ab.RuleBuilder = ab(this, that)
@@ -97,6 +135,9 @@ trait Patterns {
     /** Action construction. */
     def ->(that: AbstractPattern)(implicit ab: ActionBuilder)
         : ab.RuleBuilder = ab(this, that.toPattern)
+
+    def ->(that: AbstractRuleTail)(implicit ab: ActionBuilder) =
+      Rule(ab(this, that.rhs.toPattern).getAction, that.toRate(this))
 
 
     // -- Core Seq[Pattern.Agent] API --
@@ -112,21 +153,20 @@ trait Patterns {
   /** Companion object of the [[Patterns#Pattern]] class. */
   object Pattern extends SiteGraph {
 
-    /** The type of agents in [[Pattern.Component]]s. */
-    type Agent = Pattern.AgentImpl
-
     /**
      * A class representing agents in [[Pattern.Component]]s.
      *
      * @param state the state of the agent.
-     * @param _siteStates the states of the sites of the agent.
-     * @param _links the links of the sites of the agent.
+     * @param siteStates the states of the sites of the agent.
+     * @param links the links of the sites of the agent.
      */
-    final class AgentImpl private[Pattern] (
-      val state: AgentState,
-      protected[Pattern] val _siteStates: Array[SiteState],
-      protected[Pattern] val _links: Array[SiteGraph.Link])
+    abstract class Agent
         extends AgentIntf {
+
+      val state: AgentState
+      val siteTypes: Array[agentType.Site]
+      val siteStates: Array[SiteState]
+      val links: Array[SiteGraph.Link]
 
       import SiteGraph.{Link, Undefined, Stub, Wildcard}
 
@@ -151,17 +191,35 @@ trait Patterns {
 
       // -- Pattern.AgentIntf API --
 
-      /** The states of the sites of this agent. */
-      @inline def siteStates: IndexedSeq[SiteState] = _siteStates
+      // /** The site in the contact graph for each site in this agent. */
+      // @inline def siteTypes: IndexedSeq[agentType.Site] = _siteTypes
 
-      /** The links of the sites of this agent. */
-      @inline def links: IndexedSeq[Link] = _links
+      // /** The states of the sites of this agent. */
+      // @inline def siteStates: IndexedSeq[SiteState] = _siteStates
+
+      // /** The links of the sites of this agent. */
+      // @inline def links: IndexedSeq[Link] = _links
 
       /** The number of sites of this agent. */
-      @inline override def length: Int = _links.length
+      @inline override def length: Int = links.length
 
       /** The range of indices of this agent. */
-      @inline override def indices: Range = 0 until _links.length
+      @inline override def indices: Range = 0 until links.length
+    }
+
+    object Agent {
+
+      def apply(_agentType: ContactGraph.Agent, _state: AgentState)(
+        st: Array[_agentType.Site], ss: Array[SiteState],
+        ls: Array[SiteGraph.Link]): Agent =
+          new Agent {
+            type T = _agentType.type
+            val agentType: T = _agentType
+            val state = _state
+            val siteStates = ss
+            val siteTypes = st
+            val links = ls
+          }
     }
 
     /**
@@ -216,8 +274,8 @@ trait Patterns {
        *
        * FIXME: Can we do better?
        */
-      protected[Pattern] var _embeddings
-          : mutable.ArrayBuffer[ComponentEmbedding[Mixture.Agent]] = null
+      protected[Pattern] var _embeddings: mutable.ArrayBuffer[
+        ComponentEmbedding[Mixture.Agent]] = null
 
       /**
        * The component embeddings from this component to the mixture.
@@ -373,7 +431,7 @@ trait Patterns {
       def register: ComponentIndex =
         if (_modelIndex >= 0) _modelIndex else {
 
-          // FIXME: This "isEquivTo" in the following loop is an
+          // TODO: This "isEquivTo" in the following loop is an
           // isomorphism check, so this loop is expensive! One iso
           // check is O(n^2) in the size of the components involved,
           // so the total cost of checking whether there is already a
@@ -435,8 +493,8 @@ trait Patterns {
        *
        * @return `true` if and only if `this` and `that` are equivalent.
        */
-      // FIXME: Should override this for better performance
-      //override def isEquivTo[U <: Component](that: U): Boolean = ???
+      // FIXME: We should override this for better performance
+      // override def isEquivTo[U <: Component](that: U): Boolean = ???
 
       /**
        * Returns the join of this component and `that`.
@@ -500,20 +558,48 @@ trait Patterns {
     /** Builder for patterns. */
     class Builder() {
 
-      import Builder._
+      import SiteGraph.{Link,Undefined,Defined,Wildcard,Stub}
 
-      final class Agent private[Builder] (
-        val index: AgentIndex, val state: AgentState) {
+      abstract class Agent(val index: AgentIndex)
+          extends AgentIntf {
+
+        val state: AgentState
+        // val siteTypes: Array[agentType.Site]
+        // val siteStates: Array[SiteState]
+
+        // TODO: Is there a way to name this sites instead of _sites?
+        val _sites: mutable.ArrayBuffer[Site]
+
+        @inline final def siteStates: Array[SiteState] = {
+          for (i <- indices) yield _sites(i).state
+        }.toArray
+
+        @inline final def siteTypes: Array[agentType.Site] = {
+          for (i <- indices) yield _sites(i).siteType
+        }.toArray
+
+        @inline final def links: Array[Link] = {
+          for (i <- indices) yield _sites(i).link
+        }.toArray
+
+        /** The number of sites of this agent. */
+        @inline override def length: Int = _sites.length
+
+        /** The range of indices of this agent. */
+        @inline override def indices: Range = _sites.indices
+
 
         final class Site private[Agent] (
-          val index: SiteIndex, val state: SiteState) {
-
-          private var _link: Builder.Link = Undefined
-          @inline def link = _link
+          val index: SiteIndex,
+          val siteType: agentType.Site,
+          val state: SiteState) {
 
           @inline def agent = Agent.this
 
-          def define(link: Builder.Defined) = {
+          private var _link: Link = Undefined
+          @inline def link = _link
+
+          def define(link: Defined) = {
             _link = _link match {
               case Undefined => link
               case _ => throw new IllegalStateException(
@@ -524,44 +610,102 @@ trait Patterns {
             this
           }
 
+          // TODO: I should probably use Agent and SiteIndex instead
+
           def connect(to: Agent#Site,
+            fromType: ContactGraph.Link, toType: ContactGraph.Link,
             fromState: LinkState, toState: LinkState) = {
-            this define Linked(to, fromState)
-            to   define Linked(this, toState)
+            this define Linked(to, fromType, fromState)
+            to   define Linked(this, toType, toState)
             this
           }
 
           override def toString = state + linkDelim + link
         }
 
-        val sites = new mutable.ArrayBuffer[Site]()
+        // def +=(siteType: agentType.Site, state: SiteState) = {
+        //   val s = new Site(sites.length, siteType, state)
+        //   sites += s
+        //   s
+        // }
 
-        def +=(state: SiteState) = {
-          val s = new Site(sites.length, state)
-          sites += s
-          s
+        // TODO: Can I make this work without _sites being mutable?
+
+        def completeInterface: Agent = {
+          val intf = agentType.completeInterface((
+            for (s <- _sites)
+            yield (s.siteType, (s.state, s.link))).toMap)
+          _sites.clear()
+          for (((siteType, (state, link)), i) <- intf.zipWithIndex) {
+            _sites += new Site(i, siteType, state)
+            link match {
+              case  Undefined => ()
+              case l: Defined => _sites.last define l
+            }
+          }
+          this
         }
 
-        override def toString = state + "(" + sites + ")"
+        override def toString = state + "(" + _sites + ")"
       }
 
-      final case class Linked(to: Agent#Site, state: LinkState)
+      object Agent {
+
+        def apply(a: AgentIndex, _agentType: ContactGraph.Agent,
+          _state: AgentState)(st: Array[_agentType.Site],
+            ss: Array[SiteState]): Agent =
+          new Agent(a) {
+            type T = _agentType.type
+            val agentType: T = _agentType
+            val state = _state
+            val _sites = mutable.ArrayBuffer[Site]()
+
+            for ((tpe, state) <- st zip ss)
+              _sites += new Site(sites.length, tpe, state)
+          }
+
+        // def apply(a: AgentIndex, _agentType: ContactGraph.Agent,
+        //   state: AgentState)(_siteTypes: Seq[_agentType.Site],
+        //     _siteStates: Seq[SiteState]) =
+        //   new Agent(a, _agentType, state) {
+        //     val siteTypes = _siteTypes
+        //     val siteStates = _siteStates
+        //   }
+        //   // for ((siteType, state) <- sites)
+        //   //   u += (siteType, state)
+      }
+
+      // TODO: Get rid of this and use SiteGraph.Linked
+      final case class Linked(to: Agent#Site,
+        linkType: ContactGraph.Link, state: LinkState)
           extends Defined {
-        // FIXME: How can I print the linkId?
+
+        // RHZ: Should I print `to.state` as well?
         override def toString = state.toString
       }
 
       /** The set of agents added to the builder. */
       val agents = mutable.ArrayBuffer[Agent]()
 
-      /**
-       * Add a new agent to the builder.
-       *
-       * @param state the state of the new agent.
-       * @return a reference to the new agent.
-       */
-      def +=(state: AgentState) = {
-        val u = new Agent(agents.length, state)
+      // /**
+      //  * Add a new agent to the builder.
+      //  *
+      //  * @param state the state of the new agent.
+      //  * @return a reference to the new agent.
+      //  */
+      // def +=(agentType: ContactGraph.Agent, state: AgentState) = {
+      //   val u = new Agent(agents.length, agentType, state)
+      //   agents += u
+      //   u
+      // }
+
+      // It's important to pass sites together with agentType so
+      // the type-checker can do its work
+      def addAgent(agentType: ContactGraph.Agent, state: AgentState)(
+        sites: Seq[(agentType.Site, SiteState)]) = {
+        val (siteTypes, siteStates) = sites.unzip
+        val u = Agent(agents.length, agentType, state)(
+          siteTypes.toArray, siteStates.toArray)
         agents += u
         u
       }
@@ -581,7 +725,7 @@ trait Patterns {
               componentMap(i) = ci
               val u = agents(i)
               for (s <- u.sites) s.link match {
-                case Linked(to, _) => todo.enqueue(to.agent.index)
+                case Linked(to, _, _) => todo.enqueue(to.agent.index)
                 case _ => ()
               }
             }
@@ -621,19 +765,21 @@ trait Patterns {
           cs(i) = c
         }
 
-        // Allocate agents and initialize the components and agents
-        // arrays in `p`
+        // Allocate agents and initialize the components
+        // and agents arrays in `p`
         for (i <- as.indices) {
 
           // Allocate sites and agent
-          val u = agents(i)
+          val u = agents(i).completeInterface
           val n = u.sites.length
-          val ss = new Array[SiteState](n)
+          val st = u.siteTypes.clone
+          val ss = u.siteStates.clone
           val ls = new Array[SiteGraph.Link](n)
-          for (j <- u.sites.indices) {
-            ss(j) = u.sites(j).state
-          }
-          val v = new Pattern.Agent(u.state, ss, ls)
+          // for (j <- u.indices) {
+          //   ss(j) = u.siteStates(i)
+          //   st(j) = u.siteTypes(i)
+          // }
+          val v = Pattern.Agent(u.agentType, u.state)(st, ss, ls)
           as(i) = v
 
           // Add the agent to its component
@@ -648,14 +794,15 @@ trait Patterns {
           val u = agents(i)
           val v = as(i)
           for (j <- u.sites.indices) {
-            val l = u.sites(j).link match {
-              case Undefined         => SiteGraph.Undefined
-              case Stub              => SiteGraph.Stub
-              case Wildcard(a, s, l) => SiteGraph.Wildcard(a, s, l)
-              case Linked(to, state) =>
-                Pattern.Linked(as(to.agent.index), to.index, state)
+            v.links(j) = u.sites(j).link match {
+              // case Undefined         => SiteGraph.Undefined
+              // case Stub              => SiteGraph.Stub
+              // case Wildcard(a, s, l) => SiteGraph.Wildcard(a, s, l)
+              case Linked(to, linkType, state) =>
+                Pattern.Linked(as(to.agent.index), to.index,
+                  linkType, state)
+              case l => l
             }
-            v._links(j) = l
           }
         }
 
@@ -663,18 +810,17 @@ trait Patterns {
       }
     }
 
-    /** Companion object of the pattern builder. */
-    object Builder {
-
-      sealed abstract class Link
-      final case object Undefined extends Link
-      sealed abstract class Defined extends Link
-      final case object Stub extends Defined
-      final case class Wildcard(
-        agentState: Option[AgentState],
-        siteState: Option[SiteState],
-        linkState: Option[LinkState]) extends Defined
-    }
+    // /** Companion object of the pattern builder. */
+    // object Builder {
+    //   sealed abstract class Link
+    //   final case object Undefined extends Link
+    //   sealed abstract class Defined extends Link
+    //   final case object Stub extends Defined
+    //   final case class Wildcard(
+    //     agentState: Option[AgentState],
+    //     siteState: Option[SiteState],
+    //     linkState: Option[LinkState]) extends Defined
+    // }
   }
 
   /**

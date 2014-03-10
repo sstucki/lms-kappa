@@ -71,7 +71,8 @@ trait Marks
    *
    * FIXME: We could do better.  We could prune the list lazily,
    * thereby fixing the amortized cost to O(1) even for cases where
-   * the list is not iterated over completely.
+   * the list is not iterated over completely. (@SST: Could you
+   * elaborate?)
    *
    * @return the collection used to track marked agents.
    */

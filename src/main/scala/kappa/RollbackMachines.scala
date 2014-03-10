@@ -2,31 +2,28 @@ package kappa
 
 trait RollbackMachines {
   this: LanguageContext
+      with ContactGraphs
       with SiteGraphs
       with Mixtures
       with Patterns
       with ComponentEmbeddings =>
 
   import SiteGraph.{Link, Stub}
-  import Mixture.{Agent, Linked}
+  import Mixture.{Agent, AgentImpl, Linked}
 
   trait RollbackMachine {
     this: Mixture =>
 
-    /**
-     * A class representing a single mixture checkpoint.
-     *
-     * FIXME: Should we use [[Mixture]] for this?
-     */
+    /** A class representing a single mixture checkpoint. */
     final class Checkpoint {
 
       val head: Agent = _head
       val length: Int = _length
 
-      var agents: List[Agent] = List()
+      var agents = List[Agent]()
 
-      var removedEmbeddings: List[ComponentEmbedding[Mixture.Agent]] = List()
-      var addedEmbeddings: List[ComponentEmbedding[Mixture.Agent]] = List()
+      var removedEmbeddings = List[ComponentEmbedding[Mixture.Agent]]()
+      var addedEmbeddings = List[ComponentEmbedding[Mixture.Agent]]()
     }
 
     /** The stack of mixture checkpoints. */
@@ -73,19 +70,21 @@ trait RollbackMachines {
       // Roll back all the agents in the checkpoint.
       val cp = _checkpoints.head
       for (v <- cp.agents) {
+        // TODO: Isn't it simpler to just put `v` in place of `u`
+        // by rewiring the mixture?
         val u = v._copy
 
         // Restore the state of `u` to that of `v`.
         u.state = v.state
         for (i <- v.indices) {
-          u._siteStates(i) = v._siteStates(i)
-          u._links(i) = v._links(i)
+          u.siteStates(i) = v.siteStates(i)
+          u.links(i) = v.links(i)
         }
         u.prev = v.prev
         u.next = v.next
         if (u.prev != null) u.prev.next = u
         if (u.next != null) u.next.prev = u
-        //mark(u, Updated)
+        // mark(u, Updated)
       }
 
       for (ce <- cp.removedEmbeddings) {
@@ -135,7 +134,8 @@ trait RollbackMachines {
      *
      * @param u the agent to add to the current checkpoint.
      */
-    @inline protected def checkpointAgent(u: Agent) {
+    @inline // protected
+    def checkpointAgent(u: Agent) {
       // RHZ: Why no copy should be created when marked?
       if (!_checkpoints.isEmpty && !(u hasMark Updated)) {
         val v = u.checkpointCopy
@@ -144,7 +144,8 @@ trait RollbackMachines {
       }
     }
 
-    def checkpointRemovedEmbedding(ce: ComponentEmbedding[Mixture.Agent]) {
+    def checkpointRemovedEmbedding(
+      ce: ComponentEmbedding[Mixture.Agent]) {
       _checkpoints match {
         case cp :: _ => cp.removedEmbeddings = ce :: cp.removedEmbeddings
         case List() => throw new IllegalStateException(
@@ -152,7 +153,8 @@ trait RollbackMachines {
       }
     }
 
-    def checkpointAddedEmbedding(ce: ComponentEmbedding[Mixture.Agent]) {
+    def checkpointAddedEmbedding(
+      ce: ComponentEmbedding[Mixture.Agent]) {
       _checkpoints match {
         case cp :: _ => cp.addedEmbeddings = ce :: cp.addedEmbeddings
         case List() => throw new IllegalStateException(
@@ -162,24 +164,23 @@ trait RollbackMachines {
   }
 
   trait RollbackAgent {
-    this: Agent =>
+    this: AgentImpl =>
 
     /**
       * Make a checkpoint copy of a given agent.
       *
       * @return a copy of this agent (sharing states and links).
       */
-    protected[kappa/*Mixture*/] def checkpointCopy: Agent = {
+    protected[kappa/*Mixture*/] def checkpointCopy: AgentImpl = {
       // Allocate an agent `v` tracking `this`.
       // RHZ: What happens if this.state is modified?
       // Is the agent state shared with the copy?
-      val v = new Agent(
-        this.state, this._siteStates.clone, this._links.clone,
-        this.liftMap.clone)
+      val v = AgentImpl(this.agentType, this.state, this.liftMap.clone)(
+        this.siteTypes, this.siteStates.clone, this.links.clone)
       v._mixture = this._mixture
+      v._copy = this
       v.prev = this.prev
       v.next = this.next
-      v._copy = this
       v
     }
   }

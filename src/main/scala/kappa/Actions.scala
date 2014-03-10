@@ -8,6 +8,7 @@ import scala.collection.mutable
 trait Actions {
   this: LanguageContext
       with SiteGraphs
+      with ContactGraphs
       with Patterns
       with Mixtures
       with RollbackMachines
@@ -32,15 +33,15 @@ trait Actions {
    * @param rhs the right-hand side of the action.
    * @param pe the partial embedding of this action.
    * @param rhsAgentOffsets a map containing the offsets in the
-   *        agents array of the agents in the RHS.
+   *        inj array of the agents in the RHS.
    * @param preCondition an optional predicate to execute ''before''
    *        applying the action.  If `preCondition` is `Some(f)` and
-   *        if `f` applied to the agents array returns `false`, the
+   *        if `f` applied to the inj array returns `false`, the
    *        action will not be applied and the mixture remains
    *        untouched.
    * @param postCondition a predicate to execute ''after'' applying
    *        the action.  If `postCondition` is `Some(f)` and `f`
-   *        applied to the agents array returns `false` the action
+   *        applied to the inj array returns `false` the action
    *        application will be canceled and the state of the mixture
    *        prior to the action application will be restored.
    */
@@ -49,14 +50,12 @@ trait Actions {
     val rhs: Pattern,
     val pe: PartialEmbedding,
     val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
-    val preCondition:  Option[(Action, Action.Agents) => Boolean] = None,
-    val postCondition: Option[(Action, Action.Agents) => Boolean] = None)
+    val preCondition:  Option[(Action, Action.Injection) => Boolean] = None,
+    val postCondition: Option[(Action, Action.Injection) => Boolean] = None)
       extends Function2[Embedding[Mixture.Agent], Mixture,
         (Boolean, Boolean)]
   {
     import Action._
-
-    type ActivationEntry = Iterable[Iterable[(Pattern.Agent, AgentIndex)]]
 
     private var _atoms: Seq[Action.Atom] = null
 
@@ -80,6 +79,17 @@ trait Actions {
 
       _atoms
     }
+
+    /** An activation entry is a sequence of sequences of pairs (u, v)
+      * that represent a partial embedding, where u is the agent in the
+      * target pattern component that's activated and v is the index of
+      * the agent in the source pattern component.
+      *
+      * RHZ: Why is it a sequence of sequences? Why not just a seq?
+      *
+      * TODO: A clearer explanation is needed.
+      */
+    type ActivationEntry = Iterable[Iterable[(Pattern.Agent, AgentIndex)]]
 
     /** Activation map. */
     val activationMap =
@@ -131,8 +141,7 @@ trait Actions {
      *         event, `false` otherwise.  The second boolean is `true`
      *         if the embedding is not injective.
      */
-    def apply(
-      embedding: Embedding[Mixture.Agent],
+    def apply(embedding: Embedding[Mixture.Agent],
       mixture: Mixture = mix): (Boolean, Boolean) = {
 
       if (!checkInjectivity(embedding, mixture)) {
@@ -140,18 +149,18 @@ trait Actions {
         (false, true)
       } else {
 
-        // Populate the agents array
+        // Populate the injection array
         val additions = rhs.length - pe.length
-        // RHZ: Isn't totalAgents = lhs.length + additions?
-        val totalAgents = (embedding map (_.length)).sum + additions
-        val agents = new Array[Mixture.Agent](totalAgents)
+        if ((embedding map (_.length)).sum != lhs.length)
+          throw new IllegalStateException("assertion failed")
+        val inj = new Injection(lhs.length + additions)
         var i = 0
         for (ce <- embedding; v <- ce) {
-          agents(i) = v
+          inj(i) = v
           i += 1
         }
 
-        if (!(preCondition map { f => f(this, agents) } getOrElse true)) {
+        if (!(preCondition map { f => f(this, inj) } getOrElse true)) {
           println("# pre-condition = false.")
           (false, false)
         } else {
@@ -166,21 +175,24 @@ trait Actions {
           mixture.clearMarkedAgents(SideEffect)
 
           // Apply all atomic actions
-          for (a <- atoms) a(agents, mixture)
+          for (a <- atoms) a(inj, mixture)
 
           // Perform negative and positive update
-          val mas = mixture.markedAgents(Updated)
-          performUpdates(agents, mas)
+          val modifiedAgents = mixture.markedAgents(Updated)
+          // RHZ: I think this solves the performance issue we were
+          // having by marking too many agents as side affected
+          val sideAffected = mixture.markedAgents(SideEffect) diff inj
+          performUpdates(inj, modifiedAgents, sideAffected)
 
           // Check post-conditions
-          if (postCondition map { f => f(this, agents) } getOrElse true) {
+          if (postCondition map { f => f(this, inj) } getOrElse true) {
             // Discard pre-application checkpoint and perform
             // negative/positive updates.
             if (!postCondition.isEmpty) mixture.discardCheckpoint
             (true, false)
           } else {
-            // Roll back to the state of the mixture prior to the action
-            // application.
+            // Roll back to the state of the mixture prior to the
+            // action application.
             println("# post-condition = false.")
             mixture.rollback
             (false, false)
@@ -228,52 +240,51 @@ trait Actions {
      * Perform the negative and positive updates after applying an
      * action.
      *
-     * @param agents the array of agents array operated on by the
-     *        action.
+     * @param inj the array of agents operated on by the action.
      * @param modifiedAgents the agents that have actually been
      *        modified by the action.
+     * @param sideAffected the agents that have been modified
+     *        by the action but are not part of the inj array.
      */
     protected def performUpdates(
-      agents: Agents,
-      modifiedAgents: Iterable[Mixture.Agent]): Unit =
-    {
+      inj: Injection,
+      modifiedAgents: Iterable[Mixture.Agent],
+      sideAffected: Iterable[Mixture.Agent]) {
+
       // -- Negative update --
       //
-      // NOTE: We need to eagerly garbage collect embeddings of
-      // observables (otherwise their overestimated count will be
-      // plotted).
-      //
-      // FIXME: However, we should be able to do the negative update
+      // TODO: We should be able to do the negative update
       // for LHS embeddings lazily.  But somehow the lazy garbage
       // collection does not work as it should, so we perform
-      // negative updates for all modified agents for now.  To be
-      // investigated.
-      for (v <- modifiedAgents) v.pruneLifts(!postCondition.isEmpty)
+      // negative updates for all modified agents for now.
+      // To be investigated.
+      //
+      // NOTE: When the lazy negative update is enabled, we still
+      // need to eagerly garbage collect embeddings of observables
+      // (otherwise their overestimated count will be plotted).
+      for (v <- modifiedAgents ++ sideAffected)
+        v.pruneLifts(!postCondition.isEmpty)
 
       // -- Positive update --
-      // var updates = 0
-
+      //
       // pes is a list of representative pairs of partial embeddings
+      // (u, v) where u represents the activated connected component
+      // and v represents the index of the agent in the inj array.
       for ((ci, ae) <- activationMap; pes <- ae) {
         val c = patternComponents(ci)
-        val pes2 = pes map { case (u, v) => (u, agents(v)) }
-        val ces = ComponentEmbedding.findEmbeddings(pes2)
+        val pesInMix = pes map { case (u, v) => (u, inj(v)) }
+        val ces = ComponentEmbedding.findEmbeddings(pesInMix)
         for (ce <- ces) {
           if (!postCondition.isEmpty)
             mix.checkpointAddedEmbedding(ce)
           c.addEmbedding(ce)
-          // updates += 1
         }
       }
-
-      val sideAffected = mix.markedAgents(SideEffect)
 
       // We now need to check them against all remaining registered
       // components to make sure we have found every embedding.
       //
       // TODO: Is there a more efficient way to handle side effects?
-      //var sideEffects = 0
-      val mas2 = mix.markedAgents(SideEffect)
       for (c <- patternComponents) {
         val pes = for (u <- c; v <- sideAffected) yield (u, v)
         val ces = ComponentEmbedding.findEmbeddings(pes)
@@ -281,10 +292,8 @@ trait Actions {
           if (!postCondition.isEmpty)
             mix.checkpointAddedEmbedding(ce)
           c.addEmbedding(ce)
-          //sideEffects += 1
         }
       }
-      //println("# updates: " + updates + ", side effects: " + sideEffects)
     }
 
     /**
@@ -335,63 +344,102 @@ trait Actions {
   /** Companion object of the [[Actions#Action]] class. */
   object Action {
 
-    // RHZ: Since this array is indexed by the agent ids of the lhs
-    // I find quite confusing the name Agents. Perhaps Injection
-    // would be better?
-    type Agents = Array[Mixture.Agent]
+    type Injection = Array[Mixture.Agent]
 
     sealed abstract class Atom {
-      def apply(agents: Agents, mixture: Mixture)
+      def apply(inj: Injection, mixture: Mixture)
     }
 
-    final case class AgentAddition(a: AgentIndex, state: AgentState,
-      siteStates: Seq[SiteState])
+    abstract class AgentAddition[T <: ContactGraph.Agent](
+      val a: AgentIndex,
+      val agentType: T,
+      val state: AgentState)
         extends Atom {
 
-      def apply(agents: Agents, mixture: Mixture) {
-        mixture += (state, siteStates)
+      val siteTypes: Seq[agentType.Site]
+      val siteStates: Seq[SiteState]
 
-        // Register the new agent in the agents array
+      def apply(inj: Injection, mixture: Mixture) {
+        mixture.addAgent(agentType, state)(siteTypes, siteStates)
+
+        // Register the new agent in the inj array
         val u = mixture.head
-        agents(a) = u
+        mixture.mark(u, Updated)
+        inj(a) = u
+      }
+    }
+
+    object AgentAddition {
+      def apply(a: AgentIndex, agentType: ContactGraph.Agent,
+        state: AgentState)(st: Seq[agentType.Site],
+          ss: Seq[SiteState]) = {
+        new AgentAddition[agentType.type](a, agentType, state) {
+          val siteTypes = st
+          val siteStates = ss
+        }
       }
     }
 
     final case class AgentDeletion(a: AgentIndex)
         extends Atom {
 
-      def apply(agents: Agents, mixture: Mixture) {
-        mixture -= agents(a)
+      def apply(inj: Injection, mixture: Mixture) {
+        val agent = inj(a)
+        mixture -= agent
+        mixture.checkpointAgent(agent)
+        mixture.mark(agent, Updated)
+        mixture.mark(agent, Deleted)
+        for (Mixture.Linked(u, i, _, _) <- agent.links) {
+          mixture.checkpointAgent(u)
+          mixture.mark(u, SideEffect)
+        }
       }
     }
 
     final case class LinkAddition(
-      a1: AgentIndex, s1: SiteIndex, l1: LinkState,
-      a2: AgentIndex, s2: SiteIndex, l2: LinkState)
+      a1: AgentIndex, s1: SiteIndex, t1: ContactGraph.Link, l1: LinkState,
+      a2: AgentIndex, s2: SiteIndex, t2: ContactGraph.Link, l2: LinkState)
         extends Atom {
 
-      def apply(agents: Agents, mixture: Mixture) {
-        val u1 = agents(a1)
-        val u2 = agents(a2)
-        mixture connect (u1, s1, l1, u2, s2, l2)
+      def apply(inj: Injection, mixture: Mixture) {
+        val u1 = inj(a1)
+        val u2 = inj(a2)
+        mixture.checkpointAgent(u1)
+        mixture.checkpointAgent(u2)
+        mixture.connect(u1, s1, t1, l1, u2, s2, t2, l2)
+        mixture.mark(u1, Updated)
+        mixture.mark(u2, Updated)
       }
     }
 
-    final case class LinkDeletion(a: AgentIndex, s: SiteIndex)
+    final case class LinkDeletion(a: AgentIndex, s: SiteIndex,
+      sideAffected: Boolean)
         extends Atom {
 
-      def apply(agents: Agents, mixture: Mixture) {
-        val u = agents(a)
-        mixture disconnect (u, s)
+      def apply(inj: Injection, mixture: Mixture) {
+        val u = inj(a)
+        u.links(s) match {
+          case Mixture.Linked(u2, _, _, _) => {
+            mixture.checkpointAgent(u2)
+            mixture.mark(u2, if (sideAffected) SideEffect else Updated)
+          }
+          case _ => ()
+        }
+        mixture.checkpointAgent(u)
+        mixture.disconnect(u, s)
+        mixture.mark(u, Updated)
       }
     }
 
     final case class AgentStateChange(a: AgentIndex, state: AgentState)
         extends Atom {
 
-      def apply(agents: Agents, mixture: Mixture) {
-        val u = agents(a)
-        mixture updateAgentState (u, state)
+      def apply(inj: Injection, mixture: Mixture) {
+        val u = inj(a)
+        mixture.checkpointAgent(u)
+        u.state = state
+        // mixture.updateAgentState(u, state)
+        mixture.mark(u, Updated)
       }
     }
 
@@ -399,11 +447,16 @@ trait Actions {
       a: AgentIndex, s: SiteIndex, state: SiteState)
         extends Atom {
 
-      def apply(agents: Agents, mixture: Mixture) {
-        val u = agents(a)
-        mixture updateSiteState (u, s, state)
+      def apply(inj: Injection, mixture: Mixture) {
+        val u = inj(a)
+        mixture.checkpointAgent(u)
+        u.siteStates(s) = state
+        // mixture.updateSiteState(u, s, state)
+        mixture.mark(u, Updated)
       }
     }
+
+    // RHZ: There's no LinkStateChange??
 
 
     /**
@@ -428,16 +481,16 @@ trait Actions {
           "attempt to change state " + ls + " to incomplete state " +
             rs + " in rule: " + lhs + " -> " + rhs)
 
-      def linkState(u: Pattern.Agent, j: SiteIndex): LinkState =
+      def linkState(u: Pattern.Agent, j: SiteIndex) =
         u.links(j) match {
-          case Linked(_, _, l) => l
+          case Linked(_, _, t, l) => (t, l)
           case _ => throw new IllegalArgumentException(
             "expected site " + j + " of agent " + u +
               " to be linked in RHS of rule " + lhs + " -> " + rhs)
         }
 
       // Compute the offsets of the first agents of each component of
-      // the LHS in the agents array passed to an action application.
+      // the LHS in the inj array passed to an action application.
       val ceOffsets: Array[Int] =
         lhs.components.scanLeft(0) { (i, ce) => i + ce.length }
 
@@ -447,30 +500,29 @@ trait Actions {
       @inline def rhsAgentOffset(a: Pattern.Agent) =
         rhsAgentOffsets(a)
 
-      @inline def linkDeletion(
-        atoms: mutable.Buffer[Atom], u1: Pattern.Agent,
-        j1: SiteIndex, u2: Pattern.Agent) {
+      @inline def linkDeletion(atoms: mutable.Buffer[Atom],
+        u1: Pattern.Agent, j1: SiteIndex,
+        u2: Pattern.Agent, sideAffected: Boolean) {
         val o1 = lhsAgentOffset(u1)
         val o2 = lhsAgentOffset(u2)
         if (o2 <= o1)
-          atoms += LinkDeletion(o1, j1)
+          atoms += LinkDeletion(o1, j1, sideAffected)
       }
 
-      @inline def linkAddition(
-        atoms: mutable.Buffer[Atom],
-        u1: Pattern.Agent, j1: SiteIndex, l1: LinkState,
+      @inline def linkAddition(atoms: mutable.Buffer[Atom],
+        u1: Pattern.Agent, j1: SiteIndex, t1: ContactGraph.Link, l1: LinkState,
         u2: Pattern.Agent, j2: SiteIndex) {
         val o1 = rhsAgentOffset(u1)
         val o2 = rhsAgentOffset(u2)
-        val l2 = linkState(u2, j2)
+        val (t2, l2) = linkState(u2, j2)
         if (o2 <= o1)
-          atoms += LinkAddition(o1, j1, l1, o2, j2, l2)
+          atoms += LinkAddition(o1, j1, t1, l1, o2, j2, t2, l2)
       }
 
       @inline def checkLinkComplete(l: LinkState) {
         if (!l.isComplete) throw new IllegalArgumentException(
-          "attempt to introduce new link with incomplete link state \"" + l +
-            "\" in rule: " + lhs + " -> " + rhs)
+          "attempt to introduce new link with incomplete link state" +
+            "\"" + l + "\" in rule: " + lhs + " -> " + rhs)
       }
 
       val atoms = new mutable.ArrayBuffer[Atom]()
@@ -488,72 +540,72 @@ trait Actions {
         case (ru, ro) => ro >= pe.length
       }
       for ((ru, ro) <- rhsAdditions) {
-        if (ru.isComplete) atoms += AgentAddition(ro, ru.state, ru.siteStates)
+        if (ru.isComplete)
+          atoms += AgentAddition(ro, ru.agentType, ru.state)(
+            ru.siteTypes, ru.siteStates)
         else throw new IllegalArgumentException(
           "attempt to add incomplete agent " + ru + " in rule: " +
             lhs + " -> " + rhs)
       }
 
       // Find all agent state changes (in the common context)
-      for {
-        (lu, ru) <- pe
-        s <- findStateChange(lu.state, ru.state)
-      } {
-        atoms += AgentStateChange(lhsAgentOffset(lu), s)
-      }
+      for { (lu, ru) <- pe
+            s <- findStateChange(lu.state, ru.state)
+      } atoms += AgentStateChange(lhsAgentOffset(lu), s)
 
       // Find all site state changes (in the common context)
-      for {
-        (lu, ru) <- pe
-        j <- lu.indices
-        s <- findStateChange(lu.siteStates(j), ru.siteStates(j))
-      } {
-        atoms += SiteStateChange(lhsAgentOffset(lu), j, s)
-      }
+      for { (lu, ru) <- pe
+            j <- lu.indices
+            s <- findStateChange(lu.siteStates(j), ru.siteStates(j))
+      } atoms += SiteStateChange(lhsAgentOffset(lu), j, s)
 
       val linkAtoms = new mutable.ArrayBuffer[Atom]()
 
       // Find all the link changes (in the common context)
       for ((lu, ru) <- pe; j <- lu.indices) {
         (lu.links(j), ru.links(j)) match {
-          case (Stub | Wildcard(_, _, _) | Linked(_, _, _), Undefined) =>
+          case (Linked(lu2, lj2, lt, ll), Linked(ru2, rj2, rt, rl)) => {
+            // Is there any change in the link?
+            // Possibilities: the neighbouring site is different or
+            // there's a link state change
+            if (!((lhsAgentOffset(lu2) == rhsAgentOffset(ru2)) &&
+                  (lj2 == rj2) && findStateChange(ll, rl).isEmpty)) {
+              linkDeletion(linkAtoms, lu, j, lu2, false)
+              linkAddition(linkAtoms, ru, j, rt, rl, ru2, rj2)
+            }
+          }
+          case (Stub, Linked(ru2, rj2, rt, rl)) => {
+            checkLinkComplete(rl)
+            linkAddition(linkAtoms, ru, j, rt, rl, ru2, rj2)
+          }
+          case (Stub | Wildcard(_, _, _) |
+                Linked(_, _, _, _), Undefined) =>
             throw new IllegalArgumentException(
               "attempt to undefine site " + j + " of agent " + lu +
               " in rule: " + lhs + " -> " + rhs)
           case (Undefined | Wildcard(_, _, _), Stub) =>
-            linkAtoms += LinkDeletion(lhsAgentOffset(lu), j)
-          case (Linked(lu2, _, _), Stub) =>
-            linkDeletion(linkAtoms, lu, j, lu2)
-          case (Undefined | Stub | Linked(_, _, _), Wildcard(_, _, _)) =>
+            linkAtoms += LinkDeletion(lhsAgentOffset(lu), j, true)
+          case (Linked(lu2, _, _, _), Stub) =>
+            linkDeletion(linkAtoms, lu, j, lu2, false)
+          case (Undefined | Stub |
+                Linked(_, _, _, _), Wildcard(_, _, _)) =>
             throw new IllegalArgumentException(
-              "attempt to add wildcard link to site " + j + " of agent " +
-              lu + " in rule: " + lhs + " -> " + rhs)
+              "attempt to add wildcard link to site " + j +
+              " of agent " + lu + " in rule: " + lhs + " -> " + rhs)
           case (Wildcard(la, ls2, ll), Wildcard(ra, rs2, rl)) =>
-            // FIXME: Should we allow link state changes in wildcards?
-            // RHZ: What is this check for?
-            if (!(la matches ra) && (ls2 matches rs2) && (ll matches rl))
+            // TODO: Should we allow link state changes in wildcards?
+            if (!((la matches ra) && (ls2 matches rs2) &&
+                  (ll matches rl)))
               throw new IllegalArgumentException(
                 "attempt to modify wildcard link at site " + j +
                 " of agent " + lu + " in rule: " + lhs + " -> " + rhs)
-          case (Undefined | Wildcard(_, _, _), Linked(ru2, rj2, rl)) => {
-            linkAtoms += LinkDeletion(lhsAgentOffset(lu), j)
+          case (Undefined |
+                Wildcard(_, _, _), Linked(ru2, rj2, rt, rl)) => {
+            linkAtoms += LinkDeletion(lhsAgentOffset(lu), j, true)
             checkLinkComplete(rl)
-            linkAddition(linkAtoms, ru, j, rl, ru2, rj2)
+            linkAddition(linkAtoms, ru, j, rt, rl, ru2, rj2)
           }
-          case (Stub, Linked(ru2, rj2, rl)) => {
-            checkLinkComplete(rl)
-            linkAddition(linkAtoms, ru, j, rl, ru2, rj2)
-          }
-          case (Linked(lu2, lj2, ll), Linked(ru2, rj2, rl)) =>
-            // Is there any change in the link?
-            // Possibilities: the neighboring site is
-            // different or there's a link state change
-            if (!((lhsAgentOffset(lu2) == rhsAgentOffset(ru2)) &&
-                  (lj2 == rj2) && findStateChange(ll, rl).isEmpty)) {
-              linkDeletion(linkAtoms, lu, j, lu2)
-              linkAddition(linkAtoms, ru, j, rl, ru2, rj2)
-            }
-          case _ => {}
+          case _ => ()
         }
       }
 
@@ -565,25 +617,22 @@ trait Actions {
       atoms ++= linkAtoms.sortBy(atomOrd)
 
       // Find all remaining link additions (between newly added agents)
-      for {
-        (ru, ro) <- rhsAdditions
-        j <- ru.indices
-      } {
-        ru.links(j) match {
-          case Undefined =>
-            throw new IllegalArgumentException(
-              "attempt to add agent " + ru + " with undefined site " + j +
-                " in rule: " + lhs + " -> " + rhs)
-          case Wildcard(_, _, _) =>
-            throw new IllegalArgumentException(
-              "attempt to add agent " + ru + " with wildcard link at site " +
-                j + " in rule: " + lhs + " -> " + rhs)
-          case Linked(ru2, j2, l) => {
-            checkLinkComplete(l)
-            linkAddition(atoms, ru, j, l, ru2, j2)
-          }
-          case _ => { }
+      for { (ru, ro) <- rhsAdditions
+            j <- ru.indices
+      } ru.links(j) match {
+        case Undefined =>
+          throw new IllegalArgumentException(
+            "attempt to add agent " + ru + " with undefined site " +
+              j + " in rule: " + lhs + " -> " + rhs)
+        case Wildcard(_, _, _) =>
+          throw new IllegalArgumentException(
+            "attempt to add agent " + ru + " with wildcard link " +
+              "at site " + j + " in rule: " + lhs + " -> " + rhs)
+        case Linked(ru2, j2, t, l) => {
+          checkLinkComplete(l)
+          linkAddition(atoms, ru, j, t, l, ru2, j2)
         }
+        case _ => ()
       }
 
       atoms.toList
@@ -593,9 +642,9 @@ trait Actions {
 
 
   /** Convert a pair `(lhs, rhs)` of patterns into an action. */
-  implicit def patternPairToAction(lr: (Pattern, Pattern))(
-    implicit ab: ActionBuilder): ab.RuleBuilder =
-    ab(lr._1, lr._2)
+  // implicit def patternPairToAction(lr: (Pattern, Pattern))(
+  //   implicit ab: ActionBuilder): ab.RuleBuilder =
+  //   ab(lr._1, lr._2)
 
 
   /** Base class for factory objects used to build actions. */
@@ -638,8 +687,8 @@ trait Actions {
     val bwdPe: PartialEmbedding,
     val lhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
     val rhsAgentOffsets: Map[Pattern.Agent, AgentIndex],
-    val preCondition:  Option[(Action, Action.Agents) => Boolean],
-    val postCondition: Option[(Action, Action.Agents) => Boolean]) {
+    val preCondition:  Option[(Action, Action.Injection) => Boolean],
+    val postCondition: Option[(Action, Action.Injection) => Boolean]) {
 
     @inline def fwdAction = new Action(lhs, rhs, fwdPe,
       rhsAgentOffsets, preCondition, postCondition)
@@ -647,6 +696,10 @@ trait Actions {
     // TODO: We could use fwdPe.inverse here right?
     @inline def bwdAction = new Action(rhs, lhs, bwdPe,
       lhsAgentOffsets, preCondition, postCondition)
+
+    if (bwdPe != fwdPe.inverse)
+      throw new IllegalArgumentException("assertion failed: " +
+        "bwdPe != fwdPe.inverse")
   }
 
 

@@ -8,6 +8,7 @@ import scala.collection.mutable
 trait KaSpaceActions extends KappaLikeActions {
   this: KaSpaceContext
       with SiteGraphs
+      with ContactGraphs
       with Patterns
       with Mixtures
       with RollbackMachines
@@ -60,23 +61,21 @@ trait KaSpaceActions extends KappaLikeActions {
 
   object Geometry {
     def checkGeometricSoundnessPostCondition(
-      action: Action, agents: Action.Agents): Boolean =
-      if (agents.isEmpty) true
+      action: Action, inj: Action.Injection): Boolean =
+      if (inj.isEmpty) true
       else {
 
         // println("# post-condition after action = " + action.lhs +
         //   " -> " + action.rhs + " (" + action + ")")
 
         // Get target mixture
-        val mix = agents.head.mixture
+        val mix = inj.head.mixture
 
         // Find all agents that have been updated _and_ that are
         // part of the RHS of the rule (other agents can not
         // possibly affect soundness).
-        val toCheck = for {
-          i <- action.rhsAgentOffsets.values
-          if (agents(i) hasMark Updated) // all marked agents have been updated
-            } yield agents(i)
+        val toCheck = action.rhsAgentOffsets.values map inj filter
+          (_ hasMark Updated)
 
         checkGeometricSoundness(toCheck)
       }
@@ -122,7 +121,7 @@ trait KaSpaceActions extends KappaLikeActions {
       u.indices forall { i =>
         (u.siteStates(i).position, u.links(i)) match {
           case (Some(sp), Mixture.Linked(
-            v, j, KaSpaceLinkState(_, _, Some(lo)))) => {
+            v, j, _, KaSpaceLinkState(_, Some(lo), _))) => {
 
             // (v: u.LinkTarget).siteStates(j).position match {
             // (v: KaSpaceActions.this.Mixture.Agent).siteStates(j).position match {

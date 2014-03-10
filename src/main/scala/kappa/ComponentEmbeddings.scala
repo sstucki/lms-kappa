@@ -3,7 +3,10 @@ package kappa
 import scala.collection.mutable
 
 trait ComponentEmbeddings {
-  this: SiteGraphs with Patterns with Mixtures =>
+  this: ContactGraphs
+      with SiteGraphs
+      with Patterns
+      with Mixtures =>
 
   /**
    * A class representing an embedding from a single connected
@@ -23,18 +26,12 @@ trait ComponentEmbeddings {
    *        conconstitutes the domain of this embedding.
    */
   final class ComponentEmbedding[T <: SiteGraph#AgentIntf] private (
-    val inj: Array[T], val component: Pattern.Component) extends Seq[T] {
+    val inj: Array[T],
+    val component: Pattern.Component)
+      extends Seq[T] {
 
     type Source = AgentIndex
     type Target = T
-
-    // TODO: Not used. Remove.
-    // /**
-    //  * The index of the component embedding within the collection of
-    //  * embeddings of the connected component that constitutes the
-    //  * domain of this embedding.
-    //  */
-    // var index: EmbeddingIndex = -1
 
     /**
      * Returns this [[ComponentEmbedding]] as a map from agent indices
@@ -148,12 +145,13 @@ trait ComponentEmbeddings {
       val inj = new Array[Mixture.Agent](component.length)
       v.mixture.clearMarkedAgents(Visited)
       if (extendInjection(u, v, inj)) {
-        val ce = new ComponentEmbedding[Mixture.Agent](inj, u.component)
+        val ce = new ComponentEmbedding[Mixture.Agent](inj,
+          u.component)
 
-        // Register the new embedding in the lift sets of all its
-        // target agents.
+        // Register the new embedding in the lift sets of all
+        // its target agents.
         for (i <- inj.indices)
-          inj(i).asInstanceOf[Mixture.Agent].addLift(component(i), ce)
+          inj(i).addLift(component(i), ce)
 
         Some(ce)
       }
@@ -195,12 +193,8 @@ trait ComponentEmbeddings {
      *         pairs in `ps`.
      */
     def findEmbeddings(ps: Iterable[(Pattern.Agent, Mixture.Agent)])
-        : Iterable[ComponentEmbedding[Mixture.Agent]] = {
-      // RHZ: Why not just do the flatMap? It takes cares of the
-      // empty case already.
-      if (ps.isEmpty) Iterable.empty
-      else ps flatMap { case (u, v) => findEmbedding(u, v) }
-    }
+        : Iterable[ComponentEmbedding[Mixture.Agent]] =
+      ps flatMap { case (u, v) => findEmbedding(u, v) }
 
     /**
      * Extend a partial injection from agent indices to agents
@@ -252,7 +246,7 @@ trait ComponentEmbeddings {
      * @return `true` if the injection in `inj` is total after
      *         expansion.
      */
-    // FIXME: Code duplication.  The problem is making the
+    // TODO: Remove code duplication.  The problem is making the
     // injectivity check efficient for both Pattern and Mixture.
     // While Pattern allows us to track the codomain as a simple
     // BitSet (because we know the index of every agent), Mixture

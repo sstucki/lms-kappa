@@ -1,91 +1,172 @@
 package kappa
 
+import scala.collection.mutable
+
+
 trait ContactGraphs {
-  this: LanguageContext with Parsers =>
+  this: LanguageContext
+      with SiteGraphs =>
 
-  /** Contact graph.
-   *
-   * NOTE: For now they are just a collection of agent, site and link state
-   * sets, but perhpas in the future they can resemble more Pattern. In other
-   * words, this is a bit hacky for now and should be made more elegant in
-   * the future.
-   */
-  class ContactGraph(
-    val agentStateSets: Vector[AgentStateSet],
-    val siteStateSets: Vector[SiteStateSet],
-    val linkStateSets: Vector[LinkStateSet],
-    private val contactGraphString: String)
-  {
-    // TODO: Define contact graph extension
-    // def +=(cg: String) { }
+  protected val contactGraph: ContactGraph
 
-    override def toString: String = contactGraphString
+  // def contactGraph: ContactGraph =
+  //   if (_contactGraph != null) _contactGraph
+  //   else throw new IllegalStateException("no contact graph defined")
+
+  // NOTE: Perhaps a contact graph should be some kind of Map from
+  // an agent unique identifier (to be defined by the language
+  // extension) to the agents.  In this way it would be probably
+  // easier to extend a contact graph.
+
+  /** Contact graph. */
+  final class ContactGraph extends Seq[ContactGraph.Agent] {
+
+    import ContactGraph._
+
+    val agents = mutable.MutableList[Agent]()
+
+    def +=(that: Agent): ContactGraph = {
+      agents += that
+      this
+    }
+
+    // /** TODO: Extend this contact graph. */
+    // def +=(that: String) = this
+
+    // -- Core Seq[ContactGraph.Agent] API --
+    @inline def apply(idx: Int): Agent = agents(idx)
+    @inline def iterator: Iterator[Agent] = agents.iterator
+    @inline def length: Int = agents.length
   }
 
-  private var _contactGraph: ContactGraph = null
+  object ContactGraph {
 
-  def contactGraph: ContactGraph =
-    if (_contactGraph != null) _contactGraph
-    else throw new IllegalStateException("no contact graph defined")
+    // TODO: Should this be an inner class of Site?
+    final case class Link(to: Agent#Site, states: LinkStateSet)
 
-  def contactGraph_= (cg: String) = {
-    if (_contactGraph != null)
-      throw new IllegalStateException(
-        "contact graph cannot be redefined from scratch")
+    // TODO: Should these classes be inner classes of ContactGraph?
+    final class Agent(val states: AgentStateSet) {
 
-    val ast = parseContactGraph(cg)
-    val cgb = new ContactGraphBuilder
-    cgb.contactGraphString = cg
+      final class Site(val states: SiteStateSet) {
 
-    for (agent <- ast)
-      cgb += agent
+        val links = new mutable.ArrayBuffer[Link]()
+        val agent = Agent.this
 
-    _contactGraph = cgb.result
-  }
-
-  private class ContactGraphBuilder // extends Builder[...]
-  {
-    var agentStateSets: Vector[AgentStateSet] = Vector()
-    var siteStateSets: Vector[SiteStateSet] = Vector()
-    var linkStateSets: Vector[LinkStateSet] = Vector()
-    var contactGraphString: String = ""
-    var pairs: Map[LinkId, List[(SiteStateSet, LinkStateSetName)]] =
-      Map() withDefaultValue List()
-
-    def += (agent: AST.CGAgent) = agent match {
-      case AST.CGAgent(agentStateSet, intf) => {
-        val newASS = mkAgentStateSet(agentStateSet)
-        agentStateSets = agentStateSets :+ newASS
-        for (AST.CGSite(siteStateSet, linkStateSets) <- intf) {
-          val newSSS = mkSiteStateSet(newASS, siteStateSet)
-          siteStateSets = siteStateSets :+ newSSS
-          for (linkStateSet <- linkStateSets)
-            pairs += (linkStateSet.id ->
-                       ((newSSS, linkStateSet) :: pairs(linkStateSet.id)))
+        def connect(to: Agent#Site, states: LinkStateSet): Link = {
+          val l = new Link(to, states)
+          links += l
+          l
         }
-        /*
-        siteStateSets ++= (for (AST.CGSite(siteStateSet, _) <- intf)
-                           yield mkSiteStateSet(agentStateSet, siteStateSet))
-        linkStateSets ++= (for (AST.CGSite(_, linkStateSets) <- intf;
-                                linkStateSet <- linkStateSets)
-                           yield mkLinkStateSet(linkStateSet))
+      }
+
+      /** An iterable for the finite set of sites associated with
+        * this agent.
         */
+      val sites = new mutable.ArrayBuffer[Site]()
+
+      def +=(states: SiteStateSet): Site = {
+        val s = new Site(states)
+        sites += s
+        s
+      }
+
+      /** This method receives a partially defined, unordered interface
+        * and returns a fully defined, ordered one. In other words, it
+        * completes the given interface with the missing undefined sites.
+        *
+        * NOTE: The code that relies on the assumption that sites need
+        * to be ordered is in Patterns.Pattern.Agent.matches.
+        */
+      def completeInterface(ss: Map[Site,(SiteState,SiteGraph.Link)])
+          : Seq[(Site,(SiteState,SiteGraph.Link))] = {
+        for (siteType <- sites) yield
+          if (ss contains siteType) (siteType, ss(siteType))
+          else (siteType, (siteType.states.undefinedState,
+            SiteGraph.Undefined))
+          // siteStates find (site.states contains _) match {
+          //   case Some(siteState) => siteState
+          //   case None => site.undefinedState
+          // }
       }
     }
 
-    def result: ContactGraph = {
-      pairs foreach {
-        case (_, List((s2, l2), (s1, l1))) =>
-          linkStateSets = linkStateSets :+
-            mkLinkStateSet(s1, s2, l1) :+
-            mkLinkStateSet(s2, s1, l2)
 
-        case _ => throw new IllegalArgumentException(
-          "every bond label must appear exactly twice in contact graph")
-      }
-      new ContactGraph(agentStateSets, siteStateSets, linkStateSets,
-                       contactGraphString)
-    }
+    // // -- Builder --
+
+    // /** Contact graph builder. */
+    // final class Builder {
+
+    //   /** The set of agents added to the builder. */
+    //   val agents = mutable.ArrayBuffer[Agent]()
+
+    //   /**
+    //    * Add a new agent to the builder.
+    //    *
+    //    * @param state the state of the new agent.
+    //    * @return a reference to the new agent.
+    //    */
+    //   def +=(states: AgentStateSet): Agent = {
+    //     val u = new Agent(states)
+    //     agents += u
+    //     u
+    //   }
+
+    //   def result: ContactGraph = {
+    //     val cg = new ContactGraph
+    //     for (u <- agents)
+    //       cg += u
+    //     cg
+    //   }
+    // }
   }
+
+
+  // -- Abstract syntax for contact graphs --
+
+  /** A class representing abstract agent state sets. */
+  abstract class AbstractAgentStateSet {
+
+    /** Creates an agent state set from this abstract agent state set. */
+    def toAgentStateSet: AgentStateSet
+  }
+
+  /** A class representing abstract site states. */
+  abstract class AbstractSiteStateSet {
+
+    /** Creates a site state set from this abstract site state set. */
+    def toSiteStateSet: SiteStateSet
+  }
+
+  /** A trait for anything that is parsed as a link . */
+  trait AbstractLinkStateSet {
+
+    /** Creates a link state set from this abstract link state set. */
+    def toLinkStateSet: LinkStateSet
+  }
+
+  final case class AbstractCG(
+    agents: Vector[AbstractCGAgent] = Vector())
+
+  final case class AbstractCGAgent(
+    states: AbstractAgentStateSet,
+    sites: Seq[AbstractCGSite])
+
+  final case class AbstractCGSite(
+    states: AbstractSiteStateSet,
+    links: Seq[AbstractCGLink])
+
+  final case class AbstractCGLink(
+    id: LinkId,
+    states: AbstractLinkStateSet)
+
+
+  // abstract class AbstractCGLink {
+
+  //   /** Unique identifier for a link. */
+  //   def id: LinkId
+
+  //   /** The state of this abstract contact graph link. */
+  //   def states: AbstractLinkStateSet
+  // }
 }
 

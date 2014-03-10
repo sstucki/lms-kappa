@@ -2,16 +2,15 @@ package kappa
 
 
 /** A class representing generic models. */
-trait BioBrickFramework extends KappaModel {
+abstract class BioBrickFramework extends KappaModel {
 
-  // Base contact graph, user will add stuff on top
-  // TODO: contactGraphs can be easily merged, += should implement that
-  // contactGraph = """
-  //   DNA(downstream!{1}, upstream!{1}, binding!{3}, type),
-  //   RNA(downstream!{2,7}, upstream!{2},binding!{8}, type),
-  //   RNAP(dna!{3}, rna!{7}),
-  //   Ribosome(rna!{8}),
-  // """
+  // Base contact graph on top which the user can add stuff
+  val contactGraph: ContactGraph = """
+    DNA(downstream!{1}, upstream!{1}, binding!{3}, type),
+    RNA(downstream!{2,7}, upstream!{2},binding!{8}, type),
+    RNAP(dna!{3}, rna!{7}),
+    Ribosome(rna!{8}),
+  """
 
   // TODO: There is an implicit volume in here that we should make explicit
   // var volume: Double = E coli avg volume
@@ -28,7 +27,8 @@ trait BioBrickFramework extends KappaModel {
         "upstream/upstream, downstream/downstream, binding/binding)"
   }
 
-  // TODO: Check all default values!!
+  // TODO: We should not have default values actually
+  // Change RepressilatorKBBF.scala
 
   class Promoter(val partId: String) extends BioBrickPart {
 

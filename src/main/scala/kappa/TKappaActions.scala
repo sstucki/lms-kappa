@@ -102,21 +102,21 @@ trait TKappaActions extends KappaLikeActions {
 
   object Thermodynamics {
 
-    var lastEnergy: Double = 0
+    var previousEnergy: Double = 0
 
     /**
      * Check whether we accept or not the transition given the
      * difference in energy between the source and target state.
      */
-    def checkEnergy(action: Action, agents: Action.Agents): Boolean = {
-      val nextEnergy = mixtureEnergy
-      lazy val deltaE = nextEnergy - lastEnergy
-      lazy val prob = math.exp(-deltaE / kB * temperature)
-      (lastEnergy >= nextEnergy) || (rand.nextDouble < prob)
+    def checkEnergy(action: Action, inj: Action.Injection): Boolean = {
+      val currentEnergy = mixtureEnergy
+      lazy val prob = math.exp(
+        (previousEnergy - currentEnergy) / (kB * temperature))
+      (previousEnergy >= currentEnergy) || (rand.nextDouble < prob)
     }
 
-    def updateEnergy(action: Action, agents: Action.Agents): Boolean = {
-      lastEnergy = mixtureEnergy
+    def updateEnergy(action: Action, inj: Action.Injection): Boolean = {
+      previousEnergy = mixtureEnergy
       true
     }
   }

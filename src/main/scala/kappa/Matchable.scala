@@ -42,7 +42,6 @@ import scala.language.implicitConversions
  * inspiration.
  */
 trait Matchable[T] extends Any {
-
   this: T =>
 
   /**

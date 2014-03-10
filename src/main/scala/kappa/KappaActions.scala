@@ -6,6 +6,7 @@ import scala.language.implicitConversions
 trait KappaActions extends KappaLikeActions {
   this: KappaContext
       with SiteGraphs
+      with ContactGraphs
       with Patterns
       with Mixtures
       with RollbackMachines

@@ -15,7 +15,7 @@ trait PartialEmbeddings {
    * behavior.  E.g. `++` will return a `Seq[(Pattern.Agent,
    * Pattern.Agent)]` rather than the expected `PartialEmbedding`.
    *
-   * FIXME:
+   * TODO:
    *
    *  1. Partial embeddings are spans.  As such they should have a
    *     context object, i.e. the [[Patterns#Pattern.Component]] that
@@ -24,6 +24,8 @@ trait PartialEmbeddings {
    *
    *  2. Represent left/right legs of this partial embedding using
    *     [[Embeddings#Embedding]].
+   *
+   * @SST: Why should we represent partial embeddings as spans?
    *
    * @param leftInj an array of [[Patterns#Pattern.Agent]]s representing
    *        the left leg of the span associated with this partial

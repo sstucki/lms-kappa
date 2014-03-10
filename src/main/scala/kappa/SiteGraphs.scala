@@ -4,7 +4,8 @@ import collection.mutable
 
 
 trait SiteGraphs {
-  this: LanguageContext =>
+  this: LanguageContext
+      with ContactGraphs =>
 
   trait SiteGraph {
 
@@ -17,7 +18,7 @@ trait SiteGraphs {
      * A trait defining the minimal interface of agents in site
      * graphs.
      *
-     * FIXME: The `_siteStates` and `_links` methods in this trait
+     * TODO: The `_siteStates` and `_links` methods in this trait
      * force concrete agent classes to provide array-based
      * implementations (or at least accessors) of the respective
      * collections.  Does it make sense to have these methods in this
@@ -25,18 +26,31 @@ trait SiteGraphs {
      * class?  Is there a performance benefit to keeping these
      * methods?
      */
-    trait AgentIntf extends Matchable[SiteGraph#AgentIntf] with Equals {
+    trait AgentIntf
+        extends Matchable[SiteGraph#AgentIntf]
+           with Equals {
+
+      type T <: ContactGraph.Agent
 
       // -- Abstract interface --
+
+      /** The type of this agent. */
+      val agentType: T
 
       /** The state of this agent. */
       def state: AgentState
 
+      /** The types of the sites of this agent. */
+      // def siteTypes: IndexedSeq[agentType.Site]
+      def siteTypes: Array[agentType.Site]
+
       /** The states of the sites of this agent. */
-      def siteStates: IndexedSeq[SiteState]
+      // def siteStates: IndexedSeq[SiteState]
+      def siteStates: Array[SiteState]
 
       /** The links of the sites of this agent. */
-      def links: IndexedSeq[Link]
+      // def links: IndexedSeq[Link]
+      def links: Array[Link]
 
 
       // -- Concrete interface --
@@ -58,7 +72,7 @@ trait SiteGraphs {
        */
       @inline def neighbour(i: SiteIndex): Option[Agent] =
         links(i) match {
-          case Linked(u, j, _) => Some(u)
+          case Linked(u, j, _, _) => Some(u)
           case _ => None
         }
 
@@ -71,9 +85,10 @@ trait SiteGraphs {
        *         agent and site index of this agent at site index `i`,
        *         if the site `i` is connected, and `None` otherwise.
        */
-      @inline def neighbourSite(i: SiteIndex): Option[(Agent, SiteIndex)] =
+      @inline def neighbourSite(i: SiteIndex)
+          : Option[(Agent, SiteIndex)] =
         links(i) match {
-          case Linked(u, j, _) => Some((u, j))
+          case Linked(u, j, _, _) => Some((u, j))
           case _ => None
         }
 
@@ -87,8 +102,9 @@ trait SiteGraphs {
        * @param state the state of this site
        * @param link whether and how this site is linked to another site.
        */
-      final class Site private[AgentIntf] (
-        val index: SiteIndex, val state: SiteState, val link: Link) {
+      final class SiteIntf private[AgentIntf] (
+        val index: SiteIndex, val siteType: agentType.Site,
+        val state: SiteState, val link: Link) {
 
         /** The enclosing agent of this site. */
         @inline def agent = AgentIntf.this
@@ -100,31 +116,48 @@ trait SiteGraphs {
          *          agent and site index of this site if it is
          *          connected, and `None` otherwise.
          */
-        @inline def neighbour: Option[Agent#Site] =
+        @inline def neighbour: Option[Agent#SiteIntf] =
           link match {
-            case Linked(u, j, _) => Some(u.site(j))
+            case Linked(u, j, _, _) => Some(u.site(j))
             case _ => None
           }
 
         override def toString = state.toString + link
       }
 
+      // TODO: Are the methods below any useful?
       /**
-       * Return a given site of this agent as a [[Agent#Site]].
+       * Return a given site of this agent as a [[Agent#SiteIntf]].
        *
        * @param i the index of the site to return.
        * @return the `i`th site of this agent.
        */
-      @inline def site(i: SiteIndex): Site =
-        new Site(i, siteStates(i), links(i))
+      @inline def site(i: SiteIndex): SiteIntf =
+        new SiteIntf(i, siteTypes(i), siteStates(i), links(i))
 
       /**
-       * Return a given site of this agent as a [[Agent#Site]].
+       * Return a view of the sites of this agent.
+       *
+       * NOTE: This will return a collection of [[this.SiteIntf]]s
+       * representing the sites of this agent.  This method is
+       * provided for convenience only, don't use it in performance
+       * critical code.
+       *
+       * @return a view of the sites of this agent.
+       */
+      @inline def sites: IndexedSeq[SiteIntf] =
+        for (i <- indices) yield site(i)
+
+
+      // TODO: Are `siteByState` and `siteIndexByState` any useful?
+      /**
+       * Return a given site of this agent as a [[Agent#SiteIntf]].
        *
        * @param s the site state of the site to return.
        * @return the first site with state `s`.
        */
-      @inline def site(s: SiteState): Site = site(siteIndex(s))
+      @inline def siteByState(s: SiteState): SiteIntf =
+        site(siteIndexByState(s))
 
       /**
        * Return the index of the site with the given state.
@@ -132,24 +165,12 @@ trait SiteGraphs {
        * @param s the site state.
        * @return the index of the first site with state `s`.
        */
-      @inline def siteIndex(s: SiteState): SiteIndex = {
+      @inline def siteIndexByState(s: SiteState): SiteIndex = {
         val i = siteStates.indexWhere { t: SiteState => t == s }
         if (i < 0) throw new NoSuchElementException(
           "agent " + this + " doesn't have a site with state " + s)
         i
       }
-
-      /**
-       * Return a view of the sites of this agent.
-       *
-       * NOTE: This will return a collection of [[Agent#Site]]s
-       * representing the sites of this agent.  This method is
-       * provided for convenience only, don't use it in performance
-       * critical code.
-       *
-       * @return a view of the sites of this agent.
-       */
-      @inline def sites: IndexedSeq[Site] = for (i <- indices) yield site(i)
 
 
       // -- Matchable[SiteGraph#AgentIntf] API --
@@ -159,7 +180,8 @@ trait SiteGraphs {
        *
        * @return `true` if this agent matches `that`.
        */
-      def matches(that: SiteGraph#AgentIntf): Boolean = {
+      def matches(that: SiteGraph#AgentIntf)
+          : Boolean = {
         (this.length == that.length) &&
         (this.state matches that.state) &&
         (this.siteStates zip that.siteStates forall {
@@ -179,7 +201,8 @@ trait SiteGraphs {
        *
        * @return the join of `this` and `that`.
        */
-      final def join(that: SiteGraph#AgentIntf): Option[SiteGraph#AgentIntf] =
+      final def join(that: SiteGraph#AgentIntf)
+          : Option[SiteGraph#AgentIntf] =
         if (this.length != that.length) None
         else {
           val siteStateJoins = new Array[SiteState](length)
@@ -197,8 +220,10 @@ trait SiteGraphs {
               case None    => false
             }
           })
-          if (allJoins) for (st <- this.state join that.state)
-          yield DummySiteGraph.AgentImpl(st, siteStateJoins, linkJoins)
+          if (allJoins)
+            for (st <- this.state join that.state)
+            yield DummySiteGraph.AgentImpl(this.agentType, st)(
+              this.siteTypes, siteStateJoins, linkJoins)
           else None
         }
 
@@ -213,7 +238,8 @@ trait SiteGraphs {
        *
        * @return the meet of `this` and `that`.
        */
-      final def meet(that: SiteGraph#AgentIntf): Option[SiteGraph#AgentIntf] =
+      final def meet(that: SiteGraph#AgentIntf)
+          : Option[SiteGraph#AgentIntf] =
         if (this.length != that.length) None
         else {
           val siteStateMeets = new Array[SiteState](length)
@@ -232,7 +258,8 @@ trait SiteGraphs {
             }
           })
           if (allMeets) for (st <- this.state meet that.state)
-          yield DummySiteGraph.AgentImpl(st, siteStateMeets, linkMeets)
+          yield DummySiteGraph.AgentImpl(this.agentType, st)(
+            this.siteTypes, siteStateMeets, linkMeets)
           else None
         }
 
@@ -279,7 +306,8 @@ trait SiteGraphs {
        *         agent, `false` otherwise.
        */
       override def equals(that: Any): Boolean =
-        this.isInstanceOf[AgentIntf] && (this eq that.asInstanceOf[AgentIntf])
+        this.isInstanceOf[AgentIntf] &&
+        (this eq that.asInstanceOf[AgentIntf])
 
       /**
        * Calculate a hash code value for the agent.
@@ -341,9 +369,9 @@ trait SiteGraphs {
      *        this link.
      * @param state the state of the link from source to target.
      */
-    // RHZ: Why is Linked here and Link in the companion object?
-    final case class Linked(
-      agent: Agent, site: SiteIndex, state: LinkState) extends Link
+    final case class Linked(agent: Agent, site: SiteIndex,
+      linkType: ContactGraph.Link, state: LinkState)
+        extends Defined
   }
 
 
@@ -378,9 +406,9 @@ trait SiteGraphs {
       /**
        * Returns the join of this link and `that`.
        *
-       * FIXME: There is one case that is a little problematic: if we
+       * NOTE: There is one case that is a little problematic: if we
        * find both `this` and `that` are instances of `Linked`
-       * pointing two the same site in two agents `u1`and `u2`, we
+       * pointing two the same site in two agents `u1` and `u2`, we
        * don't really know what the join of `u1` and `u2` is, and we
        * can't tell whether it even exists, because attempting to
        * compute `u1 join u2` will throw us straight into a recursive
@@ -420,10 +448,10 @@ trait SiteGraphs {
         }
         case (l1: SiteGraph#Linked, l2: SiteGraph#Linked) if
           l1.site == l2.site => {
-            val u1 = l1.agent; val i1 = l1.site
+            val u1 = l1.agent; val i1 = l1.site; val t1 = l1.linkType
             val l = l1.state join l2.state
             l map (DummySiteGraph.Linked(
-              DummySiteGraph.AgentImpl(u1), i1, _)) orElse {
+              DummySiteGraph.AgentImpl(u1), i1, t1, _)) orElse {
               val u2 = l2.agent; val i2 = l2.site
               val a = u1.state          join u2.state
               val s = u1.siteStates(i1) join u2.siteStates(i2)
@@ -436,7 +464,7 @@ trait SiteGraphs {
       /**
        * Returns the meet of this link and `that`.
        *
-       * FIXME: This method has the same problem as
+       * NOTE: This method has the same problem as
        * [[SiteGraphs#SiteGraph.Link.join]], except it may return
        * instances of `Linked` even when only one of the links is an
        * instance of `Linked` and the other one is a compatible
@@ -452,26 +480,26 @@ trait SiteGraphs {
           for (a <- a1 meet a2; s <- s1 meet s2; l <- l1 meet l2)
           yield Wildcard(a.om, s.om, l.om)
         case (Wildcard(a1, s1, l1), l2: SiteGraph#Linked) =>
-          // FIXME: See note above.
           for {
             a <- a1 meet Some(l2.agent.state)
             s <- s1 meet Some(l2.agent.siteStates(l2.site))
             l <- l1 meet Some(l2.state)
           } yield DummySiteGraph.Linked(
-            DummySiteGraph.AgentImpl(l2.agent), l2.site, l.om.get)
+            DummySiteGraph.AgentImpl(l2.agent), l2.site,
+            l2.linkType, l.om.get)
         case (l1: SiteGraph#Linked, Wildcard(a2, s2, l2)) =>
-          // FIXME: See note above.
           for {
             a <- Some(l1.agent.state)               meet a2
             s <- Some(l1.agent.siteStates(l1.site)) meet s2
             l <- Some(l1.state)                     meet l2
           } yield DummySiteGraph.Linked(
-            DummySiteGraph.AgentImpl(l1.agent), l1.site, l.om.get)
+            DummySiteGraph.AgentImpl(l1.agent), l1.site,
+            l1.linkType, l.om.get)
         case (l1: SiteGraph#Linked, l2: SiteGraph#Linked) if
           l1.site == l2.site => {
-            // FIXME: See note above.
             (l1.state meet l2.state) map (DummySiteGraph.Linked(
-              DummySiteGraph.AgentImpl(l1.agent), l1.site, _))
+              DummySiteGraph.AgentImpl(l1.agent), l1.site,
+              l1.linkType, _))
           }
         case _ => None
       }
@@ -488,6 +516,7 @@ trait SiteGraphs {
       }
 
       // -- Any API --
+      // FIXME: missing case Defined... Defined should be sealed
       override def toString = this match {
         case Undefined => "?"
         case Wildcard(a, s, l) =>
@@ -502,8 +531,11 @@ trait SiteGraphs {
     /** An object representing undefined sites. */
     case object Undefined extends Link
 
+    /** A class representing defined sites. */
+    /*sealed*/ abstract class Defined extends Link
+
     /** An object representing stubs, i.e. unconnected sites. */
-    case object Stub extends Link
+    case object Stub extends Defined
 
     /**
      * A class representing a wildcard link at a site.
@@ -519,7 +551,7 @@ trait SiteGraphs {
     final case class Wildcard(
       agentState: Option[AgentState],
       siteState: Option[SiteState],
-      linkState: Option[LinkState]) extends Link
+      linkState: Option[LinkState]) extends Defined
 
     /**
      * An object used to construct dummy agents and links returned by
@@ -536,28 +568,38 @@ trait SiteGraphs {
        * [[Matchable]] API methods in [[SiteGraph#AgentIntf]] and
        * [[SiteGraph.Link]].
        */
-      final class AgentImpl(
-        val state: AgentState, val siteStates: IndexedSeq[SiteState],
-        ls: IndexedSeq[Link])
+      abstract class AgentImpl
           extends AgentIntf {
 
-        val links: IndexedSeq[Link] = ls map {
-          case l: SiteGraph#Linked => Linked(AgentImpl.this, l.site, l.state)
-          case l => l
-        }
+        val state: AgentState
+        val siteTypes: Array[agentType.Site]
+        val siteStates: Array[SiteState]
+        val links: Array[Link]
       }
 
       /**
        * The companion object of [[DummySiteGraph.AgentImpl]]
        */
       object AgentImpl {
-        def apply(
-          state: AgentState, siteStates: IndexedSeq[SiteState],
-          links: IndexedSeq[Link]): AgentImpl =
-          new AgentImpl(state, siteStates, links)
+        def apply(_agentType: ContactGraph.Agent, _state: AgentState)(
+          st: Array[_agentType.Site], ss: Array[SiteState],
+          ls: Array[Link]): AgentImpl =
+          new AgentImpl {
+            type T = _agentType.type
+            val agentType: T = _agentType
+            val state = _state
+            val siteStates = ss
+            val siteTypes = st
+            val links = ls map {
+              case l: SiteGraph#Linked =>
+                Linked(this, l.site, l.linkType, l.state)
+              case l => l
+            }
+          }
 
         def apply(u: SiteGraph#AgentIntf): AgentImpl =
-          apply(u.state, u.siteStates, u.links)
+          apply(u.agentType, u.state)(
+            u.siteTypes, u.siteStates, u.links)
       }
     }
   }
