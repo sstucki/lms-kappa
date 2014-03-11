@@ -6,12 +6,12 @@ import org.scalatest.FlatSpec
 
 class TestModel extends KappaModel with FlatSpec {
 
-  //behavior of "Models"
+  // behavior of "Models"
 
   contactGraph = "A(s:{p,q}!{1,1,2}),B(s!{2})"
 
   var k = 5
-  val r1 = ("A(s), A(s)" <-> "A(s!1), A(s!1)") :@ (k * 1E-4, 1)
+  val r1 = "A(s), A(s)" <-> "A(s!1), A(s!1)" :@ (k * 1E-4, 1)
   withRule(r1)
   println(r1)
   k = 6
@@ -34,7 +34,7 @@ class TestModel extends KappaModel with FlatSpec {
   withInit(10, "A(s:p)")
   println("Mixture: " + mix)
 
-  when ("A(s)".inMix < 50) exec (k = 7)
+  when ("A(s)".inMix < 50) exec (k = 7) only once
   when (10 > "A(s)".inMix) exec { println("k = 8"); k = 8; }
   when (this.time >= 10) add 50 of "A(s:p)"
   when (this.events == 1000) del 50 of "A(s:p)"
