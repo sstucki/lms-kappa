@@ -2,8 +2,7 @@ package kappa
 
 import org.scalatest.FlatSpec
 
-class KaSimAbcTest extends KappaModel("") with FlatSpec {
-
+class KaSimAbc extends KappaModel("") {
   // ####### TEMPLATE MODEL AS DESCRIBED IN THE KASIM MANUAL #############
 
   // #### Signatures
@@ -128,6 +127,10 @@ class KaSimAbcTest extends KappaModel("") with FlatSpec {
 
   withMaxEvents(10000)
   withMaxTime(3000)
-  run
 }
 
+
+class KaSimAbcTest extends FlatSpec {
+  val model = new KaSimAbc
+  model.run
+}

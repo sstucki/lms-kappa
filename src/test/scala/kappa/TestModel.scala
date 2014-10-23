@@ -2,8 +2,7 @@ package kappa
 
 import org.scalatest.FlatSpec
 
-class TestModel extends KappaModel("A(s:{p,q}!{1,1}") with FlatSpec {
-
+class KaModel extends KappaModel("A(s:{p,q}!{1,1}") {
   println("Contact graph = " + contactGraph)
   //import HelperFns._
 
@@ -83,6 +82,9 @@ class TestModel extends KappaModel("A(s:{p,q}!{1,1}") with FlatSpec {
   // val m4 = when (_.events == 1000) del 50 of "A(s)"
 
   withMaxEvents(100)
-  run
 }
 
+class KaModelTest extends FlatSpec {
+  val model = new KaModel
+  model.run
+}
