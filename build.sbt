@@ -6,16 +6,17 @@ version := "0.1-SNAPSHOT"
 
 scalaOrganization := "org.scala-lang.virtualized"
 
-scalaVersion := Option(System.getenv("SCALA_VIRTUALIZED_VERSION")).getOrElse("2.10.0")
+scalaVersion := "2.10.2"
 
 //--- Dependencies
 
-resolvers += "ScalaTools snapshots at Sonatype" at "https://oss.sonatype.org/content/repositories/snapshots/"
-// resolvers ++= Seq(ScalaToolsSnapshots, "Sonatype Public" at "https://oss.sonatype.org/content/groups/public")
+//--- Dependencies
+resolvers ++= Seq(
+  "Sonatype Public" at "https://oss.sonatype.org/content/groups/public")
 
 libraryDependencies ++= Seq(
-    "org.scalatest" % "scalatest_2.10.0-RC5" % "2.0.M5-B1" % "test",
-    "EPFL" %% "lms" % "0.3-SNAPSHOT")
+  "org.scalatest" %% "scalatest" % "2.2.0" % "test")
+  // "EPFL" %% "lms" % "0.3-SNAPSHOT")
 
 //--- End of Dependencies
 
