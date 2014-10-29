@@ -5,6 +5,7 @@ package kappa
 abstract class BioBrickFramework extends KappaModel {
 
   // Base contact graph on top which the user can add stuff
+  // TODO: Probably the promoter should have it's own agent type
   val contactGraph: ContactGraph = """
     DNA(downstream!{1}, upstream!{1}, binding!{3}, type),
     RNA(downstream!{2,7}, upstream!{2},binding!{8}, type),

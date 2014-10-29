@@ -41,9 +41,11 @@ trait KaSpaceContext extends KappaLikeContext {
     radii: List[AgentLabel])
       extends KappaLikeAgentStateSet {
 
-    // -- KappaLikeLinkStateSet API --
+    // -- KappaLikeAgentStateSet API --
 
     @inline def labels: List[AgentLabel] = radii
+    @inline def undefinedState = KaSpaceAgentState(this, None)
+    @inline def defaultState = KaSpaceAgentState(this, labels.headOption)
   }
 
 
@@ -67,9 +69,7 @@ trait KaSpaceContext extends KappaLikeContext {
     // -- KappaLikeSiteStateSet API --
 
     @inline def labels = positions
-
     @inline def undefinedState = KaSpaceSiteState(this, None)
-
     @inline def defaultState = KaSpaceSiteState(this, labels.headOption)
   }
 
@@ -92,6 +92,8 @@ trait KaSpaceContext extends KappaLikeContext {
     // -- KappaLikeLinkStateSet API --
 
     @inline def labels = orientations
+    @inline def undefinedState = KaSpaceLinkState(this, None)
+    @inline def defaultState = KaSpaceLinkState(this, labels.headOption)
 
     // -- Any API --
 

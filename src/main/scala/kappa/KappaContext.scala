@@ -39,6 +39,8 @@ trait KappaContext extends KappaLikeContext {
     // -- KappaLikeLinkStateSet API --
 
     @inline def labels: List[AgentLabel] = List()
+    @inline def undefinedState = KappaAgentState(this)
+    @inline def defaultState = KappaAgentState(this)
 
     // -- GenericLinkStateSet API --
 
@@ -83,6 +85,8 @@ trait KappaContext extends KappaLikeContext {
     // -- KappaLikeLinkStateSet API --
 
     @inline final def labels: List[LinkLabel] = List()
+    @inline def undefinedState = KappaLinkState(None)
+    @inline def defaultState = KappaLinkState(None)
 
     // -- GenericLinkStateSet API --
 

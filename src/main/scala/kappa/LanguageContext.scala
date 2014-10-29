@@ -38,6 +38,12 @@ trait LanguageContext {
 
     /** Tests whether this set is empty. (Better description required) */
     def isEmpty: Boolean
+
+    /** Returns an undefined agent state. */
+    def undefinedState: AgentState
+
+    /** Returns the default agent state for this agent state set. */
+    def defaultState: AgentState
   }
 
   trait GenericSiteStateSet {
@@ -67,6 +73,12 @@ trait LanguageContext {
 
     /** Tests whether this set is empty. (Better description required) */
     def isEmpty: Boolean
+
+    /** Returns an undefined link state. */
+    def undefinedState: LinkState
+
+    /** Returns the default link state for this link state set. */
+    def defaultState: LinkState
   }
 
 

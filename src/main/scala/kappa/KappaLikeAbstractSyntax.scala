@@ -20,6 +20,7 @@ trait KappaLikeAbstractSyntax extends AbstractSyntax {
       with Actions
       with Rules =>
 
+  import SiteGraph.{AgentType, SiteType}
 
   // -- Nodes of abstract syntax trees and their builders. --
 
@@ -30,49 +31,42 @@ trait KappaLikeAbstractSyntax extends AbstractSyntax {
     /** The agent name of this KappaLike agent state. */
     def agentName: AgentName
 
+    /** The agent label of this KappaLike agent state. */
     def label: Option[AgentLabel]
 
-    val agentType: ContactGraph.Agent = {
-      contactGraph.agents find (_.states.agentName == agentName)
-    } getOrElse {
-      throw new IllegalArgumentException(
-        "couldn't find agent type for \"" + agentName + "\"")
-    }
+    val agentType: AgentType =
+      contactGraph.agents find (_.states.agentName == agentName) getOrElse {
+        throw new IllegalArgumentException(
+          "couldn't find agent type for \"" + agentName + "\"")
+      }
+  }
 
-    // /** Find an agent state set in the contact graph. */
-    // def findAgentStateSet: AgentStateSet =
-    //   contactGraph.agentStateSets find (_.agentType == agentType) getOrElse {
-    //     throw new IllegalArgumentException(
-    //       "couldn't find agent state set for \"" + agentType + "\"")
-    //   }
+  /** A class representing abstract KappaLike site states. */
+  abstract class AbstractKappaLikeSiteState
+      extends AbstractSiteState {
 
-    /** A class representing abstract KappaLike site states. */
-    abstract class AbstractKappaLikeSiteState
-        extends AbstractSiteState {
+    /** The agent name of this KappaLike agent state. */
+    def agentName: AgentName
 
-      /** The site name of this KappaLike site state. */
-      def siteName: SiteName
+    /** The parent agent type of this KappaLike site state. */
+    val agentType: AgentType =
+      contactGraph.agents find (_.states.agentName == agentName) getOrElse {
+        throw new IllegalArgumentException(
+          "couldn't find agent type for \"" + agentName + "\"")
+      }
 
-      def label: Option[SiteLabel]
+    /** The site name of this KappaLike site state. */
+    def siteName: SiteName
 
-      val siteType: agentType.Site = {
-        agentType.sites find (_.states.siteName == siteName)
-      } getOrElse {
+    val siteType: SiteType =
+      agentType.sites find (_.states.siteName == siteName) getOrElse {
         throw new IllegalArgumentException(
           "couldn't find site type for \"" + siteName +
             "\" on agent " + agentType)
       }
 
-      // /** Find a site state in the contact graph. */
-      // def findSiteStateSet(agentStateSet: AgentStateSet): SiteStateSet =
-      //   contactGraph.siteStateSets find { siteStateSet =>
-      //     (siteStateSet.siteName      == name) &&
-      //     (siteStateSet.agentStateSet == agentStateSet)
-      // } getOrElse {
-      //   throw new IllegalArgumentException(
-      //     "couldn't find site state set for \"" + name + "\"")
-      // }
-    }
+    /** The site label of this KappaLike site state. */
+    def label: Option[SiteLabel]
   }
 }
 

@@ -175,8 +175,8 @@ trait RollbackMachines {
       // Allocate an agent `v` tracking `this`.
       // RHZ: What happens if this.state is modified?
       // Is the agent state shared with the copy?
-      val v = AgentImpl(this.agentType, this.state, this.liftMap.clone)(
-        this.siteTypes, this.siteStates.clone, this.links.clone)
+      val v = new AgentImpl(this.agentType, this.state, this.siteTypes,
+        this.siteStates.clone, this.links.clone, this.liftMap.clone)
       v._mixture = this._mixture
       v._copy = this
       v.prev = this.prev

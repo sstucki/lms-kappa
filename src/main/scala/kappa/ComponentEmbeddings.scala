@@ -223,6 +223,8 @@ trait ComponentEmbeddings {
           u.indices forall { j =>
             (u.neighbour(j), v.neighbour(j)) match {
               case (None, _) => true
+              // TODO: Shouldn't I care that the site `j` is
+              // connected to the same site in `u` and `v`?
               case (Some(w1), Some(w2)) => {
                 extendInjection(w1, w2, inj, codomain)
               }

@@ -58,37 +58,31 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
     @inline final def toAgentState = KappaAgentState(agentType.states)
 
     override def toString = agentName
+  }
 
-    /** A class representing abstract Kappa site states. */
-    sealed case class AbstractKappaSiteState(siteName: SiteName,
-      label: Option[SiteLabel])
-        extends AbstractKappaLikeSiteState {
+  /** A class representing abstract Kappa site states. */
+  sealed case class AbstractKappaSiteState(agentName: AgentName,
+    siteName: SiteName, label: Option[SiteLabel])
+      extends AbstractKappaLikeSiteState {
 
-      /** Build an abstract site state with a particular label. */
-      @inline final def ~(label: SiteLabel): AbstractSiteState =
-        new AbstractKappaSiteState(siteName, Some(label))
+    /** Build an abstract site state with a particular label. */
+    @inline final def ~(label: SiteLabel): AbstractSiteState =
+      new AbstractKappaSiteState(agentName, siteName, Some(label))
 
-      /** Creates a site state from this abstract site state. */
-      @inline final def toSiteState: SiteState =
-        new KappaSiteState(siteType.states, label)
+    /** Creates a site state from this abstract site state. */
+    @inline final def toSiteState: SiteState =
+      new KappaSiteState(siteType.states, label)
 
-      override def toString =
-        siteName + (label map (stateDelim + _) getOrElse "")
-    }
+    override def toString =
+      siteName + (label map (stateDelim + _) getOrElse "")
   }
 
   // Aliases
   class AgentType(agentName: AgentName)
-      extends AbstractKappaAgentState(agentName) {
+      extends AbstractKappaAgentState(agentName)
 
-    // final class Site(siteName: SiteName)
-    //     extends AbstractKappaSiteState(siteName, None)
-
-    final object Site {
-      def apply(siteName: SiteName) =
-        new AbstractKappaSiteState(siteName, None)
-    }
-  }
+  final class Site(agentName: AgentName, siteName: SiteName)
+      extends AbstractKappaSiteState(agentName, siteName, None)
 
   /** A class representing abstract Kappa link states. */
   class AbstractKappaLinkState extends AbstractLinkState {

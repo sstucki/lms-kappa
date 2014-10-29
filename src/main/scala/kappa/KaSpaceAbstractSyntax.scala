@@ -49,7 +49,7 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
   }
 
 
-  // -- Agents and Sites --
+  // -- Agents --
 
   /** A class representing abstract KaSpace agent states. */
   sealed case class AbstractKaSpaceAgentState(
@@ -66,37 +66,37 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
     /** Creates an agent state from this abstract agent state. */
     @inline final def toAgentState =
       KaSpaceAgentState(agentType.states, radius)
+  }
 
-    /** A class representing abstract KaSpace site states. */
-    sealed case class AbstractKaSpaceSiteState(
-      siteName: SiteName,
-      position: Option[SiteLabel])
-        extends AbstractKappaLikeSiteState {
+  // -- Sites --
 
-      @inline final def label = position
+  /** A class representing abstract KaSpace site states. */
+  sealed case class AbstractKaSpaceSiteState(
+    agentName: AgentName,
+    siteName: SiteName,
+    position: Option[SiteLabel])
+      extends AbstractKappaLikeSiteState {
 
-      /** Build an abstract site state with a particular label. */
-      @inline final def ~(position: SiteLabel) =
-        AbstractKaSpaceSiteState(siteName, Some(position))
+    @inline final def label = position
 
-      // @inline final def !(id: linkId) =
-      //   AbstractSite(this, AbstractKaSpaceLinked(Some(id),
-      //     AbstractKaSpaceLinkState(None)))
+    /** Build an abstract site state with a particular label. */
+    @inline final def ~(position: SiteLabel) =
+      AbstractKaSpaceSiteState(agentName, siteName, Some(position))
 
-      /** Creates a site state from this abstract site state. */
-      @inline final def toSiteState =
-        KaSpaceSiteState(siteType.states, position)
-    }
+    /** Creates a site state from this abstract site state. */
+    @inline final def toSiteState =
+      KaSpaceSiteState(siteType.states, position)
   }
 
   // - Aliases -
 
   final class AgentType(agentName: AgentName, radius: Option[AgentLabel])
       extends AbstractKaSpaceAgentState(agentName, radius) {
-    final class Site(siteName: SiteName, position: Option[SiteLabel])
-        extends AbstractKaSpaceSiteState(siteName, position)
   }
 
+  final class Site(agentName: AgentName, siteName: SiteName,
+    position: Option[SiteLabel])
+      extends AbstractKaSpaceSiteState(agentName, siteName, position)
 
   // -- Links --
 

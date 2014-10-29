@@ -130,7 +130,7 @@ trait Parsers {
     val ast = parseContactGraph(s)
     val cg = new ContactGraph
 
-    val linkMap = new mutable.ArrayBuffer[(ContactGraph.Agent#Site,
+    val linkMap = new mutable.ArrayBuffer[(ContactGraph.Site,
       AbstractCGLink)]
 
     for (AbstractCGAgent(states, sites) <- ast.agents) {

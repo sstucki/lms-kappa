@@ -26,7 +26,11 @@ trait ContactGraphs {
     val agents = mutable.MutableList[Agent]()
 
     def +=(that: Agent): ContactGraph = {
-      agents += that
+      agents find (_.states.undefinedState ==
+        that.states.undefinedState) match {
+        case Some(agent) => agent += that
+        case None => agents += that
+      }
       this
     }
 
@@ -41,23 +45,21 @@ trait ContactGraphs {
 
   object ContactGraph {
 
-    // TODO: Should this be an inner class of Site?
-    final case class Link(to: Agent#Site, states: LinkStateSet)
+    final case class Link(to: Site, states: LinkStateSet)
 
-    // TODO: Should these classes be inner classes of ContactGraph?
-    final class Agent(val states: AgentStateSet) {
+    final class Site(val states: SiteStateSet) {
 
-      final class Site(val states: SiteStateSet) {
+      val links = new mutable.ArrayBuffer[Link]()
 
-        val links = new mutable.ArrayBuffer[Link]()
-        val agent = Agent.this
-
-        def connect(to: Agent#Site, states: LinkStateSet): Link = {
-          val l = new Link(to, states)
-          links += l
-          l
-        }
+      def connect(to: Site, states: LinkStateSet): Link = {
+        val l = new Link(to, states)
+        links += l
+        l
       }
+    }
+
+
+    final class Agent(val states: AgentStateSet) {
 
       /** An iterable for the finite set of sites associated with
         * this agent.
@@ -68,6 +70,17 @@ trait ContactGraphs {
         val s = new Site(states)
         sites += s
         s
+      }
+
+      def +=(agent: Agent) {
+        // TODO: I should merge the AgentStateSets as well
+        for (site <- agent.sites) {
+          this.sites find (_.states.undefinedState ==
+            site.states.undefinedState) match {
+            case Some(s) => () // TODO: and merge the SiteStateSets
+            case None => sites += site
+          }
+        }
       }
 
       /** This method receives a partially defined, unordered interface
@@ -83,41 +96,8 @@ trait ContactGraphs {
           if (ss contains siteType) (siteType, ss(siteType))
           else (siteType, (siteType.states.undefinedState,
             SiteGraph.Undefined))
-          // siteStates find (site.states contains _) match {
-          //   case Some(siteState) => siteState
-          //   case None => site.undefinedState
-          // }
       }
     }
-
-
-    // // -- Builder --
-
-    // /** Contact graph builder. */
-    // final class Builder {
-
-    //   /** The set of agents added to the builder. */
-    //   val agents = mutable.ArrayBuffer[Agent]()
-
-    //   /**
-    //    * Add a new agent to the builder.
-    //    *
-    //    * @param state the state of the new agent.
-    //    * @return a reference to the new agent.
-    //    */
-    //   def +=(states: AgentStateSet): Agent = {
-    //     val u = new Agent(states)
-    //     agents += u
-    //     u
-    //   }
-
-    //   def result: ContactGraph = {
-    //     val cg = new ContactGraph
-    //     for (u <- agents)
-    //       cg += u
-    //     cg
-    //   }
-    // }
   }
 
 
@@ -158,15 +138,5 @@ trait ContactGraphs {
   final case class AbstractCGLink(
     id: LinkId,
     states: AbstractLinkStateSet)
-
-
-  // abstract class AbstractCGLink {
-
-  //   /** Unique identifier for a link. */
-  //   def id: LinkId
-
-  //   /** The state of this abstract contact graph link. */
-  //   def states: AbstractLinkStateSet
-  // }
 }
 

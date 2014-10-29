@@ -61,7 +61,7 @@ trait AbstractSyntax {
     def toAbstractPattern: AbstractPattern
 
     /** Append an abstract agent to this partial abstract pattern.  */
-    @inline def :+(that: PartialAbstractAgent): AbstractPattern =
+    @inline def :+(that: AbstractAgent): AbstractPattern =
       this.toAbstractPattern :+ that
 
     /** Append an abstract action to this partial abstract pattern.  */
@@ -87,7 +87,7 @@ trait AbstractSyntax {
       that.prependAbstractPattern(this.toAbstractPattern)
 
     /** Prepend an abstract agent to this partial abstract pattern.  */
-    @inline def +:(that: PartialAbstractAgent): AbstractPattern =
+    @inline def +:(that: AbstractAgent): AbstractPattern =
       that +: this.toAbstractPattern
 
     /** Prepend an abstract action to this partial abstract pattern.  */
@@ -99,7 +99,7 @@ trait AbstractSyntax {
       that ++ this.toAbstractPattern
 
     /** Prepend an abstract agent to this partial abstract pattern.  */
-    @inline def ::(that: PartialAbstractAgent): AbstractPattern =
+    @inline def ::(that: AbstractAgent): AbstractPattern =
       that +: this
 
     /** Prepend an abstract action to this partial abstract pattern.  */
@@ -114,7 +114,7 @@ trait AbstractSyntax {
      * Build an abstract action from this partial abstract pattern and
      * an abstract agent.
      */
-    @inline def ->(that: PartialAbstractAgent): AbstractAction =
+    @inline def ->(that: AbstractAgent): AbstractAction =
       AbstractAction(this.toAbstractPattern, that.toAbstractPattern)
 
     /** Build an action from this partial abstract pattern and a pattern. */
@@ -138,7 +138,7 @@ trait AbstractSyntax {
      * Build an abstract bidirectional action from this partial
      * abstract pattern and an abstract agent.
      */
-    @inline def <->(that: PartialAbstractAgent): AbstractBiAction =
+    @inline def <->(that: AbstractAgent): AbstractBiAction =
       AbstractBiAction(this.toAbstractPattern, that.toAbstractPattern)
 
     /** Build a bidirectional action from this partial abstract pattern and a pattern. */
@@ -221,42 +221,38 @@ trait AbstractSyntax {
     @inline def toMixture: Mixture = this.toAbstractPattern.toMixture
   }
 
-  /**
-   * An abstract class representing partially built abstract agents.
-   *
-   * Every abstract syntax node that can be converted into an agent
-   * (i.e. that can be used in agent position) should extend this
-   * class.
-   */
-  abstract class PartialAbstractAgent extends PartialAbstractPattern {
+  // TODO: Are partial sites and agents really necessary?
+  // Can not we put these types, values and methods in AbstractAgent
+  // and AbstractSite directly?
+  // /** An abstract class representing partially built abstract sites.
+  //   *
+  //   * Every abstract syntax node that can be converted into a site
+  //   * (i.e. that can be used in site position) should extend this
+  //   * class.
+  //   */
+  // abstract class PartialAbstractSite {
+  //   type State <: AbstractSiteState
+  //   val siteType: ContactGraph.Site
+  //   /** Convert this partial abstract site into an abstract site. */
+  //   def toAbstractSite: AbstractSite[State]
+  // }
 
-    type State <: AbstractAgentState
-
-    val agentType: ContactGraph.Agent
-
-    /** An abstract class representing partially built abstract sites.
-      *
-      * Every abstract syntax node that can be converted into a site
-      * (i.e. that can be used in site position) should extend this
-      * class.
-      */
-    abstract class PartialAbstractSite {
-
-      type State <: AbstractAgentState#AbstractSiteState
-
-      val siteType: agentType.Site
-
-      /** Convert this partial abstract site into an abstract site. */
-      def toAbstractSite: AbstractSite[State]
-    }
-
-    /** Convert this partial abstract agent into an abstract agent. */
-    def toAbstractAgent: AbstractAgent[State]
-
-    /** Convert this partial abstract agent into an abstract pattern. */
-    @inline def toAbstractPattern: AbstractPattern =
-      this.toAbstractAgent.toAbstractPattern
-  }
+  // /**
+  //  * An abstract class representing partially built abstract agents.
+  //  *
+  //  * Every abstract syntax node that can be converted into an agent
+  //  * (i.e. that can be used in agent position) should extend this
+  //  * class.
+  //  */
+  // abstract class PartialAbstractAgent extends PartialAbstractPattern {
+  //   // type State <: AbstractAgentState
+  //   val agentType: ContactGraph.Agent
+  //   /** Convert this partial abstract agent into an abstract agent. */
+  //   def toAbstractAgent: AbstractAgent//[State]
+  //   /** Convert this partial abstract agent into an abstract pattern. */
+  //   @inline def toAbstractPattern: AbstractPattern =
+  //     this.toAbstractAgent.toAbstractPattern
+  // }
 
 
   // -- Complete elements of syntax --
@@ -283,8 +279,8 @@ trait AbstractSyntax {
 
   /** A class representing wildcard links at abstract sites. */
   final case class AbstractWildcard(
-    agntState: Option[AbstractAgentState],
-    siteState: Option[AbstractAgentState#AbstractSiteState],
+    agentState: Option[AbstractAgentState],
+    siteState: Option[AbstractSiteState],
     linkState: Option[AbstractLinkState]) extends AbstractLink
 
   /** A class representing abstract links between abstract sites. */
@@ -303,177 +299,134 @@ trait AbstractSyntax {
 
   // - Agents and Sites -
 
+  /** A class representing abstract site states. */
+  abstract class AbstractSiteState {
+
+    val siteType: ContactGraph.Site
+
+    /** Build an undefined abstract site from this partial abstract
+      * site.
+      */
+    @inline def ?() = AbstractSite(this, AbstractUndefined)
+
+    /** Build a free abstract site from this partial abstract site. */
+    @inline def !-() = AbstractSite(this, AbstractStub)
+
+    /** Build an abstract site with a wildcard link from this partial
+      * abstract site.
+      *
+      * @param wc the wildcard connected to this partial abstract site.
+      */
+    @inline def !(
+      agentState: Option[AbstractAgentState],
+      siteState: Option[AbstractSiteState],
+      linkState: Option[AbstractLinkState]): AbstractSite =
+      this ! AbstractWildcard(agentState, siteState, linkState)
+
+    /** Build an abstract site with a maximally general wildcard link
+      * from this partial abstract site.
+      */
+    @inline def !*() = this ! (None, None, None)
+
+    /** Build a linked abstract site from this partial abstract site.
+      *
+      * @param link the link connecting this partial abstract site.
+      */
+    @inline def !(link: AbstractLink) =
+      AbstractSite(this, link)
+
+    @inline def /(endpointName: EndpointName) =
+      AbstractSite(this, AbstractEndpoint(endpointName))
+
+    @inline def toAbstractSite = this.!-
+
+    /** Creates a site state from this abstract site state. */
+    def toSiteState: SiteState
+  }
+
   /** A class representing abstract agent states. */
-  abstract class AbstractAgentState extends PartialAbstractAgent {
+  abstract class AbstractAgentState {
 
-    type State = this.type
+    val agentType: ContactGraph.Agent
 
-    /**
-     * Build an abstract agent from this partial abstract agent.
-     *
-     * @param sites a sequence of partial abstract sites representing
-     *        the interface of the abstract agent to build.
-     */
-    def apply(sites: AbstractSiteState*): AbstractAgent[State] = {
+    /** Build an abstract agent from this partial abstract agent.
+      *
+      * @param sites a sequence of partial abstract sites representing
+      *        the interface of the abstract agent to build.
+      */
+    def apply(sites: AbstractSiteState*): AbstractAgent = {
       // Convert partial sites into total sites and
       // put them into an AbstractAgent with `this` state
-      AbstractAgent(agentType, this)(sites map (_.toAbstractSite))
+      new AbstractAgent(this, sites map (_.toAbstractSite))
     }
 
-    @inline override def toAbstractAgent = apply()
+    @inline def toAbstractAgent = apply()
 
     /** Creates an agent state from this abstract agent state. */
     def toAgentState: AgentState
-
-
-    /** A class representing abstract site states. */
-    abstract class AbstractSiteState extends PartialAbstractSite {
-
-      type State = this.type
-
-      /** Build an undefined abstract site from this partial abstract
-        * site.
-        */
-      @inline def ?() = AbstractSite[State](this, AbstractUndefined)
-
-      /** Build a free abstract site from this partial abstract site. */
-      @inline def !-() = AbstractSite[State](this, AbstractStub)
-
-      /** Build an abstract site with a wildcard link from this partial
-        * abstract site.
-        *
-        * @param wc the wildcard connected to this partial abstract site.
-        */
-      @inline def !(
-        agntState: Option[AbstractAgentState],
-        siteState: Option[AbstractAgentState#AbstractSiteState],
-        linkState: Option[AbstractLinkState])
-          : AbstractSite[State] =
-        this ! AbstractWildcard(agntState, siteState, linkState)
-
-      // TODO: Is it possible to have two methods `!` for wildcards,
-      // one like the one below and the other one that accepts a
-      // siteState only if an agentState has been provided and where
-      // the type of siteState is agentState.AbstractSiteState?
-      //
-      // def !(agentState: None, linkState: Option[AbstractLinkState]) =
-      //   this ! AbstractWildcard(None, None, linkState)
-
-      /** Build an abstract site with a maximally general wildcard link
-        * from this partial abstract site.
-        */
-      @inline def !*() = this ! (None, None, None)
-
-      /** Build a linked abstract site from this partial abstract site.
-        *
-        * @param link the link connecting this partial abstract site.
-        */
-      @inline def !(link: AbstractLink) =
-        AbstractSite[State](this, link)
-
-      @inline def /(endpointName: EndpointName) =
-        AbstractSite[State](this, AbstractEndpoint(endpointName))
-
-      @inline override def toAbstractSite = this.!-
-
-      /** Creates a site state from this abstract site state. */
-      def toSiteState: SiteState
-    }
   }
 
-  // /** A class representing abstract sites. */
-  // FIXME: AbstractSite doesn't have ! and / methods
-  final case class AbstractSite[+S <:
-    AbstractAgentState#AbstractSiteState](
-    state: S,
+  /** A class representing abstract sites. */
+  final case class AbstractSite(state: AbstractSiteState,
     link: AbstractLink)
-  //     extends PartialAbstractSite {
-  //   @inline override def toAbstractSite = this
-  // }
 
   /** A class representing abstract agents. */
-  abstract class AbstractAgent[+S <: AbstractAgentState](
-    val agentType: ContactGraph.Agent,
-    val state: S)
-      extends PartialAbstractAgent {
+  final class AbstractAgent(
+    val state: AbstractAgentState,
+    val sites: Seq[AbstractSite]) {
 
-    type State = state.type
-    type Site = AbstractSite[state.AbstractSiteState]
+    def agentType: ContactGraph.Agent = state.agentType
 
-    val sites: Seq[Site]
-    // val siteTypes: Seq[agentType.Site]
-    // val siteStates: Seq[state.AbstractSiteState]
-    // val links: Seq[AbstractLink]
-
-    def undefineSites(siteIndices: Set[SiteIndex])
-     // : AbstractAgent[State] =
-        : AbstractAgent[S] =
-      // if (siteIndices.isEmpty) this
-      // else AbstractAgent(agentType, state) {
-      //   val siteTypes = this.siteTypes
-      //   val siteStates = this.siteStates
-      //   val links = for ((l, i) <- this.links.zipWithIndex) yield
-      //     if (siteIndices contains i) AbstractUndefined else l
-      // }
+    def undefineSites(siteIndices: Set[SiteIndex]): AbstractAgent =
       if (siteIndices.isEmpty) this
-      else AbstractAgent(agentType, state)(
+      else new AbstractAgent(state,
         for ((s, i) <- sites.zipWithIndex) yield
           if (siteIndices contains i)
             AbstractSite(s.state, AbstractUndefined)
           else s)
 
     def closeWith(n: Int, f: EndpointName => AbstractLink)
-        : (AbstractAgent[state.type], Int) = {
+        : (AbstractAgent, Int) = {
 
-      val (_sites: List[Site], m) = sites.foldLeft(
-        (List[Site](), n))({
+      val (_sites: List[AbstractSite], m) = sites.foldLeft(
+        (List[AbstractSite](), n))({
           case ((sites, n), AbstractSite(state, AbstractEndpoint(ep)))
               if n > 0 => (AbstractSite(state, f(ep)) :: sites, n-1)
           case ((sites, n), s) => (s :: sites, n)
         })
-      (AbstractAgent(agentType, state)(_sites.reverse), m)
+      (new AbstractAgent(state, _sites.reverse), m)
     }
 
     def addToPattern(pb: Pattern.Builder) {
-      pb.addAgent(state.agentType, state.toAgentState)(
-        for (s <- sites) yield (s.state.siteType,
-          s.state.toSiteState))
+      val v = pb += (state.agentType, state.toAgentState)
+      for (s <- sites)
+        v += (s.state.siteType, s.state.toSiteState)
     }
-  }
 
-  object AbstractAgent {
-    def apply(agentType: ContactGraph.Agent,
-      state: AbstractAgentState)(
-      _sites: Seq[AbstractSite[state.AbstractSiteState]]) =
-      new AbstractAgent[state.type](agentType, state) {
+    @inline def toAbstractAgent = this
 
-        val sites = _sites
-
-        @inline override def toAbstractAgent = this
-
-        @inline override def toAbstractPattern: AbstractPattern =
-          AbstractPattern(Vector(this))
-      }
+    @inline def toAbstractPattern: AbstractPattern =
+      AbstractPattern(Vector(this))
   }
 
 
   // - Patterns -
 
-  // TODO: Make this class abstract
+  // TODO: Make this class abstract... Why? I guess I wrote this
+  // because I want to make some things extension-dependent (eg
+  // Connectors in normal Kappa)
   /** A class representing abstract patterns. */
   final case class AbstractPattern(
-    agents: Vector[AbstractAgent[AbstractAgentState]] = Vector(),
+    agents: Vector[AbstractAgent] = Vector(),
     links: Seq[(AgentIndex, SiteIndex, AbstractLinkState,
                 AgentIndex, SiteIndex, AbstractLinkState)] = List())
       extends PartialAbstractPattern {
     pattern =>
 
-    type Agent = AbstractAgent[AbstractAgentState]
-
-    @inline def :+(that: Agent): AbstractPattern =
+    @inline override def :+(that: AbstractAgent): AbstractPattern =
       AbstractPattern(agents :+ that, links)
 
-    @inline def +:(that: Agent): AbstractPattern =
+    @inline override def +:(that: AbstractAgent): AbstractPattern =
       AbstractPattern(that +: agents, links)
 
     @inline override def ++(that: AbstractPattern): AbstractPattern = {
@@ -558,8 +511,8 @@ trait AbstractSyntax {
           (i1, j1, ls1, offset + i2, j2, ls2)
         }
 
-        def undefineSites(agents: Seq[Agent],
-          siteMap: Map[AgentIndex, Set[SiteIndex]]): Seq[Agent] =
+        def undefineSites(agents: Seq[AbstractAgent],
+          siteMap: Map[AgentIndex, Set[SiteIndex]]): Seq[AbstractAgent] =
           for ((u, i) <- agents.zipWithIndex)
           yield u undefineSites siteMap(i)
             // if (siteMap(i).nonEmpty)
@@ -612,7 +565,7 @@ trait AbstractSyntax {
         : AbstractPattern = {
       // var i = 0
       val (newAgents,_) = agents.foldLeft(
-        (Vector[Agent](), n))({
+        (Vector[AbstractAgent](), n))({
           case ((newAgents,n),u) => {
             val (newAgent,m) = u.closeWith(n,f)
             (newAgent +: newAgents,m)
@@ -683,7 +636,7 @@ trait AbstractSyntax {
         for ((s, j) <- u.sites.zipWithIndex) {
 
           // val x = v += (s.state.siteType, s.state.toSiteState)
-          val x = v._sites(j)
+          val x = v.sites(j)
 
           // if (sites contains siteState)
           //   siteMap += ((i, sites(siteState)._2) -> x)
@@ -695,7 +648,7 @@ trait AbstractSyntax {
             case AbstractStub =>
               x define SiteGraph.Stub
 
-            case AbstractWildcard(agntState, siteState, linkState) => {
+            case AbstractWildcard(agentState, siteState, linkState) => {
               // TODO: Perhaps I should not care about link types
               // source and target...
               lazy val set = (for {
@@ -706,7 +659,7 @@ trait AbstractSyntax {
                 throw new IllegalArgumentException("link not found")
               }
               x define SiteGraph.Wildcard(
-                agntState map (_.toAgentState),
+                agentState map (_.toAgentState),
                 siteState map (_.toSiteState),
                 linkState map (_.toLinkState(set, None)))
             }
@@ -738,9 +691,9 @@ trait AbstractSyntax {
           // Get link types and build concrete link states
           val lt1 = findLinkType(x1, x2)
           val lt2 = findLinkType(x2, x1)
-          x1 connect (x2, lt1, lt2,
-            l1.state.toLinkState(lt1.states, Some(id)),
-            l2.state.toLinkState(lt2.states, Some(id)))
+          x1 connect (x2,
+            lt1, l1.state.toLinkState(lt1.states, Some(id)),
+            lt2, l2.state.toLinkState(lt2.states, Some(id)))
         }
         case (id, Seq(_)) => throw new IllegalStateException(
           "dangling link with label " + id)
@@ -760,9 +713,9 @@ trait AbstractSyntax {
         // Get link types and build concrete link states
         val lt1 = findLinkType(x1, x2)
         val lt2 = findLinkType(x2, x1)
-        x1 connect (x2, lt1, lt2,
-          l1.toLinkState(lt1.states, None), //, ss1, ss2),
-          l2.toLinkState(lt2.states, None)) //, ss2, ss1))
+        x1 connect (x2,
+          lt1, l1.toLinkState(lt1.states, None), //, ss1, ss2),
+          lt2, l2.toLinkState(lt2.states, None)) //, ss2, ss1))
       }
 
       // Build the pattern
@@ -856,8 +809,8 @@ trait AbstractSyntax {
     rhs: AbstractPattern) extends PartialAbstractRule {
 
     /** Append an abstract agent to this abstract action.  */
-    @inline def :+(that: PartialAbstractAgent): AbstractAction =
-      AbstractAction(lhs, rhs :+ that.toAbstractAgent)
+    @inline def :+(that: AbstractAgent): AbstractAction =
+      AbstractAction(lhs, rhs :+ that)
 
     /** Append an abstract pattern to this abstract action.  */
     @inline def ++(that: AbstractPattern): AbstractAction =
@@ -871,12 +824,12 @@ trait AbstractSyntax {
     }
 
     /** Prepend an abstract agent to this partial abstract pattern.  */
-    @inline def +:(that: PartialAbstractAgent): AbstractAction =
-      AbstractAction(that.toAbstractAgent +: lhs, rhs)
+    @inline def +:(that: AbstractAgent): AbstractAction =
+      AbstractAction(that +: lhs, rhs)
 
     /** Prepend an abstract agent to this partial abstract pattern.  */
-    @inline def ::(that: PartialAbstractAgent): AbstractAction =
-      that.toAbstractAgent +: this
+    @inline def ::(that: AbstractAgent): AbstractAction =
+      that +: this
 
     // FIXME: :@ and !@ methods should be language-specific
     /**
@@ -905,8 +858,8 @@ trait AbstractSyntax {
     rhs: AbstractPattern) extends PartialAbstractRule {
 
     /** Append an abstract agent to this abstract bidirectional action. */
-    @inline def :+(that: PartialAbstractAgent): AbstractBiAction =
-      AbstractBiAction(lhs, rhs :+ that.toAbstractAgent)
+    @inline def :+(that: AbstractAgent): AbstractBiAction =
+      AbstractBiAction(lhs, rhs :+ that)
 
     /** Append an abstract pattern to this abstract bidirectional action. */
     @inline def ++(that: AbstractPattern): AbstractBiAction =
@@ -921,12 +874,12 @@ trait AbstractSyntax {
     }
 
     /** Prepend an abstract agent to this abstract bidirectional action. */
-    @inline def +:(that: PartialAbstractAgent): AbstractBiAction =
-      AbstractBiAction(that.toAbstractAgent +: lhs, rhs)
+    @inline def +:(that: AbstractAgent): AbstractBiAction =
+      AbstractBiAction(that +: lhs, rhs)
 
     /** Prepend an abstract agent to this abstract bidirectional action. */
-    @inline def ::(that: PartialAbstractAgent): AbstractBiAction =
-      that.toAbstractAgent +: this
+    @inline def ::(that: AbstractAgent): AbstractBiAction =
+      that +: this
 
     // FIXME: :@ and !@ methods should be language-specific
     /**
@@ -962,7 +915,7 @@ trait AbstractSyntax {
     def rhs: AbstractPattern
 
     /** Prepend an agent to the right-hand side of this tail. */
-    def +:(that: PartialAbstractAgent): AbstractRuleTail
+    def +:(that: AbstractAgent): AbstractRuleTail
 
     /** Prepend an abstract pattern to the right-hand side of this tail. */
     def prependAbstractPattern(that: AbstractPattern): AbstractRuleTail
@@ -971,8 +924,8 @@ trait AbstractSyntax {
     def toRate(lhs: Pattern): () => Double
 
     /** Prepend an agent to the right-hand side of this tail. */
-    @inline def ::(that: PartialAbstractAgent): AbstractRuleTail =
-      that.toAbstractAgent +: this
+    @inline def ::(that: AbstractAgent): AbstractRuleTail =
+      that +: this
   }
 
   /** A class representing tails of rules that follow mass-action kinetics. */
@@ -980,8 +933,8 @@ trait AbstractSyntax {
     rhs: AbstractPattern, rate: () => Double) extends AbstractRuleTail {
 
     /** Prepend an agent to the right-hand side of this tail. */
-    @inline def +:(that: PartialAbstractAgent): AbstractRuleTail =
-      AbstractMassActionRuleTail(that.toAbstractAgent +: rhs, rate)
+    @inline def +:(that: AbstractAgent): AbstractRuleTail =
+      AbstractMassActionRuleTail(that +: rhs, rate)
 
     /** Prepend an abstract pattern to the right-hand side of this tail. */
     def prependAbstractPattern(that: AbstractPattern): AbstractRuleTail =
@@ -997,8 +950,8 @@ trait AbstractSyntax {
     law: () => Double) extends AbstractRuleTail {
 
     /** Prepend an agent to the right-hand side of this tail. */
-    @inline def +:(that: PartialAbstractAgent): AbstractRuleTail =
-      AbstractRateLawRuleTail(that.toAbstractAgent +: rhs, law)
+    @inline def +:(that: AbstractAgent): AbstractRuleTail =
+      AbstractRateLawRuleTail(that +: rhs, law)
 
     /** Prepend an abstract pattern to the right-hand side of this tail. */
     def prependAbstractPattern(that: AbstractPattern): AbstractRuleTail =
@@ -1015,7 +968,7 @@ trait AbstractSyntax {
     def rhs: AbstractPattern
 
     /** Prepend an agent to the right-hand side of this tail. */
-    def +:(that: PartialAbstractAgent): AbstractBiRuleTail
+    def +:(that: AbstractAgent): AbstractBiRuleTail
 
     /** Prepend an abstract pattern to the right-hand side of this tail. */
     def prependAbstractPattern(that: AbstractPattern): AbstractBiRuleTail
@@ -1027,8 +980,8 @@ trait AbstractSyntax {
     def toBwdRate(lhs: Pattern): () => Double
 
     /** Prepend an agent to the right-hand side of this tail. */
-    @inline def ::(that: PartialAbstractAgent): AbstractBiRuleTail =
-      that.toAbstractAgent +: this
+    @inline def ::(that: AbstractAgent): AbstractBiRuleTail =
+      that +: this
   }
 
   /** A class representing tails of bidirectional rules that follow mass-action kinetics. */
@@ -1037,9 +990,8 @@ trait AbstractSyntax {
       extends AbstractBiRuleTail {
 
     /** Prepend an agent to the right-hand side of this tail. */
-    @inline def +:(that: PartialAbstractAgent): AbstractBiRuleTail =
-      AbstractMassActionBiRuleTail(that.toAbstractAgent +: rhs,
-        fwdRate, bwdRate)
+    @inline def +:(that: AbstractAgent): AbstractBiRuleTail =
+      AbstractMassActionBiRuleTail(that +: rhs, fwdRate, bwdRate)
 
     /** Prepend an abstract pattern to the right-hand side of this tail. */
     def prependAbstractPattern(that: AbstractPattern): AbstractBiRuleTail =
@@ -1060,9 +1012,8 @@ trait AbstractSyntax {
       extends AbstractBiRuleTail {
 
     /** Prepend an agent to the right-hand side of this tail. */
-    @inline def +:(that: PartialAbstractAgent): AbstractBiRuleTail =
-      AbstractRateLawBiRuleTail(that.toAbstractAgent +: rhs,
-        fwdLaw, bwdLaw)
+    @inline def +:(that: AbstractAgent): AbstractBiRuleTail =
+      AbstractRateLawBiRuleTail(that +: rhs, fwdLaw, bwdLaw)
 
     /** Prepend an abstract pattern to the right-hand side of this tail. */
     def prependAbstractPattern(that: AbstractPattern): AbstractBiRuleTail =

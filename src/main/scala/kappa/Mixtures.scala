@@ -14,7 +14,7 @@ trait Mixtures {
       with Embeddings
       with RollbackMachines =>
 
-  import SiteGraph.{Link, Stub}
+  import SiteGraph.{Link, Stub, LinkType, AgentType, SiteType}
 
 
   /**
@@ -135,7 +135,7 @@ trait Mixtures {
         val ss = u.siteStates.clone
         val ls = new Array[Link](u.length)
         // TODO: Is the agent state shared with the copy?
-        val v = AgentImpl(u.agentType, u.state)(st, ss, ls)
+        val v = new AgentImpl(u.agentType, u.state, st, ss, ls)
         v._copy = u
         v._mixture = m
         m += v
@@ -183,8 +183,8 @@ trait Mixtures {
     }
 
     /** Create a [[Mixture.Agent]] and add it to this mixture. */
-    def addAgent(agentType: ContactGraph.Agent, state: AgentState)(
-      siteTypes: Seq[agentType.Site], siteStates: Seq[SiteState])
+    def +=(agentType: AgentType, state: AgentState,
+      siteTypes: Seq[SiteType], siteStates: Seq[SiteState])
         : this.type = {
 
       // Create and initialize sites
@@ -193,7 +193,7 @@ trait Mixtures {
       val ls = Array.fill[Link](ss.length)(Stub)
 
       // Add agent to mixture
-      this += AgentImpl(agentType, state)(st, ss, ls)
+      this += new AgentImpl(agentType, state, st, ss, ls)
     }
 
     /**
@@ -282,8 +282,8 @@ trait Mixtures {
 
     /** Connect two sites in this mixture. */
     def connect(
-      u1: Agent, i1: SiteIndex, t1: ContactGraph.Link, l1: LinkState,
-      u2: Agent, i2: SiteIndex, t2: ContactGraph.Link, l2: LinkState)
+      u1: Agent, i1: SiteIndex, t1: LinkType, l1: LinkState,
+      u2: Agent, i2: SiteIndex, t2: LinkType, l2: LinkState)
         : Mixture = {
 
       val freshId = Mixture.getFreshLinkId
@@ -370,19 +370,19 @@ trait Mixtures {
 
       // Create a map to track which site a given link connects to.
       val linkMap = new mutable.HashMap[(Agent, SiteIndex),
-        (pb.Agent#Site, ContactGraph.Link, LinkState)]()
+        (pb.Agent#Site, LinkType, LinkState)]()
 
       for (u <- this) {
-        val v = pb.addAgent(u.agentType, u.state)(
-          for (s <- u.sites) yield (s.siteType, s.state))
+        val v = pb += (u.agentType, u.state)
+        for (s <- u.sites) v += (s.siteType, s.state)
 
         for ((s, i) <- u.sites.zipWithIndex) {
-          val x = v._sites(i)
+          val x = v.sites(i)
           s.link match {
             case Stub => x define SiteGraph.Stub
             case Linked(v, j, t, l) =>
               linkMap get (u, i) match {
-                case Some((y, u, m)) => x connect (y, t, u, l, m)
+                case Some((y, u, m)) => x connect (y, t, l, u, m)
                 case None => linkMap += ((v, j) -> (x, t, l))
               }
             case _ => ()
@@ -469,26 +469,23 @@ trait Mixtures {
      * @param prev a reference to the previous agent in the [[Mixture]]
      *        this agent belongs to.
      */
-    abstract class AgentImpl
+    final class AgentImpl(
+      val agentType: AgentType,
+      var state: AgentState,
+      val siteTypes: Array[SiteType],
+      // NOTE: `siteStates` and `links` need to be set when
+      // rollbacking a mixture (RollbackMachines.scala, line 78)
+      val siteStates: Array[SiteState],
+      // NOTE: `links` need to be set when creating a Mixture
+      // from a Pattern (Patterns.scala, line 105)
+      val links: Array[Link],
+      val liftMap: mutable.HashMap[Pattern.Agent,
+        ComponentEmbedding[Agent]] = new mutable.HashMap())
+
         extends AgentIntf
            with DoublyLinkedCell[Agent]
            with RollbackAgent
            with Markable {
-
-      var state: AgentState
-
-      val liftMap: mutable.HashMap[Pattern.Agent,
-        ComponentEmbedding[Agent]]
-
-      val siteTypes: Array[agentType.Site]
-
-      // NOTE: `siteStates` and `links` need to be set when
-      // rollbacking a mixture (RollbackMachines.scala, line 78)
-      val siteStates: Array[SiteState]
-
-      // NOTE: `links` need to be set when creating a Mixture
-      // from a Pattern (Patterns.scala, line 105)
-      val links: Array[Link]
 
       // TODO: Change all access modifier to protected[Mixture]?
 
@@ -565,24 +562,6 @@ trait Mixtures {
 
       /** The range of indices of this agent. */
       @inline override def indices: Range = links.indices
-    }
-
-    object AgentImpl {
-
-      def apply(_agentType: ContactGraph.Agent, _state: AgentState,
-        _liftMap: mutable.HashMap[Pattern.Agent,
-          ComponentEmbedding[Agent]] = new mutable.HashMap())(
-        st: Array[_agentType.Site], ss: Array[SiteState],
-        ls: Array[Link]) =
-        new AgentImpl {
-          type T = _agentType.type
-          val agentType: T = _agentType
-          var state = _state
-          val siteTypes = st
-          val siteStates = ss
-          val links = ls
-          val liftMap = _liftMap
-        }
     }
   }
 

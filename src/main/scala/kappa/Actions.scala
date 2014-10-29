@@ -344,39 +344,29 @@ trait Actions {
   /** Companion object of the [[Actions#Action]] class. */
   object Action {
 
+    import SiteGraph.{AgentType,SiteType}
+
     type Injection = Array[Mixture.Agent]
 
     sealed abstract class Atom {
       def apply(inj: Injection, mixture: Mixture)
     }
 
-    abstract class AgentAddition[T <: ContactGraph.Agent](
-      val a: AgentIndex,
-      val agentType: T,
-      val state: AgentState)
+    final case class AgentAddition(
+      val index: AgentIndex,
+      val agentType: AgentType,
+      val state: AgentState,
+      val siteTypes: Seq[SiteType],
+      val siteStates: Seq[SiteState])
         extends Atom {
 
-      val siteTypes: Seq[agentType.Site]
-      val siteStates: Seq[SiteState]
-
       def apply(inj: Injection, mixture: Mixture) {
-        mixture.addAgent(agentType, state)(siteTypes, siteStates)
+        mixture += (agentType, state, siteTypes, siteStates)
 
         // Register the new agent in the inj array
         val u = mixture.head
         mixture.mark(u, Updated)
-        inj(a) = u
-      }
-    }
-
-    object AgentAddition {
-      def apply(a: AgentIndex, agentType: ContactGraph.Agent,
-        state: AgentState)(st: Seq[agentType.Site],
-          ss: Seq[SiteState]) = {
-        new AgentAddition[agentType.type](a, agentType, state) {
-          val siteTypes = st
-          val siteStates = ss
-        }
+        inj(index) = u
       }
     }
 
@@ -541,7 +531,7 @@ trait Actions {
       }
       for ((ru, ro) <- rhsAdditions) {
         if (ru.isComplete)
-          atoms += AgentAddition(ro, ru.agentType, ru.state)(
+          atoms += AgentAddition(ro, ru.agentType, ru.state,
             ru.siteTypes, ru.siteStates)
         else throw new IllegalArgumentException(
           "attempt to add incomplete agent " + ru + " in rule: " +
