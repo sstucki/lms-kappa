@@ -221,39 +221,6 @@ trait AbstractSyntax {
     @inline def toMixture: Mixture = this.toAbstractPattern.toMixture
   }
 
-  // TODO: Are partial sites and agents really necessary?
-  // Can not we put these types, values and methods in AbstractAgent
-  // and AbstractSite directly?
-  // /** An abstract class representing partially built abstract sites.
-  //   *
-  //   * Every abstract syntax node that can be converted into a site
-  //   * (i.e. that can be used in site position) should extend this
-  //   * class.
-  //   */
-  // abstract class PartialAbstractSite {
-  //   type State <: AbstractSiteState
-  //   val siteType: ContactGraph.Site
-  //   /** Convert this partial abstract site into an abstract site. */
-  //   def toAbstractSite: AbstractSite[State]
-  // }
-
-  // /**
-  //  * An abstract class representing partially built abstract agents.
-  //  *
-  //  * Every abstract syntax node that can be converted into an agent
-  //  * (i.e. that can be used in agent position) should extend this
-  //  * class.
-  //  */
-  // abstract class PartialAbstractAgent extends PartialAbstractPattern {
-  //   // type State <: AbstractAgentState
-  //   val agentType: ContactGraph.Agent
-  //   /** Convert this partial abstract agent into an abstract agent. */
-  //   def toAbstractAgent: AbstractAgent//[State]
-  //   /** Convert this partial abstract agent into an abstract pattern. */
-  //   @inline def toAbstractPattern: AbstractPattern =
-  //     this.toAbstractAgent.toAbstractPattern
-  // }
-
 
   // -- Complete elements of syntax --
 
@@ -519,13 +486,6 @@ trait AbstractSyntax {
           siteMap: Map[AgentIndex, Set[SiteIndex]]): Seq[AbstractAgent] =
           for ((u, i) <- agents.zipWithIndex)
           yield u undefineSites siteMap(i)
-            // if (siteMap(i).nonEmpty)
-            //   u.state.AbstractAgent(
-            //     for ((s: u.state.AbstractSite, j) <- u.sites.zipWithIndex)
-            //     yield if (siteMap(i) contains j)
-            //             u.state.AbstractSite(s.state, AbstractUndefined)
-            //           else s)
-            // else u
 
         val sm1 = links.foldLeft(Map() withDefaultValue
           Set(): Map[AgentIndex, Set[SiteIndex]]) {
@@ -567,7 +527,6 @@ trait AbstractSyntax {
       */
     def closeWith(n: Int, f: EndpointName => AbstractLink)
         : AbstractPattern = {
-      // var i = 0
       val (newAgents,_) = agents.foldLeft(
         (Vector[AbstractAgent](), n))({
           case ((newAgents,n),u) => {
@@ -575,15 +534,6 @@ trait AbstractSyntax {
             (newAgent +: newAgents,m)
           }
         })
-      // val newAgents =
-      //   for (u <- agents) yield u.state.AbstractAgent(
-      //     for (s <- u.sites) yield s.link match {
-      //       case AbstractEndpoint(ep) if i < n => {
-      //         i += 1
-      //         u.state.AbstractSite(s.state, f(ep))
-      //       }
-      //       case _ => s
-      //     })
       AbstractPattern(newAgents.toVector, links)
     }
 
@@ -622,28 +572,11 @@ trait AbstractSyntax {
       // Create agents
       for ((u, i) <- agents.zipWithIndex) {
 
-        // // Create the concrete site states and complete the interface
-        // // by filling in undefined sites states.
-        // val sites = (for ((s, j) <- u.sites.zipWithIndex)
-        //              yield (s.state.toSiteState, (s, j))).toMap
-
-        // val siteStates = u.agentType.completeInterface(sites.keys.toSeq)
-        // val intf = siteStates map { siteState =>
-        //   (siteState, sites.get(siteState) map (_._1.link) getOrElse
-        //     AbstractUndefined) }
-
-        // Create the concrete agent state from the abstract one and
-        // add the state to the builder to get an builder agent.
-        // val v = pb += (u.state.agentType, u.state.toAgentState)
         val v = pb.agents(i)
 
         for ((s, j) <- u.sites.zipWithIndex) {
 
-          // val x = v += (s.state.siteType, s.state.toSiteState)
           val x = v.sites(j)
-
-          // if (sites contains siteState)
-          //   siteMap += ((i, sites(siteState)._2) -> x)
           siteMap += ((i, j) -> x)
 
           s.link match {
@@ -694,10 +627,6 @@ trait AbstractSyntax {
       // Connect links
       for (l <- linkMap groupBy { case (_, l) => l.id }) l match {
         case (id, Seq((x1, l1), (x2, l2))) => {
-          // val t1 = s1.state.siteStateSet
-          // val t2 = s2.state.siteStateSet
-          // val ls1 = l1.toLinkState(Some(id), t1, t2)
-          // val ls2 = l2.toLinkState(Some(id), t2, t1)
           // Get link types and build concrete link states
           val lt1 = findLinkType(x1, x2)
           val lt2 = findLinkType(x2, x1)
@@ -716,16 +645,12 @@ trait AbstractSyntax {
       for ((i1, j1, l1, i2, j2, l2) <- links) {
         val x1 = siteMap((i1, j1))
         val x2 = siteMap((i2, j2))
-        // // val ss1 = x1.state.siteStateSet
-        // // val ss2 = x2.state.siteStateSet
-        // val x1 = pb.agents(i1).sites(j1)
-        // val x2 = pb.agents(i2).sites(j2)
         // Get link types and build concrete link states
         val lt1 = findLinkType(x1, x2)
         val lt2 = findLinkType(x2, x1)
         x1 connect (x2,
-          lt1, l1.toLinkState(lt1.states, None), //, ss1, ss2),
-          lt2, l2.toLinkState(lt2.states, None)) //, ss2, ss1))
+          lt1, l1.toLinkState(lt1.states, None),
+          lt2, l2.toLinkState(lt2.states, None))
       }
 
       // Build the pattern

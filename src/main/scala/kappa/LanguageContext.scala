@@ -19,16 +19,6 @@ trait LanguageContext {
   type LinkStateSet <: GenericLinkStateSet
 
 
-  // /** Creates an agent state set from a set of agent state names. */
-  // def mkAgentStateSet(stateSet: AgentStateSetName): AgentStateSet
-
-  // /** Creates a site state set from a set of site state names. */
-  // def mkSiteStateSet(agentStateSet: AgentStateSet, siteStateSet: SiteStateSetName): SiteStateSet
-
-  // /** Creates a link state set from a set of link state names. */
-  // def mkLinkStateSet(source: SiteStateSet, target: SiteStateSet, stateSet: LinkStateSetName): LinkStateSet
-
-
   /** A trait for agent state sets. */
   trait GenericAgentStateSet {
     // extends Set[AgentState] with SetLike[AgentState]

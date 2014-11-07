@@ -10,31 +10,6 @@ trait KappaLikeParsers extends Parsers {
       with Patterns
       with Mixtures =>
 
-  /*
-  // States for contact graphs
-  type LinkName = LinkId
-  type AgentStateSetName = KappaLikeAgentStateSetName
-  type SiteStateSetName = KappaLikeSiteStateSetName
-  type LinkStateSetName = KappaLikeLinkStateSetName
-
-  final case class AbstractKappaLikeAgentStateSet(
-    val agentType: AgentTypeName,
-    val states: List[AgentLabel])
-      extends AbstractAgentStateSet
-
-  final case class AbstractKappaLikeSiteStateSet(
-    val siteName: SiteName,
-    val states: List[SiteLabel])
-      extends AbstractSiteStateSet
-
-  final case class AbstractKappaLikeLinkStateSet(
-    val states: List[LinkLabel])
-      extends AbstractLinkStateSet
-  // {
-  //   @inline final def id: LinkId = linkName
-  // }
-  */
-
   /** A parser for Kappa-like languages. */
   trait KappaLikeParser extends GenericParser {
 
