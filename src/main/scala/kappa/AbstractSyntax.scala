@@ -297,12 +297,12 @@ trait AbstractSyntax {
       extends AbstractLink
 
 
-  // - Agents and Sites -
+  // - Sites -
 
   /** A class representing abstract site states. */
   abstract class AbstractSiteState {
 
-    val siteType: ContactGraph.Site
+    def siteType(agentType: ContactGraph.Agent): ContactGraph.Site
 
     /** Build an undefined abstract site from this partial abstract
       * site.
@@ -341,13 +341,15 @@ trait AbstractSyntax {
     @inline def toAbstractSite = this.!-
 
     /** Creates a site state from this abstract site state. */
-    def toSiteState: SiteState
+    def toSiteState(agentType: ContactGraph.Agent): SiteState
   }
+
+  // - Agents -
 
   /** A class representing abstract agent states. */
   abstract class AbstractAgentState {
 
-    val agentType: ContactGraph.Agent
+    def agentType: ContactGraph.Agent
 
     /** Build an abstract agent from this partial abstract agent.
       *
@@ -367,11 +369,12 @@ trait AbstractSyntax {
   }
 
   /** A class representing abstract sites. */
-  final case class AbstractSite(state: AbstractSiteState,
-    link: AbstractLink)
+  final case class AbstractSite(
+    val state: AbstractSiteState,
+    val link: AbstractLink)
 
   /** A class representing abstract agents. */
-  final class AbstractAgent(
+  final case class AbstractAgent(
     val state: AbstractAgentState,
     val sites: Seq[AbstractSite]) {
 
@@ -398,9 +401,10 @@ trait AbstractSyntax {
     }
 
     def addToPattern(pb: Pattern.Builder) {
-      val v = pb += (state.agentType, state.toAgentState)
+      val at = state.agentType
+      val v = pb += (at, state.toAgentState)
       for (s <- sites)
-        v += (s.state.siteType, s.state.toSiteState)
+        v += (s.state.siteType(at), s.state.toSiteState(at))
     }
 
     @inline def toAbstractAgent = this
@@ -651,17 +655,23 @@ trait AbstractSyntax {
             case AbstractWildcard(agentState, siteState, linkState) => {
               // TODO: Perhaps I should not care about link types
               // source and target...
-              lazy val set = (for {
-                to <- siteState map (_.siteType)
-                linkType <- x.siteType.links find {
-                  case ContactGraph.Link(cgTo, states) => to == cgTo }
-              } yield linkType.states) getOrElse {
-                throw new IllegalArgumentException("link not found")
-              }
+              // TODO: Should this be lazy?
+              val linkStateSets = for {
+                as <- agentState.toSeq
+                ss <- siteState.toSeq
+                st = ss.siteType(as.agentType)
+                ContactGraph.Link(siteType, states) <- st.links
+                if siteType == st
+              } yield states
+              require(linkStateSets.length > 0, "link not found")
+              require(linkStateSets.length < 2,
+                "too many link state sets")
               x define SiteGraph.Wildcard(
-                agentState map (_.toAgentState),
-                siteState map (_.toSiteState),
-                linkState map (_.toLinkState(set, None)))
+                for (as <- agentState) yield as.toAgentState,
+                for (as <- agentState; ss <- siteState)
+                yield ss.toSiteState(as.agentType),
+                for (ls <- linkState)
+                yield ls.toLinkState(linkStateSets.head, None))
             }
 
             case l: AbstractLinked => linkMap += (x -> l)

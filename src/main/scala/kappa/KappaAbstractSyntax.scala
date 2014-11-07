@@ -61,17 +61,17 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
   }
 
   /** A class representing abstract Kappa site states. */
-  sealed case class AbstractKappaSiteState(agentName: AgentName,
+  sealed case class AbstractKappaSiteState(
     siteName: SiteName, label: Option[SiteLabel])
       extends AbstractKappaLikeSiteState {
 
     /** Build an abstract site state with a particular label. */
     @inline final def ~(label: SiteLabel): AbstractSiteState =
-      new AbstractKappaSiteState(agentName, siteName, Some(label))
+      new AbstractKappaSiteState(siteName, Some(label))
 
     /** Creates a site state from this abstract site state. */
-    @inline final def toSiteState: SiteState =
-      new KappaSiteState(siteType.states, label)
+    @inline final def toSiteState(agentType: ContactGraph.Agent): SiteState =
+      new KappaSiteState(siteType(agentType).states, label)
 
     override def toString =
       siteName + (label map (stateDelim + _) getOrElse "")
@@ -82,7 +82,7 @@ trait KappaAbstractSyntax extends KappaLikeAbstractSyntax {
       extends AbstractKappaAgentState(agentName)
 
   final class Site(agentName: AgentName, siteName: SiteName)
-      extends AbstractKappaSiteState(agentName, siteName, None)
+      extends AbstractKappaSiteState(siteName, None)
 
   /** A class representing abstract Kappa link states. */
   class AbstractKappaLinkState extends AbstractLinkState {

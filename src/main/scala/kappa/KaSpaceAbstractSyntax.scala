@@ -72,7 +72,6 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
 
   /** A class representing abstract KaSpace site states. */
   sealed case class AbstractKaSpaceSiteState(
-    agentName: AgentName,
     siteName: SiteName,
     position: Option[SiteLabel])
       extends AbstractKappaLikeSiteState {
@@ -81,22 +80,20 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
 
     /** Build an abstract site state with a particular label. */
     @inline final def ~(position: SiteLabel) =
-      AbstractKaSpaceSiteState(agentName, siteName, Some(position))
+      AbstractKaSpaceSiteState(siteName, Some(position))
 
     /** Creates a site state from this abstract site state. */
-    @inline final def toSiteState =
-      KaSpaceSiteState(siteType.states, position)
+    @inline final def toSiteState(agentType: ContactGraph.Agent) =
+      KaSpaceSiteState(siteType(agentType).states, position)
   }
 
   // - Aliases -
 
   final class AgentType(agentName: AgentName, radius: Option[AgentLabel])
-      extends AbstractKaSpaceAgentState(agentName, radius) {
-  }
+      extends AbstractKaSpaceAgentState(agentName, radius)
 
-  final class Site(agentName: AgentName, siteName: SiteName,
-    position: Option[SiteLabel])
-      extends AbstractKaSpaceSiteState(agentName, siteName, position)
+  final class Site(siteName: SiteName, position: Option[SiteLabel])
+      extends AbstractKaSpaceSiteState(siteName, position)
 
   // -- Links --
 
