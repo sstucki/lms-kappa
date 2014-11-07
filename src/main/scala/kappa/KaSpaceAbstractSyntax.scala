@@ -89,9 +89,45 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
 
   // - Aliases -
 
+  /**
+   * Alias for easy agent state creation.
+   *
+   * Use case:
+   * {{{
+   *   // Define an object `A` representing an agent of type "A".
+   *   object A extends AgentType("A")
+   *
+   *   // Define a val `x` representing a site with name "x".
+   *   val x = Site("x")
+   *
+   *   // Use `A` and `x` to constructor an agent.
+   *   withObs{ A(x) }
+   * }}}
+   */
   final class AgentType(agentName: AgentName, radius: Option[AgentLabel])
       extends AbstractKaSpaceAgentState(agentName, radius)
 
+  /**
+   * A factory object for easy site state creation.
+   *
+   * Use case:
+   * {{{
+   *   // Define an object `A` representing an agent of type "A".
+   *   object A extends AgentType("A")
+   *
+   *   // Define a val `x` representing a site with name "x".
+   *   val x = Site("x")
+   *
+   *   // Use `A` and `x` to constructor an agent.
+   *   withObs{ A(x) }
+   * }}}
+    */
+  // TODO: Should this be an object with an apply method instead, like
+  // object Site {
+  //   def apply(n: SiteName, position: Option[SiteLabel]) =
+  //     AbstractKaSpaceSiteState(siteName, position)
+  // }
+  // Same applies for AgentType.
   final class Site(siteName: SiteName, position: Option[SiteLabel])
       extends AbstractKaSpaceSiteState(siteName, position)
 
@@ -119,159 +155,8 @@ trait KaSpaceAbstractSyntax extends KappaLikeAbstractSyntax {
       KaSpaceLinkState(set, orientation, linkId)
   }
 
-  // /** Convert link IDs into abstract links. */
+  /** Convert link IDs into abstract links. */
   implicit def linkIdToAbstractLinked(id: LinkId) =
     AbstractKaSpaceLinked(id)
-
-  // /** A class representing abstract KaSpace link states. */
-  // final case class AbstractKaSpaceLinkState(
-  //   orientation: Option[LinkLabel])
-  //     extends AbstractLinkState {
-
-  //   val linkType = ...
-
-  //   /** Creates a link state from this abstract link state. */
-  //   @inline def toLinkState(linkId: Option[LinkId]): LinkState =
-  //     KaSpaceLinkState(linkType.states, orientation, linkId)
-
-  //     // Find a link state set in the contact graph.
-  //     val lss = contactGraph.linkStateSets.find { linkStateSet =>
-  //       (linkStateSet.source == source) &&
-  //       (linkStateSet.target == target) &&
-  //       (orientation map { w1 =>
-  //         linkStateSet.labels exists { w2 => w1 ~= w2 }
-  //       } getOrElse true)
-  //     } getOrElse {
-  //       throw new IllegalArgumentException(
-  //         "couldn't find link state set from " + source +
-  //           " to " + target + " with orientation " + orientation)
-  //     }
-  //     KaSpaceLinkState(lss, orientation, linkId)
-  //   }
-  // }
-
-  // /** Companion object of the AbstractKaSpaceAgentState class. */
-  // object AbstractKaSpaceAgentState {
-  //   @inline def apply(agentType: AgentTypeName, radius: Option[AgentLabel])
-  //       : AbstractKaSpaceAgentState =
-  //     new AbstractKaSpaceAgentState(agentType, radius)
-  // }
-
-  // /** Companion object of the AbstractKaSpaceSiteState class. */
-  // object AbstractKaSpaceSiteState {
-  //   @inline def apply(
-  //     name: SiteName, position: Option[SiteLabel]): AbstractKaSpaceSiteState =
-  //     new AbstractKaSpaceSiteState(name, position)
-  // }
-
-  // /** A class representing abstract KaSpace link states. */
-  // class AbstractKaSpaceLinkState(val orientation: Option[LinkLabel])
-  //     extends AbstractLinkState {
-
-  //   /** Creates a link state from this abstract link state. */
-  //   @inline final def toLinkState(linkId: Option[LinkId],
-  //     source: SiteStateSet, target: SiteStateSet): LinkState = {
-
-  //     // Find a link state set in the contact graph.
-  //     val lss = contactGraph.linkStateSets.find { linkStateSet =>
-  //       (linkStateSet.source == source) &&
-  //       (linkStateSet.target == target) &&
-  //       (orientation map { w1 =>
-  //         linkStateSet.labels exists { w2 => w1 ~= w2 }
-  //       } getOrElse true)
-  //     } getOrElse {
-  //       throw new IllegalArgumentException(
-  //         "couldn't find link state set from " + source +
-  //           " to " + target + " with orientation " + orientation)
-  //     }
-  //     KaSpaceLinkState(linkId, lss, orientation)
-  //   }
-  // }
-
-  // /** Companion object of the AbstractKaSpaceLinkState class. */
-  // object AbstractKaSpaceLinkState {
-  //   @inline def apply(
-  //     orientation: Option[LinkLabel]): AbstractKaSpaceLinkState =
-  //     new AbstractKaSpaceLinkState(orientation)
-
-  //   /** Empty instance of the AbstractKaSpaceLinkState class. */
-  //   object Empty extends AbstractKaSpaceLinkState(None)
-  // }
-
-
-  // /** A class to build abstract KaSpace agent states. */
-  // class PartialAbstractKaSpaceAgentState(val agentType: AgentTypeName)
-  //     extends PartialAbstractKappaLikeAgentState {
-
-  //   /** Build an abstract agent state with a particular label. */
-  //   @inline final def ~(label: AgentLabel): AbstractAgentState =
-  //     AbstractKaSpaceAgentState(agentType, Some(label))
-
-  //   @inline final def toAgentState: AgentState =
-  //     AbstractKaSpaceAgentState(agentType, None).toAgentState
-  // }
-
-  // /** Companion object of the PartialAbstractKaSpaceAgentState class. */
-  // object PartialAbstractKaSpaceAgentState {
-  //   @inline def apply(agentType: AgentTypeName)
-  //       : PartialAbstractKaSpaceAgentState =
-  //     new PartialAbstractKaSpaceAgentState(agentType)
-  // }
-
-  // /** A class to build abstract KaSpace site states. */
-  // class PartialAbstractKaSpaceSiteState(val name: SiteName)
-  //     extends PartialAbstractKappaLikeSiteState {
-
-  //   /** Build an abstract site state with a particular label. */
-  //   @inline final def ~(label: SiteLabel): AbstractSiteState =
-  //     AbstractKaSpaceSiteState(name, Some(label))
-
-  //   @inline final def toSiteState(agentStateSet: AgentStateSet): SiteState =
-  //     AbstractKaSpaceSiteState(name, None).toSiteState(agentStateSet)
-  // }
-
-  // /** Companion object of the PartialAbstractKaSpaceSiteState class. */
-  // object PartialAbstractKaSpaceSiteState {
-  //   @inline def apply(name: SiteName): PartialAbstractKaSpaceSiteState =
-  //     new PartialAbstractKaSpaceSiteState(name)
-  // }
-
-
-  // /**
-  //  * Alias for easy agent state creation.
-  //  *
-  //  * Use case:
-  //  * {{{
-  //  *   // Define an object `A` representing an agent of type "A".
-  //  *   object A extends AgentType("A")
-  //  *
-  //  *   // Define a val `x` representing a site with name "x".
-  //  *   val x = Site("x")
-  //  *
-  //  *   // Use `A` and `x` to constructor an agent.
-  //  *   withObs{ A(x) }
-  //  * }}}
-  //  */
-  // class AgentType(agentTypeName: AgentTypeName)
-  //     extends PartialAbstractKaSpaceAgentState(agentTypeName)
-
-  // /**
-  //  * A factory object for easy site state creation.
-  //  *
-  //  * Use case:
-  //  * {{{
-  //  *   // Define an object `A` representing an agent of type "A".
-  //  *   object A extends AgentType("A")
-  //  *
-  //  *   // Define a val `x` representing a site with name "x".
-  //  *   val x = Site("x")
-  //  *
-  //  *   // Use `A` and `x` to constructor an agent.
-  //  *   withObs{ A(x) }
-  //  * }}}
-  //  */
-  // object Site {
-  //   def apply(n: SiteName) = PartialAbstractKaSpaceSiteState(n)
-  // }
 }
 

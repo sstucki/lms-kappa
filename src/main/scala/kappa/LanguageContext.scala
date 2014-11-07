@@ -50,9 +50,6 @@ trait LanguageContext {
 
     /** Returns the default site state for this site state set. */
     def defaultState: SiteState
-
-    // /** Returns the agent state set to which this site state set is associated. */
-    // def agentStateSet: AgentStateSet
   }
 
   trait GenericLinkStateSet {
@@ -79,20 +76,10 @@ trait LanguageContext {
 
 
   /** A trait for generic agent states. */
-  trait GenericAgentState[T] extends Matchable[T] {
-    this: T =>
-
-    // /** Returns the agent state set this agent state belongs to. */
-    // def agentStateSet: AgentStateSet
-  }
+  trait GenericAgentState[T] extends Matchable[T]
 
   /** A trait for generic site states. */
-  trait GenericSiteState[T] extends Matchable[T] {
-    this: T =>
-
-    // /** Returns the site state set this agent state belongs to. */
-    // def siteStateSet: SiteStateSet
-  }
+  trait GenericSiteState[T] extends Matchable[T]
 
   /** A trait for generic link states. */
   trait GenericLinkState[T] extends Matchable[T] {
@@ -103,9 +90,6 @@ trait LanguageContext {
 
     /** Returns a link state with a different link id. */
     def withLinkId(linkId: LinkId): T
-
-    // /** Returns the link state set this agent state belongs to. */
-    // def linkStateSet: LinkStateSet
   }
 
   /** An implicit providing a class tag for [[SiteState]]s. */

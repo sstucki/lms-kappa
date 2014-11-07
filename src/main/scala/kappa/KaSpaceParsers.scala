@@ -11,38 +11,6 @@ trait KaSpaceParsers extends KappaLikeParsers {
       with Patterns
       with Mixtures =>
 
-
-  // States for contact graphs
-  // TODO: This can't be put in KappaLikeParsers because we don't know
-  // there about KaSpaceAgentStateSet, but we should declare the
-  // virtual method `def KappaLikeAgentStateSet(agentName: AgentName,
-  // states: List[AgentLabel])` in KappaLikeContext... Unnecessary,
-  // because these case classes have been defined in K*AbstractSyntax
-  //
-  // final case class AbstractKaSpaceAgentStateSet(
-  //   val agentName: AgentName,
-  //   val states: List[AgentLabel])
-  //     extends AbstractAgentStateSet {
-  //   /** Creates an agent state set from this abstract agent state set. */
-  //   def toAgentStateSet = KaSpaceAgentStateSet(agentName, states)
-  // }
-
-  // final case class AbstractKaSpaceSiteStateSet(
-  //   val siteName: SiteName,
-  //   val states: List[SiteLabel])
-  //     extends AbstractSiteStateSet {
-  //   /** Creates a site state set from this abstract site state set. */
-  //   def toSiteStateSet = KaSpaceSiteStateSet(siteName, states)
-  // }
-
-  // final case class AbstractKaSpaceLinkStateSet(
-  //   val states: List[LinkLabel])
-  //     extends AbstractLinkStateSet {
-  //   /** Creates a link state set from this abstract link state set. */
-  //   def toLinkStateSet = KaSpaceLinkStateSet(states)
-  // }
-
-
   object KaSpaceParser extends KappaLikeParser {
 
     // -- Parsers for labels --

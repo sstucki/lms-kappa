@@ -11,29 +11,11 @@ trait KaSpaceContext extends KappaLikeContext {
   type SiteLabel = Position
   type LinkLabel = Orientation
 
-
   // -- State set types --
 
   type AgentStateSet = KaSpaceAgentStateSet
   type SiteStateSet = KaSpaceSiteStateSet
   type LinkStateSet = KaSpaceLinkStateSet
-
-
-  // /** Creates an agent state set from a set of agent state names. */
-  // def mkAgentStateSet(agentStateSet: AgentStateSetName): AgentStateSet =
-  //   KaSpaceAgentStateSet(agentStateSet.agentType, agentStateSet.labels)
-
-  // /** Creates a site state set from a set of site state names. */
-  // def mkSiteStateSet(agentStateSet: AgentStateSet,
-  //                    siteStateSet: SiteStateSetName): SiteStateSet =
-  //   KaSpaceSiteStateSet(siteStateSet.siteName, siteStateSet.labels, agentStateSet)
-
-  // /** Creates a link state set from a set of link state names. */
-  // def mkLinkStateSet(source: SiteStateSet,
-  //                    target: SiteStateSet,
-  //                    stateSet: LinkStateSetName): LinkStateSet =
-  //   KaSpaceLinkStateSet(source, target, stateSet.labels)
-
 
   /** KaSpace agent state set. */
   final case class KaSpaceAgentStateSet(

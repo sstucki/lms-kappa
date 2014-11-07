@@ -18,20 +18,6 @@ trait KappaContext extends KappaLikeContext {
   type SiteStateSet = KappaSiteStateSet
   type LinkStateSet = KappaLinkStateSet
 
-
-  // /** Creates an agent state set from a set of agent state names. */
-  // def mkAgentStateSet(agentStateSet: AgentStateSetName): AgentStateSet =
-  //   KappaAgentStateSet(agentStateSet.agentType)
-
-  // /** Creates a site state set from a set of site state names. */
-  // def mkSiteStateSet(agentStateSet: AgentStateSet, siteStateSet: SiteStateSetName): SiteStateSet =
-  //   KappaSiteStateSet(siteStateSet.siteName, siteStateSet.labels, agentStateSet)
-
-  // /** Creates a link state set from a set of link state names. */
-  // def mkLinkStateSet(source: SiteStateSet, target: SiteStateSet, stateSet: LinkStateSetName): LinkStateSet =
-  //   KappaLinkStateSet
-
-
   /** Kappa agent state sets. */
   final case class KappaAgentStateSet(agentName: AgentName)
       extends KappaLikeAgentStateSet {

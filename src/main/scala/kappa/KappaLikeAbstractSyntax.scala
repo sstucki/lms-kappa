@@ -45,15 +45,6 @@ trait KappaLikeAbstractSyntax extends AbstractSyntax {
   abstract class AbstractKappaLikeSiteState
       extends AbstractSiteState {
 
-    // /** The agent name of this KappaLike agent state. */
-    // def agentName: AgentName
-    // /** The parent agent type of this KappaLike site state. */
-    // def agentType: AgentType =
-    //   contactGraph.agents find (_.states.agentName == agentName) getOrElse {
-    //     throw new IllegalArgumentException(
-    //       "couldn't find agent type for \"" + agentName + "\"")
-    //   }
-
     /** The site name of this KappaLike site state. */
     def siteName: SiteName
 
