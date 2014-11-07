@@ -19,21 +19,16 @@ trait Parsers {
 
     lazy val linkId: Parser[LinkId] = wholeNumber ^^ (_.toInt)
 
-    lazy val pattern: Parser[AbstractPattern] =
-      failure("missing implementation")
-
-    /*
     def agentState: Parser[AbstractAgentState]
-    def siteState: Parser[AbstractAgentState#AbstractSiteState]
+    def siteState: Parser[AbstractSiteState]
     def linkState: Parser[AbstractLinkState]
     def linked: Parser[AbstractLinked]
 
     // -- Patterns (site graphs) --
 
     // pattern ::= agent [, pattern]
-    lazy val pattern: Parser[AbstractPattern] = repsep(agent, ",") ^^ {
-      as => as.foldLeft(AbstractPattern())(_:+_)
-    }
+    lazy val pattern: Parser[AbstractPattern] = repsep(agent, ",") ^^ (
+      as => as.foldLeft(AbstractPattern())(_:+_))
 
     // agent ::= agent_state [ interface ]
     lazy val agent: Parser[AbstractAgent] = agentState ~ opt(interface) ^^ {
@@ -69,7 +64,6 @@ trait Parsers {
           case None          => AbstractWildcard(Some(as), None, None)
         }
       }
-    */
 
 
     // -- Contact graphs --
