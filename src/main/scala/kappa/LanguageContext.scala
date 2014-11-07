@@ -76,10 +76,14 @@ trait LanguageContext {
 
 
   /** A trait for generic agent states. */
-  trait GenericAgentState[T] extends Matchable[T]
+  trait GenericAgentState[T] extends Matchable[T] {
+    this: T
+  }
 
   /** A trait for generic site states. */
-  trait GenericSiteState[T] extends Matchable[T]
+  trait GenericSiteState[T] extends Matchable[T] {
+    this: T
+  }
 
   /** A trait for generic link states. */
   trait GenericLinkState[T] extends Matchable[T] {
