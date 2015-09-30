@@ -10,12 +10,8 @@ scalaVersion := Option(System.getenv("SCALA_VIRTUALIZED_VERSION")).getOrElse("2.
 
 //--- Dependencies
 
-resolvers ++= Seq(
-    ScalaToolsSnapshots,
-    "Sonatype Public" at "https://oss.sonatype.org/content/groups/public")
-
 libraryDependencies ++= Seq(
-    "org.scalatest" % "scalatest_2.10.0-RC5" % "2.0.M5-B1" % "test",
+    "org.scalatest" %% "scalatest" % "2.0" % "test",
     "EPFL" %% "lms" % "0.3-SNAPSHOT")
 
 //--- End of Dependencies
