@@ -1,24 +1,29 @@
 name := "lms-kappa"
 
-organization := "EPFL"
+organization := "ch.lamp.epfl"
 
 version := "0.1-SNAPSHOT"
 
 scalaOrganization := "org.scala-lang.virtualized"
 
-scalaVersion := Option(System.getenv("SCALA_VIRTUALIZED_VERSION")).getOrElse("2.10.0")
+scalaVersion := "2.11.2"
 
 //--- Dependencies
 
+resolvers += Resolver.sonatypeRepo("snapshots")
+
 libraryDependencies ++= Seq(
-    "org.scalatest" %% "scalatest" % "2.0" % "test",
-    "EPFL" %% "lms" % "0.3-SNAPSHOT")
+  "org.scala-lang.lms" %% "lms-core" % "1.0.0-SNAPSHOT",
+  "org.scala-lang.virtualized" % "scala-compiler" % "2.11.2",
+  "org.scala-lang.virtualized" % "scala-library" % "2.11.2",
+  "org.scala-lang.virtualized" % "scala-reflect" % "2.11.2",
+  "org.scalatest" % "scalatest_2.11" % "2.2.2")
 
 //--- End of Dependencies
 
 // General compiler options
 scalacOptions ++= Seq(
-  "-deprecation", "-unchecked", "-Xexperimental", "-P:continuations:enable",
+  "-deprecation", "-unchecked", "-Xexperimental",
   "-Yvirtualize", "-feature", "-language:higherKinds")
 
 // Documentation (scaladoc) options
@@ -29,10 +34,3 @@ parallelExecution in Test := false
 
 // disable publishing of main docs
 publishArtifact in (Compile, packageDoc) := false
-
-// continuations
-autoCompilerPlugins := true
-
-libraryDependencies <<= (scalaVersion, libraryDependencies) { (ver, deps) =>
-    deps :+ compilerPlugin("org.scala-lang.plugins" % "continuations" % ver)
-}

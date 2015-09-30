@@ -195,7 +195,7 @@ object Orientation {
    */
   def apply(es: Seq[Seq[Double]])(
     implicit e1: DummyImplicit, e2: DummyImplicit): Orientation = {
-    Orientation(es map (Position(_)))
+    Orientation(es map (Position(_)))(e1)
   }
 
   /**

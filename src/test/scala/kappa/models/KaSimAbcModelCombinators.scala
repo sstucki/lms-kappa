@@ -2,12 +2,12 @@ package kappa.models
 
 import scala.language.postfixOps
 
-import org.scalatest.FlatSpec
+import org.scalatest.FlatSpecLike
 
 import kappa.KappaModel
 
 
-class KaSimAbcModelCombinators extends KappaModel with FlatSpec {
+class KaSimAbcModelCombinators extends KappaModel with FlatSpecLike {
 
   // ####### TEMPLATE MODEL AS DESCRIBED IN THE KASIM MANUAL #############
 

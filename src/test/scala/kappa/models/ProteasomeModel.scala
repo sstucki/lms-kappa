@@ -1,12 +1,12 @@
 package kappa.models
 
-import org.scalatest.FlatSpec
+import org.scalatest.FlatSpecLike
 import scala.math._
 
 import kappa.{ KaSpaceModel, Orientation, Position }
 
 
-class ProteasomeModel extends KaSpaceModel with FlatSpec {
+class ProteasomeModel extends KaSpaceModel with FlatSpecLike {
 
   // Agent radius
   val radius: Double = 0.8

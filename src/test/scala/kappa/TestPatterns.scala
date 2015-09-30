@@ -1,8 +1,8 @@
 package kappa
 
-import org.scalatest.FlatSpec
+import org.scalatest.FlatSpecLike
 
-class TestPatterns extends KappaModel with FlatSpec {
+class TestPatterns extends KappaModel with FlatSpecLike {
 
   behavior of "Patterns"
 

@@ -1,12 +1,12 @@
 package kappa.models
 
-import org.scalatest.FlatSpec
+import org.scalatest.FlatSpecLike
 import scala.math._
 
 import kappa.{ KaSpaceModel, Orientation, Position }
 
 
-class RingModel extends KaSpaceModel with FlatSpec {
+class RingModel extends KaSpaceModel with FlatSpecLike {
 
   // Agent radius
   val radius = 1

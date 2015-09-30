@@ -1,8 +1,8 @@
 package kappa
 
-import org.scalatest.FlatSpec
+import org.scalatest.FlatSpecLike
 
-class TestKaSpaceParser extends KaSpaceModel with FlatSpec {
+class TestKaSpaceParser extends KaSpaceModel with FlatSpecLike {
 
   behavior of "KaSpace parser"
 
